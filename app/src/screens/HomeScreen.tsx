@@ -142,7 +142,14 @@ export function HomeScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { padding: 20, paddingBottom: 48, gap: 12 },
+  container: {
+    padding: 20,
+    paddingBottom: 48,
+    gap: 12,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+  },
   hero: { alignItems: 'center', paddingVertical: 32, gap: 6 },
   title: { color: theme.text, fontSize: 44, fontWeight: '800', letterSpacing: 1 },
   subtitle: { color: theme.textMuted, fontSize: 15 },

@@ -5,11 +5,17 @@ import { Card, isRed, rankName, suitName } from '../shared/cards';
 import { theme } from '../theme';
 
 export const CARD_SIZES = {
-  sm: { width: 40, height: 58, rank: 14, suit: 18 },
-  md: { width: 54, height: 78, rank: 18, suit: 24 },
+  sm: { width: 40, height: 58, rank: 13, cornerSuit: 10, bigSuit: 16 },
+  md: { width: 56, height: 80, rank: 19, cornerSuit: 14, bigSuit: 26 },
 } as const;
 
 export type CardSize = keyof typeof CARD_SIZES;
+
+/**
+ * Давхарлагдсан үед ч заавал харагдах ёстой булангийн өргөн.
+ * Гарын хөзрүүдийг хэр их давхарлахыг энэ утга тодорхойлно.
+ */
+export const CARD_CORNER_WIDTH = 24;
 
 interface Props {
   card: Card;
@@ -32,14 +38,23 @@ export function PlayingCard({ card, size = 'md', selected, dimmed, onPress }: Pr
         dimmed && styles.dimmed,
       ]}
     >
-      <Text style={[styles.rank, { fontSize: s.rank, color }]}>{rankName(card)}</Text>
-      <Text style={[styles.suit, { fontSize: s.suit, color }]}>{suitName(card)}</Text>
+      {/* Зэрэглэл ба баг хоёулаа зүүн дээд буланд — жинхэнэ хөзөр шиг.
+          Ингэснээр хөзрүүд давхарлагдсан ч аль хөзөр болох нь тодорхой. */}
+      <View style={styles.corner}>
+        <Text style={[styles.rank, { fontSize: s.rank, color }]}>{rankName(card)}</Text>
+        <Text style={[styles.cornerSuit, { fontSize: s.cornerSuit, color }]}>{suitName(card)}</Text>
+      </View>
+      <Text style={[styles.bigSuit, { fontSize: s.bigSuit, color }]}>{suitName(card)}</Text>
     </View>
   );
 
   if (!onPress) return face;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${rankName(card)} ${suitName(card)}`}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${rankName(card)} ${suitName(card)}`}
+    >
       {face}
     </Pressable>
   );
@@ -55,25 +70,30 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.card,
     borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 3,
-    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.15)',
     shadowColor: '#000',
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 3,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 1, height: 2 },
     elevation: 3,
   },
   selected: {
     borderColor: theme.accent,
     borderWidth: 2,
-    transform: [{ translateY: -14 }],
+    transform: [{ translateY: -16 }],
   },
   dimmed: { opacity: 0.45 },
-  rank: { fontWeight: '700', lineHeight: undefined },
-  suit: { alignSelf: 'flex-end', lineHeight: undefined },
+  corner: {
+    position: 'absolute',
+    top: 3,
+    left: 5,
+    alignItems: 'center',
+    width: CARD_CORNER_WIDTH - 10,
+  },
+  rank: { fontWeight: '800', includeFontPadding: false },
+  cornerSuit: { marginTop: -2, includeFontPadding: false },
+  bigSuit: { position: 'absolute', bottom: 3, right: 5, includeFontPadding: false },
   back: {
     backgroundColor: theme.cardBack,
     borderRadius: 8,

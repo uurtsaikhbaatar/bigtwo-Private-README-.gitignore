@@ -1,13 +1,34 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import type { Card } from '../shared/cards';
 import { THREE_OF_DIAMONDS } from '../shared/cards';
 import { beats, comboLabel, detectCombo } from '../shared/combos';
 import type { GameView, PlayerView } from '../shared/protocol';
 import { Button } from '../components/Button';
-import { PlayingCard } from '../components/PlayingCard';
+import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
 import { theme } from '../theme';
+
+/**
+ * Өргөн дэлгэц дээр агуулгыг хэт татахгүйн тулд тавьсан хязгаар.
+ * 13 хөзрийн бүтэн гар давхарлалгүй багтахаар сонгосон (13 × 56 + зай).
+ */
+const CONTENT_MAX_WIDTH = 780;
+
+/**
+ * Гарын хөзрүүд хэр их давхарлагдахыг тооцно.
+ * Зай хүрэлцвэл огт давхарлахгүй; хүрэлцэхгүй бол булангийн тэмдэглэгээ
+ * (зэрэглэл + баг) үргэлж харагдахуйц хэмжээгээр л давхарлана.
+ */
+function handOverlap(cardCount: number, screenWidth: number): number {
+  if (cardCount < 2) return 0;
+  const available = Math.min(screenWidth, CONTENT_MAX_WIDTH) - 32;
+  const cardWidth = CARD_SIZES.md.width;
+  const needed = cardCount * cardWidth;
+  if (needed <= available) return 0;
+  const maxOverlap = cardWidth - CARD_CORNER_WIDTH;
+  return Math.min(maxOverlap, (needed - available) / (cardCount - 1));
+}
 
 interface Props {
   view: GameView;
@@ -19,8 +40,10 @@ interface Props {
 
 export function TableScreen({ view, onPlay, onPass, onRematch, onLeave }: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
+  const { width } = useWindowDimensions();
   const you = view.players.find((p) => p.id === view.youId);
   const yourTurn = view.turnId === view.youId;
+  const overlap = handOverlap(view.yourHand.length, width);
 
   // Гар өөрчлөгдөх бүрд сонголтыг цэвэрлэнэ (тавилт амжилттай болсон гэсэн үг).
   useEffect(() => setSelected([]), [view.yourHand.length, view.round]);
@@ -83,7 +106,7 @@ export function TableScreen({ view, onPlay, onPass, onRematch, onLeave }: Props)
           contentContainerStyle={styles.fan}
         >
           {view.yourHand.map((card, i) => (
-            <View key={card} style={i === 0 ? undefined : styles.overlap}>
+            <View key={card} style={i === 0 ? undefined : { marginLeft: -overlap }}>
               <PlayingCard
                 card={card}
                 selected={selected.includes(card)}
@@ -230,7 +253,15 @@ function rotate(players: PlayerView[], youId: string): PlayerView[] {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 12, gap: 10 },
+  container: {
+    flex: 1,
+    padding: 12,
+    gap: 10,
+    // Өргөн дэлгэц дээр агуулга дунд байрлаж, хэт татагдахгүй.
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+  },
   opponents: { flexDirection: 'row', gap: 8 },
   opponent: {
     flex: 1,
@@ -279,8 +310,8 @@ const styles = StyleSheet.create({
   turnText: { color: theme.textMuted, fontSize: 14, fontWeight: '600' },
   turnActive: { color: theme.accent },
   score: { color: theme.textMuted, fontSize: 13 },
-  fan: { paddingTop: 18, paddingBottom: 4, paddingHorizontal: 4 },
-  overlap: { marginLeft: -20 },
+  // Хөзөр цөөрөхөд гар зүүн тийш наалдалгүй дунд байрлана.
+  fan: { paddingTop: 20, paddingBottom: 4, paddingHorizontal: 4, flexGrow: 1, justifyContent: 'center' },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1 },
   problem: { color: theme.textMuted, fontSize: 12, textAlign: 'center', minHeight: 16 },

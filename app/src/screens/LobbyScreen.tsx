@@ -70,7 +70,14 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, gap: 12 },
+  container: {
+    flex: 1,
+    padding: 20,
+    gap: 12,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+  },
   eyebrow: { color: theme.textMuted, fontSize: 13, textAlign: 'center', marginTop: 24 },
   code: {
     color: theme.accent,
