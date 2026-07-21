@@ -1,0 +1,16 @@
+export const theme = {
+  felt: '#0b5136',
+  feltDark: '#073827',
+  surface: '#10233a',
+  surfaceRaised: '#183353',
+  card: '#fdfdf7',
+  cardBack: '#1d4ed8',
+  text: '#f2f6f4',
+  textMuted: '#9db3ac',
+  accent: '#f2b705',
+  danger: '#e2574c',
+  success: '#4ade80',
+  red: '#c8102e',
+  black: '#1b1b1f',
+  radius: 12,
+} as const;

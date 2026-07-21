@@ -1,0 +1,26 @@
+# Render Blueprint. Repo-гоо Render-т холбоход энэ файлыг өөрөө уншиж,
+# үйлчилгээг тохируулна. Дэлгэрэнгүй: https://render.com/docs/blueprint-spec
+#
+# АНХААР: энэ файл repo-гийн үндэс (root) дээр байх ёстой. Хэрэв GitHub дээрх
+# repo-гийн үндэс нь `bigtwo/` хавтас биш, түүний эцэг хавтас бол
+# `dockerfilePath` болон `dockerContext`-д `bigtwo/`-г нэмнэ.
+
+services:
+  - type: web
+    name: bigtwo
+    runtime: docker
+    plan: free
+    # Монголд хамгийн ойр бүс. Үнэгүй багц дээр боломжгүй бол `oregon` болгоно.
+    region: singapore
+
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Deploy амжилттай болсныг шалгах зам. Сервер `{ ok: true }` буцаадаг.
+    healthCheckPath: /health
+
+    # GitHub-д push хийх бүрд автоматаар шинэчилнэ.
+    autoDeployTrigger: commit
+
+    # PORT-ыг Render өөрөө өгдөг бөгөөд сервер түүнийг дагана
+    # (өгөгдөөгүй тохиолдолд Dockerfile доторх 8787 руу шилжинэ).

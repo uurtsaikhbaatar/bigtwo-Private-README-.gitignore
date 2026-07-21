@@ -1,0 +1,7 @@
+# Repo дотор мөрийн төгсгөлийг үргэлж LF байлгана. Windows дээр бичсэн файл
+# Linux (Docker, Render) дээр асуудалгүй ажиллана.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary

@@ -1,0 +1,15 @@
+{
+  "name": "bigtwo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Дай Ди (Big Two) — найзуудтайгаа онлайнаар тоглох хөзрийн апп",
+  "scripts": {
+    "server": "npm --prefix server start",
+    "app": "npm --prefix app start",
+    "test": "npm --prefix server test",
+    "smoke": "npm --prefix server run smoke",
+    "build:web": "npm --prefix app run build:web",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix app run typecheck",
+    "setup": "npm --prefix server install && npm --prefix app install"
+  }
+}

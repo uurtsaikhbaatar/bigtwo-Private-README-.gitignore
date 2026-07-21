@@ -1,0 +1,37 @@
+# Fly.io тохиргоо. `fly launch --no-deploy` энэ файлыг дахин үүсгэж болзошгүй тул
+# аппын нэрээ өөрчилснөөс бусад тохиолдолд хэвээр нь үлдээ.
+
+app = 'bigtwo'
+primary_region = 'nrt' # Токио — Монголд хамгийн ойр бүс
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  PORT = '8787'
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # Хэн ч холбогдоогүй үед машиныг унтрааж зардлыг тэглэнэ. Эхний хүсэлт
+  # ирэхэд ~1 секундэд сэргэнэ.
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = 'connections'
+    soft_limit = 200
+    hard_limit = 250
+
+[checks.health]
+  type = 'http'
+  path = '/health'
+  interval = '30s'
+  timeout = '5s'
+  grace_period = '10s'
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
