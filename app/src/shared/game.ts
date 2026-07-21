@@ -88,6 +88,11 @@ export interface GameState {
   targetScore: number;
   /** Энэ дугуйн эхний тавилтад 3♦ орох ёстой эсэх. */
   openWithThree: boolean;
+  /**
+   * Өмнөх дугуйд өнжих ээлж идэвхтэй байсан эсэх (4-өөс олон тоглогч).
+   * Ээлж дуусмагц 3♦ сүүлийн нэг удаа эхлэгчийг тодорхойлдогт хэрэгтэй.
+   */
+  rotationWasActive: boolean;
   history: RoundRecord[];
   lastRoundWinnerId: string | null;
   matchWinnerId: string | null;
@@ -107,6 +112,7 @@ export function createGame(): GameState {
     round: 0,
     targetScore: DEFAULT_TARGET_SCORE,
     openWithThree: true,
+    rotationWasActive: false,
     history: [],
     lastRoundWinnerId: null,
     matchWinnerId: null,
@@ -162,6 +168,7 @@ export function startMatch(
   state.seats = [];
   state.lastRoundWinnerId = null;
   state.matchWinnerId = null;
+  state.rotationWasActive = false;
   state.players.forEach((p) => {
     p.score = 0;
     p.eliminated = false;
@@ -209,7 +216,9 @@ export function startRound(state: GameState, rng: () => number = Math.random): v
   const dragon = seatedPlayers(state).find((p) => isDragon(p.hand));
   if (dragon) return declareDragon(state, dragon);
 
-  chooseStarter(state, previousSeats);
+  const rotating = contenders.length > SEATS_PER_ROUND;
+  chooseStarter(state, previousSeats, rotating, state.rotationWasActive);
+  state.rotationWasActive = rotating;
 }
 
 /** Гарт 13 зэрэглэл бүрээс нэг байгаа эсэх (баг хамаарахгүй). */
@@ -297,15 +306,27 @@ function drawFor(players: Player[], rng: () => number): Player[] {
 /**
  * Хэн эхлэхийг тодорхойлно.
  *
- * Өнжих ээлж байхгүй (4 ба цөөн тоглогч) үед өмнөх дугуйн хожигч түрүүлж
- * гарна. Ээлжлэн өнжиж байгаа үед хожигч өнжсөн байх тул 3♦-тэй тоглогч
- * эхэлнэ.
+ * 3♦ дараах гурван тохиолдолд эхлэгчийг заана:
+ *   - өнжих ээлж идэвхтэй (4-өөс олон тоглогч) — дугуй бүрд;
+ *   - тоглолтын хамгийн эхний дугуй;
+ *   - өнжих ээлж дуусаж, тоглогч 4 болсон эхний дугуй — 3♦ сүүлийн удаа заана.
+ *
+ * Түүнээс хойш өмнөх дугуйн хожигч түрүүлж гарна.
+ *
+ * 3♦-ээ ЗААВАЛ тавих шаардлага зөвхөн 4 ба цөөн тоглогчтой эхний дугуйд
+ * үйлчилнэ; бусад тохиолдолд 3♦-тэй хүн дуртай хослолоо тавьж болно.
  */
-function chooseStarter(state: GameState, previousSeats: string[]): void {
-  const rotating = state.players.filter((p) => !p.eliminated).length > SEATS_PER_ROUND;
+function chooseStarter(
+  state: GameState,
+  previousSeats: string[],
+  rotating: boolean,
+  rotationWasActive: boolean,
+): void {
+  const firstRound = previousSeats.length === 0;
+  const threeDecides = rotating || firstRound || rotationWasActive;
   const winner = state.lastRoundWinnerId;
 
-  if (!rotating && previousSeats.length > 0 && winner && state.seats.includes(winner)) {
+  if (!threeDecides && winner && state.seats.includes(winner)) {
     state.turn = state.seats.indexOf(winner);
     state.openWithThree = false;
     state.log.push(`${playerById(state, winner).name} өмнөх дугуйг хожсон тул эхэлнэ.`);
@@ -316,7 +337,16 @@ function chooseStarter(state: GameState, previousSeats: string[]): void {
     playerById(state, id).hand.includes(THREE_OF_DIAMONDS),
   );
   state.turn = holder !== -1 ? holder : lowestCardSeat(state);
-  state.openWithThree = holder !== -1;
+  state.openWithThree = holder !== -1 && firstRound && !rotating;
+
+  const starter = playerById(state, state.seats[state.turn]);
+  if (holder === -1) {
+    state.log.push(`3♦ тарааагдаагүй тул хамгийн бага хөзөртэй ${starter.name} эхэлнэ.`);
+  } else if (rotationWasActive && !rotating) {
+    state.log.push(`${starter.name} 3♦-тэй тул эхэлнэ (3♦ сүүлийн удаа заалаа).`);
+  } else {
+    state.log.push(`${starter.name} 3♦-тэй тул эхэлнэ.`);
+  }
 }
 
 function lowestCardSeat(state: GameState): number {
