@@ -128,7 +128,7 @@ test('хөзрийн тоо таарахгүй бол дарж чадахгүй'
   assert.ok(!beats(pair, single));
 });
 
-test('эхний тавилтад 3♦ орсон байх ёстой', () => {
+test('3♦ нь хэн эхлэхийг заана, юу тавихыг заахгүй', () => {
   // 4 тоглогчтой үед бүх 52 хөзөр тарааагддаг тул 3♦ заавал хэн нэгэнд очно.
   const state = createGame();
   addPlayer(state, 'a', 'Ану');
@@ -140,10 +140,10 @@ test('эхний тавилтад 3♦ орсон байх ёстой', () => {
   const starter = turnPlayer(state);
   assert.ok(starter.hand.includes(THREE_OF_DIAMONDS), '3♦-тэй тоглогч эхэлнэ');
 
-  const wrong = starter.hand.find((x) => x !== THREE_OF_DIAMONDS)!;
-  assert.throws(() => play(state, starter.id, [wrong]), RuleError);
-  play(state, starter.id, [THREE_OF_DIAMONDS]);
-  assert.equal(state.current?.combo.cards[0], THREE_OF_DIAMONDS);
+  // 3♦-ээ заавал оруулах шаардлагагүй — дуртай хослолоо тавьж болно.
+  const other = starter.hand.find((x) => x !== THREE_OF_DIAMONDS)!;
+  play(state, starter.id, [other]);
+  assert.equal(state.current?.combo.cards[0], other);
 });
 
 test('шинэ эргэлтийн эхэнд пас хийж болохгүй', () => {

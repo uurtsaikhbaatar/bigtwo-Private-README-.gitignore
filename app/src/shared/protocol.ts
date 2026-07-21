@@ -81,8 +81,6 @@ export interface GameView {
   phase: Phase;
   round: number;
   targetScore: number;
-  /** Энэ дугуйн эхний тавилтад 3♦ заавал орох ёстой эсэх. */
-  openWithThree: boolean;
   /** Дугуй бүрийн оноог агуулсан бүтэн түүх. */
   history: RoundRecord[];
   matchWinnerId: string | null;
@@ -123,7 +121,6 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
     phase: state.phase,
     round: state.round,
     targetScore: state.targetScore,
-    openWithThree: state.openWithThree,
     history: state.history,
     matchWinnerId: state.matchWinnerId,
     log: state.log.slice(-12),

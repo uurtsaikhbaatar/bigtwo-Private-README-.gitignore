@@ -67,14 +67,14 @@ class Client {
 }
 
 /** Хамгийн сул хууль ёсны тавилтыг сонгоно. */
-function pickPlay(hand: Card[], current: Combo | null, mustIncludeThree: boolean): Card[] | null {
+function pickPlay(hand: Card[], current: Combo | null): Card[] | null {
   for (const size of current ? [current.size] : [1, 2, 3, 5]) {
     if (size > hand.length) continue;
     const idx = Array.from({ length: size }, (_, i) => i);
     for (;;) {
       const pick = idx.map((i) => hand[i]);
       const combo = detectCombo(pick);
-      if (combo && beats(combo, current) && (!mustIncludeThree || pick.includes(0))) return pick;
+      if (combo && beats(combo, current)) return pick;
       let k = size - 1;
       while (k >= 0 && idx[k] === hand.length - size + k) k--;
       if (k < 0) break;
@@ -165,8 +165,7 @@ async function main() {
     check(av.youAreSeated, `${actor.label}: өнжиж байхад ээлж ирлээ`);
 
     const current = av.current ? detectCombo(av.current.cards) : null;
-    const mustThree = av.lastPlay === null && av.yourHand.includes(0);
-    const pick = pickPlay(av.yourHand, current, mustThree);
+    const pick = pickPlay(av.yourHand, current);
 
     actor.send(pick ? { t: 'play', cards: pick } : { t: 'pass' });
     const reply = await actor.await((m) => m.t === 'state' || m.t === 'error');

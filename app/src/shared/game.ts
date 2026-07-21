@@ -86,8 +86,6 @@ export interface GameState {
   phase: Phase;
   round: number;
   targetScore: number;
-  /** Энэ дугуйн эхний тавилтад 3♦ орох ёстой эсэх. */
-  openWithThree: boolean;
   /**
    * Өмнөх дугуйд өнжих ээлж идэвхтэй байсан эсэх (4-өөс олон тоглогч).
    * Ээлж дуусмагц 3♦ сүүлийн нэг удаа эхлэгчийг тодорхойлдогт хэрэгтэй.
@@ -111,7 +109,6 @@ export function createGame(): GameState {
     phase: 'lobby',
     round: 0,
     targetScore: DEFAULT_TARGET_SCORE,
-    openWithThree: true,
     rotationWasActive: false,
     history: [],
     lastRoundWinnerId: null,
@@ -313,8 +310,8 @@ function drawFor(players: Player[], rng: () => number): Player[] {
  *
  * Түүнээс хойш өмнөх дугуйн хожигч түрүүлж гарна.
  *
- * 3♦-ээ ЗААВАЛ тавих шаардлага зөвхөн 4 ба цөөн тоглогчтой эхний дугуйд
- * үйлчилнэ; бусад тохиолдолд 3♦-тэй хүн дуртай хослолоо тавьж болно.
+ * 3♦ нь зөвхөн ХЭН эхлэхийг заана — эхлэгч дуртай хослолоо тавьж болно.
+ * 3♦-ээ заавал оруулах шаардлага энэ тоглоомд байхгүй.
  */
 function chooseStarter(
   state: GameState,
@@ -328,7 +325,6 @@ function chooseStarter(
 
   if (!threeDecides && winner && state.seats.includes(winner)) {
     state.turn = state.seats.indexOf(winner);
-    state.openWithThree = false;
     state.log.push(`${playerById(state, winner).name} өмнөх дугуйг хожсон тул эхэлнэ.`);
     return;
   }
@@ -337,7 +333,6 @@ function chooseStarter(
     playerById(state, id).hand.includes(THREE_OF_DIAMONDS),
   );
   state.turn = holder !== -1 ? holder : lowestCardSeat(state);
-  state.openWithThree = holder !== -1 && firstRound && !rotating;
 
   const starter = playerById(state, state.seats[state.turn]);
   if (holder === -1) {
@@ -376,15 +371,6 @@ export function play(state: GameState, playerId: string, cards: Card[]): void {
   const combo = detectCombo(cards);
   if (!combo) throw new RuleError('Энэ нь хүчинтэй хослол биш байна.');
 
-  const firstPlay = state.lastPlay === null;
-  if (
-    firstPlay &&
-    state.openWithThree &&
-    player.hand.includes(THREE_OF_DIAMONDS) &&
-    !cards.includes(THREE_OF_DIAMONDS)
-  ) {
-    throw new RuleError('Эхний тавилтад 3♦ орсон байх ёстой.');
-  }
   if (!beats(combo, state.current?.combo ?? null)) {
     throw new RuleError(
       state.current ? 'Энэ хослол ширээн дээрхийг дарж чадахгүй байна.' : 'Хүчингүй тавилт.',
@@ -463,7 +449,6 @@ function nextEligible(state: GameState, from: number): number | null {
 
 function startNewTrick(state: GameState, ownerSeat: number): void {
   state.current = null;
-  state.openWithThree = false;
   seatedPlayers(state).forEach((p) => (p.passed = false));
   const owner = playerById(state, state.seats[ownerSeat]);
   state.turn = owner.place === null ? ownerSeat : (nextActiveSeat(state, ownerSeat) ?? ownerSeat);

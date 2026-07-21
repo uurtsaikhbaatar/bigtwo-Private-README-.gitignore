@@ -186,16 +186,6 @@ function validate(selected: Card[], view: GameView): string | null {
   if (selected.length === 0) return 'Хөзөр сонгоно уу';
   const combo = detectCombo(selected);
   if (!combo) return 'Энэ нь хүчинтэй хослол биш';
-  // 3♦-ээ заавал тавих шаардлага зөвхөн зарим дугуйд үйлчилдэг — серверийн
-  // шийдвэрийг дагана, эс бөгөөс хууль ёсны тавилтыг хориглох эрсдэлтэй.
-  if (
-    view.openWithThree &&
-    view.lastPlay === null &&
-    view.yourHand.includes(THREE_OF_DIAMONDS) &&
-    !selected.includes(THREE_OF_DIAMONDS)
-  ) {
-    return 'Эхний тавилтад 3♦ орсон байх ёстой';
-  }
   if (view.current) {
     const current = detectCombo(view.current.cards);
     if (current && !beats(combo, current)) {
