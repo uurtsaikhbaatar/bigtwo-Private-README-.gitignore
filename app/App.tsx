@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { ChatButton } from './src/components/ChatPanel';
 import { clearRoomCodeFromUrl, pendingRoomCode } from './src/deeplink';
 import { defaultServerUrl, useBigTwo } from './src/net';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -108,8 +109,17 @@ function Root() {
           view={view}
           onPlay={game.playCards}
           onPass={game.passTurn}
-          onRematch={game.rematch}
+          onNextRound={game.nextRound}
+          onNewMatch={() => game.startGame(view.targetScore)}
           onLeave={game.leaveRoom}
+        />
+      )}
+
+      {view && (
+        <ChatButton
+          lines={game.chat}
+          youName={view.players.find((p) => p.id === view.youId)?.name ?? ''}
+          onSend={game.sendChat}
         />
       )}
 

@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import type { Card } from '../shared/cards';
-import { THREE_OF_DIAMONDS } from '../shared/cards';
-import { beats, comboLabel, detectCombo } from '../shared/combos';
-import type { GameView, PlayerView } from '../shared/protocol';
 import { Button } from '../components/Button';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
+import { ScoreBoard } from '../components/ScoreBoard';
+import type { Card } from '../shared/cards';
+import { THREE_OF_DIAMONDS, cardName } from '../shared/cards';
+import { beats, comboLabel, detectCombo } from '../shared/combos';
+import type { GameView, PlayerView } from '../shared/protocol';
 import { theme } from '../theme';
 
 /**
@@ -26,45 +27,76 @@ function handOverlap(cardCount: number, screenWidth: number): number {
   const cardWidth = CARD_SIZES.md.width;
   const needed = cardCount * cardWidth;
   if (needed <= available) return 0;
-  const maxOverlap = cardWidth - CARD_CORNER_WIDTH;
-  return Math.min(maxOverlap, (needed - available) / (cardCount - 1));
+  return Math.min(cardWidth - CARD_CORNER_WIDTH, (needed - available) / (cardCount - 1));
 }
 
 interface Props {
   view: GameView;
   onPlay: (cards: Card[]) => void;
   onPass: () => void;
-  onRematch: () => void;
+  onNextRound: () => void;
+  onNewMatch: () => void;
   onLeave: () => void;
 }
 
-export function TableScreen({ view, onPlay, onPass, onRematch, onLeave }: Props) {
+export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onLeave }: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
   const { width } = useWindowDimensions();
   const you = view.players.find((p) => p.id === view.youId);
   const yourTurn = view.turnId === view.youId;
   const overlap = handOverlap(view.yourHand.length, width);
 
-  // Гар өөрчлөгдөх бүрд сонголтыг цэвэрлэнэ (тавилт амжилттай болсон гэсэн үг).
+  // Гар өөрчлөгдөх бүрд сонголтыг цэвэрлэнэ.
   useEffect(() => setSelected([]), [view.yourHand.length, view.round]);
 
   const toggle = (card: Card) =>
     setSelected((prev) => (prev.includes(card) ? prev.filter((c) => c !== card) : [...prev, card]));
 
   const problem = useMemo(() => validate(selected, view), [selected, view]);
-  const opponents = rotate(view.players, view.youId).filter((p) => p.id !== view.youId);
 
-  if (view.phase === 'finished') {
-    return <Results view={view} isHost={you?.isHost ?? false} onRematch={onRematch} onLeave={onLeave} />;
+  if (view.phase === 'roundEnd' || view.phase === 'matchEnd') {
+    return (
+      <Results
+        view={view}
+        isHost={you?.isHost ?? false}
+        onNextRound={onNextRound}
+        onNewMatch={onNewMatch}
+        onLeave={onLeave}
+      />
+    );
   }
+
+  const seated = view.seats
+    .map((id) => view.players.find((p) => p.id === id))
+    .filter((p): p is PlayerView => !!p);
+  const opponents = rotate(seated, view.youId).filter((p) => p.id !== view.youId);
+  const benched = view.players.filter((p) => !p.seated && !p.eliminated);
 
   return (
     <View style={styles.container}>
+      <View style={styles.topBar}>
+        <Text style={styles.topText}>{view.round}-р дугуй</Text>
+        <Text style={styles.topText}>Босго {view.targetScore}</Text>
+      </View>
+
       <View style={styles.opponents}>
         {opponents.map((p) => (
           <Opponent key={p.id} player={p} isTurn={view.turnId === p.id} />
         ))}
       </View>
+
+      {benched.length > 0 && (
+        <View style={styles.bench}>
+          <Text style={styles.benchLabel}>Өнжиж байна:</Text>
+          {benched.map((p) => (
+            <Text key={p.id} style={styles.benchName}>
+              {p.name}
+              {p.id === view.youId ? ' (та)' : ''} · {p.score}
+              {p.draw !== null ? ` · ${cardName(p.draw)}` : ''}
+            </Text>
+          ))}
+        </View>
+      )}
 
       <View style={styles.table}>
         {view.current ? (
@@ -92,49 +124,59 @@ export function TableScreen({ view, onPlay, onPass, onRematch, onLeave }: Props)
         {view.log[view.log.length - 1] ?? ''}
       </Text>
 
-      <View style={styles.handArea}>
-        <View style={styles.statusRow}>
-          <Text style={[styles.turnText, yourTurn && styles.turnActive]}>
-            {yourTurn ? 'Таны ээлж' : `${nameOf(view, view.turnId)}-ийн ээлж`}
+      {view.youAreSeated ? (
+        <View style={styles.handArea}>
+          <View style={styles.statusRow}>
+            <Text style={[styles.turnText, yourTurn && styles.turnActive]}>
+              {yourTurn ? 'Таны ээлж' : `${nameOf(view, view.turnId)}-ийн ээлж`}
+            </Text>
+            <Text style={styles.score}>Оноо: {you?.score ?? 0}</Text>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.fan}
+          >
+            {view.yourHand.map((card, i) => (
+              <View key={card} style={i === 0 ? undefined : { marginLeft: -overlap }}>
+                <PlayingCard
+                  card={card}
+                  selected={selected.includes(card)}
+                  onPress={() => toggle(card)}
+                />
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.actions}>
+            <Button
+              title="Пас"
+              variant="secondary"
+              onPress={onPass}
+              disabled={!yourTurn || !view.current}
+              style={styles.action}
+            />
+            <Button
+              title={selected.length > 0 ? `Тавих (${selected.length})` : 'Тавих'}
+              onPress={() => onPlay(selected)}
+              disabled={!yourTurn || problem !== null}
+              style={styles.action}
+            />
+          </View>
+          <Text style={styles.problem}>
+            {yourTurn && selected.length > 0 ? (problem ?? previewLabel(selected)) : ' '}
           </Text>
-          <Text style={styles.score}>Оноо: {you?.total ?? 0}</Text>
         </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.fan}
-        >
-          {view.yourHand.map((card, i) => (
-            <View key={card} style={i === 0 ? undefined : { marginLeft: -overlap }}>
-              <PlayingCard
-                card={card}
-                selected={selected.includes(card)}
-                onPress={() => toggle(card)}
-              />
-            </View>
-          ))}
-        </ScrollView>
-
-        <View style={styles.actions}>
-          <Button
-            title="Пас"
-            variant="secondary"
-            onPress={onPass}
-            disabled={!yourTurn || !view.current}
-            style={styles.action}
-          />
-          <Button
-            title={selected.length > 0 ? `Тавих (${selected.length})` : 'Тавих'}
-            onPress={() => onPlay(selected)}
-            disabled={!yourTurn || problem !== null}
-            style={styles.action}
-          />
+      ) : (
+        <View style={styles.spectator}>
+          <Text style={styles.spectatorTitle}>Та энэ дугуйд өнжиж байна</Text>
+          <Text style={styles.hint}>
+            Ширээн дээрх хөзрийг харж болно, гэхдээ тоглогчдын гар харагдахгүй. Оноо
+            нэмэгдэхгүй — дараагийн дугуйд орно.
+          </Text>
         </View>
-        <Text style={styles.problem}>
-          {yourTurn && selected.length > 0 ? (problem ?? previewLabel(selected)) : ' '}
-        </Text>
-      </View>
+      )}
     </View>
   );
 }
@@ -154,7 +196,9 @@ function validate(selected: Card[], view: GameView): string | null {
   if (view.current) {
     const current = detectCombo(view.current.cards);
     if (current && !beats(combo, current)) {
-      return combo.size === current.size ? 'Ширээн дээрхийг дарахгүй байна' : 'Хөзрийн тоо таарахгүй';
+      return combo.size === current.size
+        ? 'Ширээн дээрхийг дарахгүй байна'
+        : 'Хөзрийн тоо таарахгүй';
     }
   }
   return null;
@@ -175,6 +219,7 @@ function Opponent({ player, isTurn }: { player: PlayerView; isTurn: boolean }) {
         <Text style={styles.opponentName} numberOfLines={1}>
           {player.name}
         </Text>
+        <Text style={styles.opponentScore}>{player.score}</Text>
       </View>
       <View style={styles.miniStack}>
         {Array.from({ length: Math.min(player.handCount, 5) }).map((_, i) => (
@@ -197,48 +242,71 @@ function Opponent({ player, isTurn }: { player: PlayerView; isTurn: boolean }) {
 function Results({
   view,
   isHost,
-  onRematch,
+  onNextRound,
+  onNewMatch,
   onLeave,
 }: {
   view: GameView;
   isHost: boolean;
-  onRematch: () => void;
+  onNextRound: () => void;
+  onNewMatch: () => void;
   onLeave: () => void;
 }) {
-  const ordered = [...view.players].sort((a, b) => (a.place ?? 9) - (b.place ?? 9));
+  const matchOver = view.phase === 'matchEnd';
+  const winner = view.players.find((p) => p.id === view.matchWinnerId);
+  const dragon = view.history.at(-1)?.dragonPlayerId;
+  const justOut = view.players.filter((p) => p.eliminated);
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.resultTitle}>{view.round}-р дугуй дууслаа</Text>
+    <ScrollView contentContainerStyle={styles.resultsContainer}>
+      {dragon ? (
+        <View style={styles.dragonBanner}>
+          <Text style={styles.dragonTitle}>🐉 ЛУУ!</Text>
+          <Text style={styles.dragonText}>
+            {nameOf(view, dragon)}-д 13 дараалсан хөзөр буулаа — тоглолтыг шууд хожлоо.
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.resultTitle}>
+          {matchOver ? 'Тоглолт дууслаа' : `${view.round}-р дугуй дууслаа`}
+        </Text>
+      )}
+
+      {matchOver && winner && !dragon && (
+        <Text style={styles.winner}>🏆 {winner.name} хожлоо!</Text>
+      )}
+
       <View style={styles.resultPanel}>
-        {ordered.map((p) => {
-          const r = view.results?.find((x) => x.playerId === p.id);
-          return (
-            <View key={p.id} style={styles.resultRow}>
-              <Text style={styles.resultPlace}>{p.place}</Text>
-              <Text style={styles.resultName} numberOfLines={1}>
-                {p.name}
-                {p.id === view.youId ? ' (та)' : ''}
-              </Text>
-              <Text style={styles.resultCards}>{r ? `${r.cardsLeft} хөзөр` : ''}</Text>
-              <Text style={[styles.resultNet, (r?.net ?? 0) >= 0 ? styles.gain : styles.loss]}>
-                {r ? (r.net > 0 ? `+${r.net}` : r.net) : ''}
-              </Text>
-              <Text style={styles.resultTotal}>{p.total}</Text>
-            </View>
-          );
-        })}
-        <Text style={styles.resultLegend}>байр · нэр · үлдсэн · энэ дугуй · нийт</Text>
+        <ScoreBoard
+          players={view.players}
+          history={view.history}
+          targetScore={view.targetScore}
+          youId={view.youId}
+        />
       </View>
 
-      <View style={styles.actions}>
+      {!matchOver && justOut.length > 0 && (
+        <Text style={styles.hint}>
+          Хасагдсан: {justOut.map((p) => `${p.name} (${p.score})`).join(', ')}
+        </Text>
+      )}
+
+      <View style={styles.resultActions}>
         {isHost ? (
-          <Button title="Дахин тоглох" onPress={onRematch} style={styles.action} />
+          matchOver ? (
+            <Button title="Шинэ тоглолт" onPress={onNewMatch} />
+          ) : (
+            <Button title="Дараагийн дугуй" onPress={onNextRound} />
+          )
         ) : (
-          <Text style={styles.hint}>Өрөөний эзэн дахин эхлүүлэхийг хүлээж байна…</Text>
+          <Text style={styles.hint}>
+            Өрөөний эзэн {matchOver ? 'шинэ тоглолт эхлүүлэхийг' : 'үргэлжлүүлэхийг'} хүлээж
+            байна…
+          </Text>
         )}
+        <Button title="Гарах" variant="ghost" onPress={onLeave} />
       </View>
-      <Button title="Гарах" variant="ghost" onPress={onLeave} />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -256,12 +324,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 12,
-    gap: 10,
-    // Өргөн дэлгэц дээр агуулга дунд байрлаж, хэт татагдахгүй.
+    gap: 8,
     width: '100%',
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between' },
+  topText: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
+
   opponents: { flexDirection: 'row', gap: 8 },
   opponent: {
     flex: 1,
@@ -276,6 +346,7 @@ const styles = StyleSheet.create({
   opponentHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 7, height: 7, borderRadius: 4 },
   opponentName: { color: theme.text, fontSize: 13, fontWeight: '600', flex: 1 },
+  opponentScore: { color: theme.textMuted, fontSize: 12, fontWeight: '700' },
   opponentMeta: { color: theme.textMuted, fontSize: 11 },
   miniStack: { flexDirection: 'row' },
   miniOverlap: { marginLeft: -14 },
@@ -287,6 +358,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#93c5fd',
   },
+
+  bench: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.surface,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  benchLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '700' },
+  benchName: { color: theme.textMuted, fontSize: 11 },
 
   table: {
     flex: 1,
@@ -302,7 +386,7 @@ const styles = StyleSheet.create({
   tableLabel: { color: theme.text, fontSize: 14, fontWeight: '600' },
   tableCards: { flexDirection: 'row', gap: 6 },
   emptyTable: { alignItems: 'center', gap: 6 },
-  hint: { color: theme.textMuted, fontSize: 13, textAlign: 'center' },
+  hint: { color: theme.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 18 },
   log: { color: theme.textMuted, fontSize: 12, textAlign: 'center' },
 
   handArea: { gap: 8 },
@@ -310,21 +394,52 @@ const styles = StyleSheet.create({
   turnText: { color: theme.textMuted, fontSize: 14, fontWeight: '600' },
   turnActive: { color: theme.accent },
   score: { color: theme.textMuted, fontSize: 13 },
-  // Хөзөр цөөрөхөд гар зүүн тийш наалдалгүй дунд байрлана.
-  fan: { paddingTop: 20, paddingBottom: 4, paddingHorizontal: 4, flexGrow: 1, justifyContent: 'center' },
+  fan: {
+    paddingTop: 20,
+    paddingBottom: 4,
+    paddingHorizontal: 4,
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1 },
   problem: { color: theme.textMuted, fontSize: 12, textAlign: 'center', minHeight: 16 },
 
-  resultTitle: { color: theme.text, fontSize: 24, fontWeight: '800', textAlign: 'center', marginTop: 32 },
-  resultPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 14, gap: 10 },
-  resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  resultPlace: { color: theme.accent, fontSize: 16, fontWeight: '800', width: 20 },
-  resultName: { color: theme.text, fontSize: 15, flex: 1 },
-  resultCards: { color: theme.textMuted, fontSize: 12, width: 62, textAlign: 'right' },
-  resultNet: { fontSize: 15, fontWeight: '700', width: 44, textAlign: 'right' },
-  resultTotal: { color: theme.text, fontSize: 15, width: 44, textAlign: 'right' },
-  resultLegend: { color: theme.textMuted, fontSize: 10, textAlign: 'right' },
-  gain: { color: theme.success },
-  loss: { color: theme.danger },
+  spectator: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.radius,
+    padding: 16,
+    gap: 6,
+    alignItems: 'center',
+  },
+  spectatorTitle: { color: theme.accent, fontSize: 15, fontWeight: '700' },
+
+  resultsContainer: {
+    padding: 16,
+    gap: 14,
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+  },
+  resultTitle: {
+    color: theme.text,
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  winner: { color: theme.accent, fontSize: 18, fontWeight: '800', textAlign: 'center' },
+  dragonBanner: {
+    backgroundColor: '#3b1d5e',
+    borderRadius: theme.radius,
+    padding: 16,
+    gap: 6,
+    marginTop: 20,
+    borderWidth: 2,
+    borderColor: theme.accent,
+  },
+  dragonTitle: { color: theme.accent, fontSize: 26, fontWeight: '900', textAlign: 'center' },
+  dragonText: { color: theme.text, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  resultPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12 },
+  resultActions: { gap: 8 },
 });

@@ -9,7 +9,17 @@
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 
-import { RuleError, addPlayer, pass, play, removePlayer, startRound } from '../../app/src/shared/game';
+import {
+  DEFAULT_TARGET_SCORE,
+  MAX_PLAYERS,
+  RuleError,
+  addPlayer,
+  pass,
+  play,
+  removePlayer,
+  startMatch,
+  startRound,
+} from '../../app/src/shared/game';
 import {
   PROTOCOL_VERSION,
   type ClientMessage,
@@ -22,6 +32,8 @@ import { serveStatic } from './static';
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_NAME_LENGTH = 16;
 const MAX_CHAT_LENGTH = 200;
+/** Шинээр орсон хүнд үзүүлэх сүүлийн чат мессежийн тоо. */
+const CHAT_HISTORY = 30;
 
 const rooms = new RoomStore();
 
@@ -117,6 +129,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       existing.socket = socket;
       sessions.set(socket, { room, playerId: existing.playerId });
       send(socket, { t: 'joined', code: room.code, playerId: existing.playerId, token: existing.token });
+      sendChatHistory(socket, room);
       return broadcast(room);
     }
   }
@@ -130,12 +143,12 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
   switch (msg.t) {
     case 'start': {
       if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн эхлүүлж чадна.');
-      startRound(room.state);
+      startMatch(room.state, Number(msg.targetScore ?? DEFAULT_TARGET_SCORE));
       return broadcast(room);
     }
-    case 'rematch': {
-      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн дахин эхлүүлж чадна.');
-      if (room.state.phase !== 'finished') throw new RuleError('Дугуй хараахан дуусаагүй байна.');
+    case 'next': {
+      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн үргэлжлүүлж чадна.');
+      if (room.state.phase !== 'roundEnd') throw new RuleError('Дугуй хараахан дуусаагүй байна.');
       startRound(room.state);
       return broadcast(room);
     }
@@ -151,7 +164,10 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       const text = String(msg.text ?? '').trim().slice(0, MAX_CHAT_LENGTH);
       if (!text) return;
       const from = room.state.players.find((p) => p.id === playerId)?.name ?? '?';
-      return broadcastRaw(room, { t: 'chat', from, text, at: Date.now() });
+      const line: ServerMessage = { t: 'chat', from, text, at: Date.now() };
+      room.chat.push(line);
+      if (room.chat.length > CHAT_HISTORY) room.chat.shift();
+      return broadcastRaw(room, line);
     }
     case 'leave': {
       releaseSeat(room, playerId);
@@ -162,7 +178,9 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
 }
 
 function seat(socket: WebSocket, room: Room, name: string): void {
-  if (room.seats.size >= 4) throw new RuleError('Өрөө дүүрсэн байна (дээд тал нь 4 тоглогч).');
+  if (room.seats.size >= MAX_PLAYERS) {
+    throw new RuleError(`Өрөө дүүрсэн байна (дээд тал нь ${MAX_PLAYERS} тоглогч).`);
+  }
   const s = newSeat();
   s.socket = socket;
   room.seats.set(s.playerId, s);
@@ -170,6 +188,12 @@ function seat(socket: WebSocket, room: Room, name: string): void {
   sessions.set(socket, { room, playerId: s.playerId });
   room.lastActivity = Date.now();
   send(socket, { t: 'joined', code: room.code, playerId: s.playerId, token: s.token });
+  sendChatHistory(socket, room);
+}
+
+/** Шинээр холбогдсон хүнд сүүлийн яриаг үзүүлнэ. */
+function sendChatHistory(socket: WebSocket, room: Room): void {
+  for (const line of room.chat) send(socket, line);
 }
 
 function releaseSeat(room: Room, playerId: string): void {

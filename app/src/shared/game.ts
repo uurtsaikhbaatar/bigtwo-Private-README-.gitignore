@@ -3,10 +3,31 @@
  *
  * Сервер энэ модулийг бүрэн эрхтэйгээр ажиллуулж, клиент нь зөвхөн
  * харагдац (view) хүлээж авна. Дүрмийн шалгалт бүхэлдээ энд байрлана.
+ *
+ * ТОГЛООМЫН БҮТЭЦ
+ *   Тоглолт (match) = олон дугуй (round). Дугуй бүрийн төгсгөлд үлдсэн
+ *   хөзрөөр оноо нэмэгдэнэ; оноо хэзээ ч буурахгүй. Тохирсон босгод
+ *   (30 эсвэл 40) хүрсэн тоглогч хасагдаж, бусад нь үргэлжлүүлнэ.
+ *   Сүүлийн үлдсэн тоглогч тоглолтыг хожно.
+ *
+ *   Хөзөр 52 ширхэг тул нэг дугуйд дээд тал нь 4 тоглогч сууна. Өрөөнд
+ *   4-өөс олон хүн байвал дугуй бүрд ээлжлэн өнжинө (`chooseSeats`).
  */
 
-import { Card, THREE_OF_DIAMONDS, deal, rankOf } from './cards';
+import { Card, RANKS, THREE_OF_DIAMONDS, deal, fullDeck, rankOf, shuffle } from './cards';
 import { Combo, beats, detectCombo } from './combos';
+
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 8;
+/** Нэг дугуйд суух дээд тоо — 52 хөзрийг 13-аар хуваахад. */
+export const SEATS_PER_ROUND = 4;
+/** Дугуй бүрд дээд тал нь хэдэн тоглогч солигдох. */
+export const MAX_ROTATION = 2;
+
+export const DEFAULT_TARGET_SCORE = 30;
+export const TARGET_SCORE_CHOICES = [30, 40] as const;
+export const MIN_TARGET_SCORE = 10;
+export const MAX_TARGET_SCORE = 200;
 
 export interface Player {
   id: string;
@@ -16,6 +37,14 @@ export interface Player {
   passed: boolean;
   /** Хөзрөө дуусгасан бол хэддүгээрт орсон (1-ээс эхэлнэ), эс бөгөөс null. */
   place: number | null;
+  /** Хуримтлагдсан оноо. Хэзээ ч буурахгүй. */
+  score: number;
+  /** Босгод хүрч тоглолтоос хасагдсан эсэх. */
+  eliminated: boolean;
+  /** Энэ дугуйд суусан эсэх (өнжиж байгаа бол false). */
+  seated: boolean;
+  /** Сонгон шалгаруулалтад сугалсан хөзөр — яагаад өнжсөнийг харуулна. */
+  draw: Card | null;
 }
 
 export interface TablePlay {
@@ -23,30 +52,45 @@ export interface TablePlay {
   combo: Combo;
 }
 
-export interface RoundResult {
+export interface RoundEntry {
   playerId: string;
+  /** Өнжсөн тоглогчийн хувьд false. */
+  played: boolean;
   cardsLeft: number;
-  /** Торгуулийн үржүүлэгч тооцсон оноо (эерэг = алдагдал). */
-  penalty: number;
-  /** Бусад бүх тоглогчтой тооцоо хийсний дараах цэвэр оноо. */
-  net: number;
+  /** Торгуулийн үржүүлэгч: 1, 2 (10+ хөзөр) эсвэл 3 (13 хөзөр). */
+  multiplier: number;
+  /** Энэ дугуйд нэмэгдсэн оноо. */
+  delta: number;
+  /** Дугуйн дараах нийт оноо. */
+  total: number;
+  place: number | null;
 }
+
+export interface RoundRecord {
+  round: number;
+  entries: RoundEntry[];
+  /** "Луу" гарсан бол тухайн тоглогчийн id. */
+  dragonPlayerId?: string;
+}
+
+export type Phase = 'lobby' | 'playing' | 'roundEnd' | 'matchEnd';
 
 export interface GameState {
   players: Player[];
-  /** Ээлжтэй тоглогчийн индекс. */
+  /** Энэ дугуйд тоглож буй тоглогчдын id, ээлжийн дарааллаар. */
+  seats: string[];
+  /** `seats` доторх индекс. */
   turn: number;
-  /** Ширээн дээрх дарах ёстой хослол. null бол шинэ эргэлт. */
   current: TablePlay | null;
-  /** Хамгийн сүүлд тавигдсан хослол (шинэ эргэлт эхлэхэд ч харагдана). */
   lastPlay: TablePlay | null;
-  phase: 'lobby' | 'playing' | 'finished';
+  phase: Phase;
   round: number;
-  /** Дугуй дууссаны дараах үр дүн. */
-  results: RoundResult[] | null;
-  /** Дугуйнуудын нийлбэр оноо, playerId → оноо. */
-  totals: Record<string, number>;
-  /** Хамгийн сүүлд болсон үйлдлийн товч тайлбар (UI-д харуулах). */
+  targetScore: number;
+  /** Энэ дугуйн эхний тавилтад 3♦ орох ёстой эсэх. */
+  openWithThree: boolean;
+  history: RoundRecord[];
+  lastRoundWinnerId: string | null;
+  matchWinnerId: string | null;
   log: string[];
 }
 
@@ -55,57 +99,231 @@ export class RuleError extends Error {}
 export function createGame(): GameState {
   return {
     players: [],
+    seats: [],
     turn: 0,
     current: null,
     lastPlay: null,
     phase: 'lobby',
     round: 0,
-    results: null,
-    totals: {},
+    targetScore: DEFAULT_TARGET_SCORE,
+    openWithThree: true,
+    history: [],
+    lastRoundWinnerId: null,
+    matchWinnerId: null,
     log: [],
   };
 }
 
 export function addPlayer(state: GameState, id: string, name: string): void {
-  if (state.players.length >= 4) throw new RuleError('Өрөө дүүрсэн байна (дээд тал нь 4 тоглогч).');
+  if (state.players.length >= MAX_PLAYERS) {
+    throw new RuleError(`Өрөө дүүрсэн байна (дээд тал нь ${MAX_PLAYERS} тоглогч).`);
+  }
   if (state.players.some((p) => p.id === id)) return;
-  state.players.push({ id, name, hand: [], passed: false, place: null });
-  state.totals[id] ??= 0;
+  state.players.push({
+    id,
+    name,
+    hand: [],
+    passed: false,
+    place: null,
+    score: 0,
+    eliminated: false,
+    seated: false,
+    draw: null,
+  });
 }
 
 export function removePlayer(state: GameState, id: string): void {
   const idx = state.players.findIndex((p) => p.id === id);
   if (idx === -1) return;
   state.players.splice(idx, 1);
-  if (state.turn >= state.players.length) state.turn = 0;
+  state.seats = state.seats.filter((s) => s !== id);
+  if (state.turn >= state.seats.length) state.turn = 0;
 }
 
-/** Шинэ дугуй тарааж эхлүүлнэ. 2-4 тоглогчтой байж болно. */
+// ── Тоглолт эхлүүлэх ───────────────────────────────────────────────────────
+
+/** Шинэ тоглолт: оноо, түүх, хасалт бүгд тэглэгдэнэ. */
+export function startMatch(
+  state: GameState,
+  targetScore: number = DEFAULT_TARGET_SCORE,
+  rng: () => number = Math.random,
+): void {
+  if (state.players.length < MIN_PLAYERS) {
+    throw new RuleError(`Дор хаяж ${MIN_PLAYERS} тоглогч хэрэгтэй.`);
+  }
+  const target = Math.round(targetScore);
+  if (!Number.isFinite(target) || target < MIN_TARGET_SCORE || target > MAX_TARGET_SCORE) {
+    throw new RuleError(`Босго оноо ${MIN_TARGET_SCORE}–${MAX_TARGET_SCORE} хооронд байх ёстой.`);
+  }
+
+  state.targetScore = target;
+  state.round = 0;
+  state.history = [];
+  state.seats = [];
+  state.lastRoundWinnerId = null;
+  state.matchWinnerId = null;
+  state.players.forEach((p) => {
+    p.score = 0;
+    p.eliminated = false;
+    p.seated = false;
+    p.draw = null;
+  });
+  state.log = [`Тоглолт эхэллээ — ${target} оноонд хүрсэн тоглогч хасагдана.`];
+  startRound(state, rng);
+}
+
+/** Дараагийн дугуйг эхлүүлнэ. */
 export function startRound(state: GameState, rng: () => number = Math.random): void {
-  if (state.players.length < 2) throw new RuleError('Дор хаяж 2 тоглогч хэрэгтэй.');
-  const hands = deal(state.players.length, rng);
-  state.players.forEach((p, i) => {
-    p.hand = hands[i];
+  if (state.phase === 'matchEnd') throw new RuleError('Тоглолт дууссан байна.');
+  const contenders = state.players.filter((p) => !p.eliminated);
+  if (contenders.length < MIN_PLAYERS) throw new RuleError('Үргэлжлүүлэх тоглогч хүрэлцэхгүй.');
+
+  const previousSeats = state.seats;
+  state.seats = chooseSeats(state, contenders, rng);
+  state.round += 1;
+
+  const hands = deal(state.seats.length, rng);
+  state.players.forEach((p) => {
     p.passed = false;
     p.place = null;
+    p.hand = [];
+    p.seated = state.seats.includes(p.id);
   });
+  state.seats.forEach((id, i) => {
+    playerById(state, id).hand = hands[i];
+  });
+
   state.current = null;
   state.lastPlay = null;
-  state.results = null;
+  state.turn = 0;
   state.phase = 'playing';
-  state.round += 1;
   state.log = [`${state.round}-р дугуй эхэллээ.`];
-  // 3♦ бүхий тоглогч эхэлнэ. Хэрэв 2-3 тоглогчтой бол хэн нэгэнд байхгүй байж
-  // болох тул тавцан дээр үлдсэн бол хамгийн бага хөзөртэй тоглогч эхэлнэ.
-  const starter = state.players.findIndex((p) => p.hand.includes(THREE_OF_DIAMONDS));
-  state.turn = starter !== -1 ? starter : lowestCardHolder(state);
+
+  const benched = contenders.filter((p) => !p.seated);
+  if (benched.length > 0) {
+    state.log.push(`Өнжиж байна: ${benched.map((p) => p.name).join(', ')}.`);
+  }
+
+  // "Луу" — 13 зэрэглэл бүрээс нэг хөзөр. Хөзөр зөвхөн цөөрдөг тул энэ нь
+  // зөвхөн тараах мөчид үүсэх боломжтой.
+  const dragon = seatedPlayers(state).find((p) => isDragon(p.hand));
+  if (dragon) return declareDragon(state, dragon);
+
+  chooseStarter(state, previousSeats);
 }
 
-function lowestCardHolder(state: GameState): number {
+/** Гарт 13 зэрэглэл бүрээс нэг байгаа эсэх (баг хамаарахгүй). */
+export function isDragon(hand: Card[]): boolean {
+  if (hand.length !== RANKS.length) return false;
+  return new Set(hand.map(rankOf)).size === RANKS.length;
+}
+
+function declareDragon(state: GameState, winner: Player): void {
+  state.players.forEach((p) => {
+    if (p.id !== winner.id) p.eliminated = true;
+  });
+  state.matchWinnerId = winner.id;
+  state.lastRoundWinnerId = winner.id;
+  state.phase = 'matchEnd';
+  state.current = null;
+  state.history.push({
+    round: state.round,
+    dragonPlayerId: winner.id,
+    entries: state.players.map((p) => ({
+      playerId: p.id,
+      played: p.seated,
+      cardsLeft: p.hand.length,
+      multiplier: 1,
+      delta: 0,
+      total: p.score,
+      place: p.id === winner.id ? 1 : null,
+    })),
+  });
+  state.log.push(`🐉 ${winner.name}-д ЛУУ буулаа — 13 дараалсан хөзөр! Тоглолтыг шууд хожлоо.`);
+}
+
+/**
+ * Энэ дугуйд хэн суухыг тодорхойлно.
+ *
+ * 4 ба түүнээс цөөн тоглогчтой бол бүгд сууна. Олон бол:
+ *   - Эхний удаа: бүгд нэг хөзөр сугалж, хамгийн бага 4 нь сууна.
+ *   - Дараа нь: өмнөх дугуйн 1-р (болон 2-р) байр эзэлсэн нь өнжиж,
+ *     өнжсөн хүмүүсээс хамгийн бага хөзөр сугалсан нь ордог.
+ */
+function chooseSeats(state: GameState, contenders: Player[], rng: () => number): string[] {
+  state.players.forEach((p) => (p.draw = null));
+  if (contenders.length <= SEATS_PER_ROUND) return contenders.map((p) => p.id);
+
+  const previous = state.seats
+    .map((id) => state.players.find((p) => p.id === id))
+    .filter((p): p is Player => !!p && !p.eliminated);
+
+  // Эхний дугуй (эсвэл өмнөх суудал алдагдсан): бүгд сугална.
+  if (previous.length === 0) {
+    const drawn = drawFor(contenders, rng);
+    state.log.push(`Хөзөр сугалж ${SEATS_PER_ROUND} тоглогч тодорлоо.`);
+    return drawn.slice(0, SEATS_PER_ROUND).map((p) => p.id);
+  }
+
+  const bench = contenders.filter((p) => !previous.some((q) => q.id === p.id));
+  const rotation = Math.min(MAX_ROTATION, bench.length);
+
+  // Гарах ээлж: 1-р байр эхэлж, дараа нь 2-р байр.
+  const leaving = previous
+    .filter((p) => p.place !== null)
+    .sort((a, b) => (a.place ?? 99) - (b.place ?? 99))
+    .slice(0, rotation)
+    .map((p) => p.id);
+
+  const stayers = previous.filter((p) => !leaving.includes(p.id));
+  const incoming = drawFor(bench, rng).slice(0, SEATS_PER_ROUND - stayers.length);
+  const seats = [...stayers.map((p) => p.id), ...incoming.map((p) => p.id)];
+
+  // Хэн нэгэн хасагдсанаас болж дутвал үлдсэн хүмүүсээс нөхнө.
+  for (const p of contenders) {
+    if (seats.length >= Math.min(SEATS_PER_ROUND, contenders.length)) break;
+    if (!seats.includes(p.id)) seats.push(p.id);
+  }
+  return seats;
+}
+
+/** Өгөгдсөн тоглогчдод нэг нэг хөзөр сугалж, багаас нь эрэмбэлж буцаана. */
+function drawFor(players: Player[], rng: () => number): Player[] {
+  const deck = shuffle(fullDeck(), rng);
+  players.forEach((p, i) => (p.draw = deck[i]));
+  return players.slice().sort((a, b) => (a.draw ?? 0) - (b.draw ?? 0));
+}
+
+/**
+ * Хэн эхлэхийг тодорхойлно.
+ *
+ * Өнжих ээлж байхгүй (4 ба цөөн тоглогч) үед өмнөх дугуйн хожигч түрүүлж
+ * гарна. Ээлжлэн өнжиж байгаа үед хожигч өнжсөн байх тул 3♦-тэй тоглогч
+ * эхэлнэ.
+ */
+function chooseStarter(state: GameState, previousSeats: string[]): void {
+  const rotating = state.players.filter((p) => !p.eliminated).length > SEATS_PER_ROUND;
+  const winner = state.lastRoundWinnerId;
+
+  if (!rotating && previousSeats.length > 0 && winner && state.seats.includes(winner)) {
+    state.turn = state.seats.indexOf(winner);
+    state.openWithThree = false;
+    state.log.push(`${playerById(state, winner).name} өмнөх дугуйг хожсон тул эхэлнэ.`);
+    return;
+  }
+
+  const holder = state.seats.findIndex((id) =>
+    playerById(state, id).hand.includes(THREE_OF_DIAMONDS),
+  );
+  state.turn = holder !== -1 ? holder : lowestCardSeat(state);
+  state.openWithThree = holder !== -1;
+}
+
+function lowestCardSeat(state: GameState): number {
   let best = 0;
   let bestCard = Infinity;
-  state.players.forEach((p, i) => {
-    const low = p.hand[0];
+  state.seats.forEach((id, i) => {
+    const low = playerById(state, id).hand[0];
     if (low !== undefined && low < bestCard) {
       bestCard = low;
       best = i;
@@ -114,19 +332,27 @@ function lowestCardHolder(state: GameState): number {
   return best;
 }
 
+// ── Үйлдлүүд ───────────────────────────────────────────────────────────────
+
 /** Хөзөр тавих. Дүрэм зөрчвөл `RuleError` шиднэ. */
 export function play(state: GameState, playerId: string, cards: Card[]): void {
-  const idx = requireTurn(state, playerId);
-  const player = state.players[idx];
+  const seat = requireTurn(state, playerId);
+  const player = playerById(state, playerId);
 
-  const missing = cards.filter((c) => !player.hand.includes(c));
-  if (missing.length > 0) throw new RuleError('Тэр хөзөр таны гарт байхгүй байна.');
+  if (cards.some((c) => !player.hand.includes(c))) {
+    throw new RuleError('Тэр хөзөр таны гарт байхгүй байна.');
+  }
 
   const combo = detectCombo(cards);
   if (!combo) throw new RuleError('Энэ нь хүчинтэй хослол биш байна.');
 
-  const isFirstPlayOfRound = state.lastPlay === null;
-  if (isFirstPlayOfRound && player.hand.includes(THREE_OF_DIAMONDS) && !cards.includes(THREE_OF_DIAMONDS)) {
+  const firstPlay = state.lastPlay === null;
+  if (
+    firstPlay &&
+    state.openWithThree &&
+    player.hand.includes(THREE_OF_DIAMONDS) &&
+    !cards.includes(THREE_OF_DIAMONDS)
+  ) {
     throw new RuleError('Эхний тавилтад 3♦ орсон байх ёстой.');
   }
   if (!beats(combo, state.current?.combo ?? null)) {
@@ -144,108 +370,152 @@ export function play(state: GameState, playerId: string, cards: Card[]): void {
   if (player.hand.length === 0) {
     player.place = nextPlace(state);
     state.log.push(`${player.name} хөзрөө дуусгалаа (${player.place}-р байр).`);
-    if (activeCount(state) <= 1) return finishRound(state);
+    if (activeSeats(state) <= 1) return finishRound(state);
   }
 
-  advance(state, idx);
+  advance(state, seat);
 }
 
 /** Пас хийх. Шинэ эргэлтийн эхэнд пас хийж болохгүй. */
 export function pass(state: GameState, playerId: string): void {
-  const idx = requireTurn(state, playerId);
+  const seat = requireTurn(state, playerId);
   if (!state.current) throw new RuleError('Шинэ эргэлтийг эхлүүлэх ёстой — пас хийж болохгүй.');
-  state.players[idx].passed = true;
-  state.log.push(`${state.players[idx].name}: пас.`);
-  advance(state, idx);
+  const player = playerById(state, playerId);
+  player.passed = true;
+  state.log.push(`${player.name}: пас.`);
+  advance(state, seat);
 }
 
 function requireTurn(state: GameState, playerId: string): number {
   if (state.phase !== 'playing') throw new RuleError('Тоглоом идэвхгүй байна.');
-  const idx = state.players.findIndex((p) => p.id === playerId);
-  if (idx === -1) throw new RuleError('Тоглогч олдсонгүй.');
-  if (idx !== state.turn) throw new RuleError('Одоо таны ээлж биш байна.');
-  return idx;
+  const seat = state.seats.indexOf(playerId);
+  if (seat === -1) throw new RuleError('Та энэ дугуйд өнжиж байна.');
+  if (seat !== state.turn) throw new RuleError('Одоо таны ээлж биш байна.');
+  return seat;
 }
 
-const activeCount = (state: GameState): number => state.players.filter((p) => p.place === null).length;
+const playerById = (state: GameState, id: string): Player => {
+  const p = state.players.find((x) => x.id === id);
+  if (!p) throw new RuleError('Тоглогч олдсонгүй.');
+  return p;
+};
+
+const seatedPlayers = (state: GameState): Player[] => state.seats.map((id) => playerById(state, id));
+
+const activeSeats = (state: GameState): number =>
+  seatedPlayers(state).filter((p) => p.place === null).length;
 
 /** Дараагийн эзлэх байр. Эхний дуусгасан хүн 1-р байр эзэлнэ. */
 const nextPlace = (state: GameState): number =>
-  state.players.filter((p) => p.place !== null).length + 1;
+  seatedPlayers(state).filter((p) => p.place !== null).length + 1;
 
 /**
  * Ээлжийг дараагийн хариулах эрхтэй тоглогч руу шилжүүлнэ.
  * Хэрэв хэн ч хариулах боломжгүй бол шинэ эргэлт эхэлнэ.
  */
-function advance(state: GameState, actorIdx: number): void {
-  const ownerIdx = state.current
-    ? state.players.findIndex((p) => p.id === state.current!.playerId)
-    : actorIdx;
-
-  const next = nextEligible(state, actorIdx);
-  if (next === null || next === ownerIdx) {
-    startNewTrick(state, ownerIdx);
-  } else {
-    state.turn = next;
-  }
+function advance(state: GameState, actorSeat: number): void {
+  const ownerSeat = state.current ? state.seats.indexOf(state.current.playerId) : actorSeat;
+  const next = nextEligible(state, actorSeat);
+  if (next === null || next === ownerSeat) startNewTrick(state, ownerSeat);
+  else state.turn = next;
 }
 
-/** actorIdx-ээс хойших, дуусаагүй ба пас хийгээгүй эхний тоглогч. */
+/** actorSeat-ээс хойших, дуусаагүй ба пас хийгээгүй эхний суудал. */
 function nextEligible(state: GameState, from: number): number | null {
-  const n = state.players.length;
+  const n = state.seats.length;
   for (let i = 1; i <= n; i++) {
-    const idx = (from + i) % n;
-    const p = state.players[idx];
-    if (p.place === null && !p.passed) return idx;
+    const seat = (from + i) % n;
+    const p = playerById(state, state.seats[seat]);
+    if (p.place === null && !p.passed) return seat;
   }
   return null;
 }
 
-function startNewTrick(state: GameState, ownerIdx: number): void {
+function startNewTrick(state: GameState, ownerSeat: number): void {
   state.current = null;
-  state.players.forEach((p) => (p.passed = false));
-  const owner = state.players[ownerIdx];
-  state.turn = owner && owner.place === null ? ownerIdx : (nextActive(state, ownerIdx) ?? ownerIdx);
-  const leader = state.players[state.turn];
-  if (leader) state.log.push(`Шинэ эргэлт — ${leader.name} эхэлнэ.`);
+  state.openWithThree = false;
+  seatedPlayers(state).forEach((p) => (p.passed = false));
+  const owner = playerById(state, state.seats[ownerSeat]);
+  state.turn = owner.place === null ? ownerSeat : (nextActiveSeat(state, ownerSeat) ?? ownerSeat);
+  state.log.push(`Шинэ эргэлт — ${playerById(state, state.seats[state.turn]).name} эхэлнэ.`);
 }
 
-function nextActive(state: GameState, from: number): number | null {
-  const n = state.players.length;
+function nextActiveSeat(state: GameState, from: number): number | null {
+  const n = state.seats.length;
   for (let i = 1; i <= n; i++) {
-    const idx = (from + i) % n;
-    if (state.players[idx].place === null) return idx;
+    const seat = (from + i) % n;
+    if (playerById(state, state.seats[seat]).place === null) return seat;
   }
   return null;
+}
+
+// ── Дугуй дуусах ба оноо ───────────────────────────────────────────────────
+
+/**
+ * Үлдсэн хөзрийн торгуулийн үржүүлэгч.
+ * 10-аас дээш хөзөр үлдвэл ×2, нэг ч хөзөр гаргаагүй (13) бол ×3.
+ */
+export function penaltyMultiplier(cardsLeft: number): number {
+  if (cardsLeft >= 13) return 3;
+  if (cardsLeft >= 10) return 2;
+  return 1;
 }
 
 function finishRound(state: GameState): void {
-  state.players.forEach((p) => {
+  seatedPlayers(state).forEach((p) => {
     if (p.place === null) p.place = nextPlace(state);
   });
 
-  const penalties = new Map<string, number>();
-  for (const p of state.players) {
-    const n = p.hand.length;
-    const multiplier = n >= 13 ? 3 : n >= 10 ? 2 : 1;
-    penalties.set(p.id, n * multiplier);
-  }
+  const entries: RoundEntry[] = state.players.map((p) => {
+    const played = p.seated;
+    const cardsLeft = played ? p.hand.length : 0;
+    const multiplier = played ? penaltyMultiplier(cardsLeft) : 1;
+    const delta = played ? cardsLeft * multiplier : 0;
+    p.score += delta;
+    return {
+      playerId: p.id,
+      played,
+      cardsLeft,
+      multiplier,
+      delta,
+      total: p.score,
+      place: played ? p.place : null,
+    };
+  });
+  state.history.push({ round: state.round, entries });
 
-  // Тоглогч бүр бусад бүхэнтэй хос хосоороо тооцоо хийнэ.
-  state.results = state.players.map((p) => {
-    const mine = penalties.get(p.id)!;
-    const net = state.players
-      .filter((o) => o.id !== p.id)
-      .reduce((sum, o) => sum + (penalties.get(o.id)! - mine), 0);
-    state.totals[p.id] = (state.totals[p.id] ?? 0) + net;
-    return { playerId: p.id, cardsLeft: p.hand.length, penalty: mine, net };
+  const winner = seatedPlayers(state).find((p) => p.place === 1);
+  state.lastRoundWinnerId = winner?.id ?? null;
+  if (winner) state.log.push(`${winner.name} дугуйг хожлоо! 🎉`);
+
+  applyEliminations(state);
+
+  const remaining = state.players.filter((p) => !p.eliminated);
+  if (remaining.length <= 1) {
+    state.matchWinnerId = remaining[0]?.id ?? null;
+    state.phase = 'matchEnd';
+    if (remaining[0]) state.log.push(`🏆 ${remaining[0].name} тоглолтыг хожлоо!`);
+  } else {
+    state.phase = 'roundEnd';
+  }
+  state.current = null;
+}
+
+function applyEliminations(state: GameState): void {
+  const newlyOut = state.players.filter((p) => !p.eliminated && p.score >= state.targetScore);
+  newlyOut.forEach((p) => {
+    p.eliminated = true;
+    state.log.push(`${p.name} ${p.score} оноонд хүрч хасагдлаа.`);
   });
 
-  state.phase = 'finished';
-  state.current = null;
-  const winner = state.players.find((p) => p.place === 1);
-  if (winner) state.log.push(`${winner.name} дугуйг хожлоо! 🎉`);
+  // Бүгд нэг зэрэг босго давбал хамгийн бага оноотой нь үлдэнэ.
+  if (newlyOut.length > 0 && state.players.every((p) => p.eliminated)) {
+    const best = Math.min(...newlyOut.map((p) => p.score));
+    newlyOut.filter((p) => p.score === best).forEach((p) => (p.eliminated = false));
+  }
 }
+
+// ── Туслах ─────────────────────────────────────────────────────────────────
 
 /**
  * Тухайн тоглогчийн хувьд хууль ёсны тавилт байгаа эсэх — "пас" товчийг
@@ -253,14 +523,11 @@ function finishRound(state: GameState): void {
  */
 export function hasLegalPlay(state: GameState, playerId: string): boolean {
   const player = state.players.find((p) => p.id === playerId);
-  if (!player) return false;
+  if (!player || !player.seated) return false;
   const current = state.current?.combo ?? null;
   if (!current) return player.hand.length > 0;
-  if (current.size === 1) {
-    return player.hand.some((c) => c > current.power);
-  }
-  // Хос/гурвал/5 хөзрийн хувьд бүрэн хайлт хийхээс зайлсхийж, ойролцоо
-  // үнэлгээ өгнө: тухайн хэмжээтэй хослол угсрах боломж байгаа эсэх.
+  if (current.size === 1) return player.hand.some((c) => c > current.power);
+
   if (current.size === 2 || current.size === 3) {
     const byRank = new Map<number, Card[]>();
     for (const c of player.hand) {

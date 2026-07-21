@@ -178,10 +178,12 @@ export function useBigTwo(serverUrl: string) {
       },
       [openSocket],
     ),
-    startGame: useCallback(() => send({ t: 'start' }), [send]),
+    /** Шинэ тоглолт эхлүүлэх (босго оноотой). */
+    startGame: useCallback((targetScore: number) => send({ t: 'start', targetScore }), [send]),
+    /** Дараагийн дугуйг эхлүүлэх. */
+    nextRound: useCallback(() => send({ t: 'next' }), [send]),
     playCards: useCallback((cards: Card[]) => send({ t: 'play', cards }), [send]),
     passTurn: useCallback(() => send({ t: 'pass' }), [send]),
-    rematch: useCallback(() => send({ t: 'rematch' }), [send]),
     sendChat: useCallback((text: string) => send({ t: 'chat', text }), [send]),
     leaveRoom: useCallback(() => {
       send({ t: 'leave' });

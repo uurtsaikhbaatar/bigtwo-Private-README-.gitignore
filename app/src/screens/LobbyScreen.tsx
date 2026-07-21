@@ -1,23 +1,30 @@
-import React from 'react';
-import { Share, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
-import type { GameView } from '../shared/protocol';
 import { Button } from '../components/Button';
 import { joinUrl } from '../deeplink';
+import {
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  SEATS_PER_ROUND,
+  TARGET_SCORE_CHOICES,
+} from '../shared/game';
+import type { GameView } from '../shared/protocol';
 import { theme } from '../theme';
 
 interface Props {
   view: GameView;
-  onStart: () => void;
+  onStart: (targetScore: number) => void;
   onLeave: () => void;
 }
 
 export function LobbyScreen({ view, onStart, onLeave }: Props) {
+  const [target, setTarget] = useState<number>(TARGET_SCORE_CHOICES[0]);
   const you = view.players.find((p) => p.id === view.youId);
   const isHost = you?.isHost ?? false;
-  const enough = view.players.length >= 2;
+  const enough = view.players.length >= MIN_PLAYERS;
+  const rotating = view.players.length > SEATS_PER_ROUND;
 
-  // Вэб дээр линк дарахад шууд орох боломжтой; native дээр код л илгээнэ.
   const link = joinUrl(view.code);
   const share = () => {
     void Share.share({
@@ -28,7 +35,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.eyebrow}>Өрөөний код</Text>
       <Text style={styles.code} accessibilityLabel={view.code.split('').join(' ')}>
         {view.code}
@@ -41,57 +48,92 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
       )}
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Тоглогчид ({view.players.length}/4)</Text>
+        <Text style={styles.panelTitle}>
+          Тоглогчид ({view.players.length}/{MAX_PLAYERS})
+        </Text>
         {view.players.map((p) => (
           <View key={p.id} style={styles.row}>
-            <View style={[styles.dot, { backgroundColor: p.connected ? theme.success : theme.textMuted }]} />
-            <Text style={styles.name}>
+            <View
+              style={[styles.dot, { backgroundColor: p.connected ? theme.success : theme.textMuted }]}
+            />
+            <Text style={styles.name} numberOfLines={1}>
               {p.name}
               {p.id === view.youId ? ' (та)' : ''}
             </Text>
             {p.isHost && <Text style={styles.badge}>эзэн</Text>}
           </View>
         ))}
-        {view.players.length < 2 && (
-          <Text style={styles.hint}>Дор хаяж нэг найзаа хүлээж байна…</Text>
+        {!enough && <Text style={styles.hint}>Дор хаяж нэг найзаа хүлээж байна…</Text>}
+        {rotating && (
+          <Text style={styles.hint}>
+            Хөзөр 52 тул дугуй бүрд {SEATS_PER_ROUND} хүн тоглоно — үлдсэн нь ээлжлэн өнжинө.
+          </Text>
         )}
+      </View>
+
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Хэдэн оноонд хүрвэл хасагдах вэ?</Text>
+        <View style={styles.choices}>
+          {TARGET_SCORE_CHOICES.map((choice) => {
+            const active = target === choice;
+            return (
+              <Pressable
+                key={choice}
+                onPress={() => setTarget(choice)}
+                disabled={!isHost}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                style={[styles.choice, active && styles.choiceActive, !isHost && styles.choiceLocked]}
+              >
+                <Text style={[styles.choiceText, active && styles.choiceTextActive]}>{choice}</Text>
+                <Text style={styles.choiceLabel}>оноо</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.hint}>
+          {isHost
+            ? 'Босгод хүрсэн тоглогч хасагдаж, бусад нь үргэлжлүүлнэ. Сүүлд үлдсэн нь хожино.'
+            : `Өрөөний эзэн ${target} оноо сонгосон байна.`}
+        </Text>
       </View>
 
       <View style={styles.actions}>
         {isHost ? (
-          <Button title="Тоглоом эхлүүлэх" onPress={onStart} disabled={!enough} />
+          <Button title="Тоглоом эхлүүлэх" onPress={() => onStart(target)} disabled={!enough} />
         ) : (
           <Text style={styles.hint}>Өрөөний эзэн эхлүүлэхийг хүлээж байна…</Text>
         )}
         <Button title="Өрөөнөөс гарах" variant="ghost" onPress={onLeave} />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: 20,
+    paddingBottom: 40,
     gap: 12,
     width: '100%',
     maxWidth: 480,
     alignSelf: 'center',
   },
-  eyebrow: { color: theme.textMuted, fontSize: 13, textAlign: 'center', marginTop: 24 },
+  eyebrow: { color: theme.textMuted, fontSize: 13, textAlign: 'center', marginTop: 16 },
   code: {
     color: theme.accent,
-    fontSize: 48,
+    fontSize: 44,
     fontWeight: '800',
     letterSpacing: 8,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  panel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 16, gap: 12 },
+  link: { color: theme.textMuted, fontSize: 11, textAlign: 'center' },
+  panel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 16, gap: 10 },
   panelTitle: { color: theme.textMuted, fontSize: 13, fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  name: { color: theme.text, fontSize: 17, flex: 1 },
+  name: { color: theme.text, fontSize: 16, flex: 1 },
   badge: {
     color: theme.accent,
     fontSize: 11,
@@ -102,7 +144,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  hint: { color: theme.textMuted, fontSize: 13, textAlign: 'center' },
-  link: { color: theme.textMuted, fontSize: 11, textAlign: 'center' },
-  actions: { marginTop: 'auto', gap: 8 },
+  hint: { color: theme.textMuted, fontSize: 13, lineHeight: 18 },
+  choices: { flexDirection: 'row', gap: 10 },
+  choice: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: theme.surfaceRaised,
+    backgroundColor: theme.surfaceRaised,
+    alignItems: 'center',
+  },
+  choiceActive: { borderColor: theme.accent },
+  choiceLocked: { opacity: 0.6 },
+  choiceText: { color: theme.textMuted, fontSize: 24, fontWeight: '800' },
+  choiceTextActive: { color: theme.accent },
+  choiceLabel: { color: theme.textMuted, fontSize: 11 },
+  actions: { gap: 8, marginTop: 4 },
 });

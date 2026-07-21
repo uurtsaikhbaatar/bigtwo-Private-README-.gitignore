@@ -8,8 +8,9 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/game.test.ts",
-    "smoke": "node --import tsx src/smoke.ts"
+    "test": "node --import tsx --test src/game.test.ts src/match.test.ts",
+    "smoke": "node --import tsx src/smoke.ts",
+    "bots": "node --import tsx src/bots.ts"
   },
   "dependencies": {
     "tsx": "^4.19.2",

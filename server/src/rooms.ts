@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 
 import { GameState, createGame } from '../../app/src/shared/game';
-import { RoomMeta } from '../../app/src/shared/protocol';
+import { RoomMeta, ServerMessage } from '../../app/src/shared/protocol';
 
 /** Андуурч уншихад хялбар байлгах үүднээс O, 0, I, 1-ийг хассан. */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -23,6 +23,8 @@ export interface Room {
   state: GameState;
   hostId: string;
   seats: Map<string, Seat>;
+  /** Сүүлийн чат мессежүүд — шинээр орсон хүнд дамжуулна. */
+  chat: ServerMessage[];
   lastActivity: number;
 }
 
@@ -35,6 +37,7 @@ export class RoomStore {
       state: createGame(),
       hostId: '',
       seats: new Map(),
+      chat: [],
       lastActivity: Date.now(),
     };
     this.rooms.set(room.code, room);

@@ -1,24 +1,30 @@
 /**
- * Төгсгөлөөс төгсгөл хүртэлх шалгалт: 3 клиент бодит WebSocket-оор холбогдож,
- * өрөө үүсгэж, нэгдэж, бүтэн дугуй тоглож дуусгана.
+ * Төгсгөлөөс төгсгөл хүртэлх шалгалт: 5 клиент бодит WebSocket-оор холбогдож,
+ * бүтэн тоглолтыг (олон дугуй, хасалт хүртэл) тоглож дуусгана.
+ *
+ * 5 тоглогч сонгосон учир нь: дугуй бүрд нэг нь өнжих тул суудлын ээлж,
+ * үзэгчийн горим хоёулаа шалгагдана.
  *
  * Ажиллуулах:  npm start   (өөр цонхонд)
- *              node --import tsx src/smoke.ts
+ *              npm run smoke
  */
 
 import WebSocket from 'ws';
 
-import { Card, THREE_OF_DIAMONDS } from '../../app/src/shared/cards';
+import { Card } from '../../app/src/shared/cards';
 import { Combo, beats, detectCombo } from '../../app/src/shared/combos';
 import type { ClientMessage, GameView, ServerMessage } from '../../app/src/shared/protocol';
 
 const URL = process.env.SMOKE_URL ?? 'ws://localhost:8787';
+const TARGET_SCORE = 30;
+const PLAYER_NAMES = ['Ану', 'Бат', 'Цэцэг', 'Дорж', 'Энхээ'];
 
 class Client {
   readonly ws: WebSocket;
   view: GameView | null = null;
   code = '';
   playerId = '';
+  chat: string[] = [];
   private waiters: Array<(m: ServerMessage) => boolean> = [];
 
   constructor(readonly label: string) {
@@ -26,6 +32,7 @@ class Client {
     this.ws.on('message', (raw) => {
       const msg = JSON.parse(raw.toString()) as ServerMessage;
       if (msg.t === 'state') this.view = msg.view;
+      if (msg.t === 'chat') this.chat.push(`${msg.from}: ${msg.text}`);
       if (msg.t === 'joined') {
         this.code = msg.code;
         this.playerId = msg.playerId;
@@ -43,10 +50,12 @@ class Client {
     return new Promise((resolve) => this.ws.once('open', () => resolve()));
   }
 
-  /** Тухайн нөхцөл биелэх мессежийг хүлээнэ. */
   await(predicate: (m: ServerMessage) => boolean, timeoutMs = 5000): Promise<ServerMessage> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`${this.label}: хүлээлт хугацаа хэтэрлээ`)), timeoutMs);
+      const timer = setTimeout(
+        () => reject(new Error(`${this.label}: хүлээлт хугацаа хэтэрлээ`)),
+        timeoutMs,
+      );
       this.waiters.push((m) => {
         if (!predicate(m)) return false;
         clearTimeout(timer);
@@ -57,17 +66,15 @@ class Client {
   }
 }
 
-/** Хамгийн энгийн стратеги: хамгийн сул хууль ёсны тавилтыг сонгоно. */
+/** Хамгийн сул хууль ёсны тавилтыг сонгоно. */
 function pickPlay(hand: Card[], current: Combo | null, mustIncludeThree: boolean): Card[] | null {
-  const sizes = current ? [current.size] : [1, 2, 3, 5];
-  for (const size of sizes) {
+  for (const size of current ? [current.size] : [1, 2, 3, 5]) {
     if (size > hand.length) continue;
     const idx = Array.from({ length: size }, (_, i) => i);
     for (;;) {
       const pick = idx.map((i) => hand[i]);
       const combo = detectCombo(pick);
-      const okThree = !mustIncludeThree || pick.includes(THREE_OF_DIAMONDS);
-      if (combo && okThree && beats(combo, current)) return pick;
+      if (combo && beats(combo, current) && (!mustIncludeThree || pick.includes(0))) return pick;
       let k = size - 1;
       while (k >= 0 && idx[k] === hand.length - size + k) k--;
       if (k < 0) break;
@@ -78,61 +85,135 @@ function pickPlay(hand: Card[], current: Combo | null, mustIncludeThree: boolean
   return null;
 }
 
-async function main() {
-  const clients = [new Client('Ану'), new Client('Бат'), new Client('Цэцэг')];
-  await Promise.all(clients.map((c) => c.open()));
-  console.log('✓ 3 клиент холбогдлоо');
+const check = (condition: boolean, message: string): void => {
+  if (!condition) throw new Error(message);
+};
 
-  clients[0].send({ t: 'create', name: 'Ану' });
+async function main() {
+  const clients = PLAYER_NAMES.map((n) => new Client(n));
+  await Promise.all(clients.map((c) => c.open()));
+  console.log(`✓ ${clients.length} клиент холбогдлоо`);
+
+  clients[0].send({ t: 'create', name: clients[0].label });
   await clients[0].await((m) => m.t === 'joined');
   const code = clients[0].code;
-  console.log(`✓ өрөө үүслээ: ${code}`);
 
   for (const c of clients.slice(1)) {
     c.send({ t: 'join', name: c.label, code });
     await c.await((m) => m.t === 'joined');
   }
-  await clients[0].await((m) => m.t === 'state' && m.view.players.length === 3);
-  console.log('✓ бүгд өрөөнд нэгдлээ');
+  await clients[0].await((m) => m.t === 'state' && m.view.players.length === clients.length);
+  console.log(`✓ өрөө ${code} — ${clients.length} тоглогч нэгдлээ`);
 
-  clients[0].send({ t: 'start' });
+  // Чат: нэг нь бичихэд бүгд хүлээж авах ёстой. Хүлээгчийг илгээхээс өмнө
+  // бүртгэхгүй бол зарим клиент амжаагүй байхад шалгах эрсдэлтэй.
+  const heard = clients.map((c) => c.await((m) => m.t === 'chat'));
+  clients[1].send({ t: 'chat', text: 'Тоглоцгооё!' });
+  await Promise.all(heard);
+  check(
+    clients.every((c) => c.chat.some((l) => l.includes('Тоглоцгооё!'))),
+    'чат бүх тоглогчид хүрсэнгүй',
+  );
+  console.log('✓ чат бүх тоглогчид хүрлээ');
+
+  clients[0].send({ t: 'start', targetScore: TARGET_SCORE });
   await clients[0].await((m) => m.t === 'state' && m.view.phase === 'playing');
-  console.log('✓ тоглоом эхэллээ');
+  console.log(`✓ тоглолт эхэллээ (босго ${TARGET_SCORE} оноо)`);
 
+  const scores = new Map(clients.map((c) => [c.playerId, 0]));
   let moves = 0;
-  while (clients[0].view?.phase === 'playing') {
-    if (++moves > 500) throw new Error('тоглоом гацлаа');
-    const actor = clients.find((c) => c.view && c.view.turnId === c.playerId);
-    if (!actor?.view) {
-      await new Promise((r) => setTimeout(r, 20));
+  let rounds = 0;
+
+  while (clients[0].view?.phase !== 'matchEnd') {
+    if (++moves >= 60000) {
+      const v = clients[0].view!;
+      console.error('ГАЦСАН ТӨЛӨВ:', {
+        phase: v.phase,
+        round: v.round,
+        turnId: v.turnId,
+        seats: v.seats,
+        turnName: v.players.find((p) => p.id === v.turnId)?.name,
+        scores: v.players.map((p) => `${p.name}:${p.score}${p.eliminated ? '✗' : ''}`),
+        views: clients.map((c) => `${c.label}=${c.view?.phase}/${c.view?.turnId === c.playerId ? 'ЭЭЛЖ' : '-'}`),
+        log: v.log.slice(-4),
+      });
+      throw new Error('тоглолт гацлаа');
+    }
+    const view = clients[0].view!;
+
+    if (view.phase === 'roundEnd') {
+      verifyRound(clients, scores);
+      rounds++;
+      clients[0].send({ t: 'next' });
+      await clients[0].await((m) => m.t === 'state' && m.view.phase !== 'roundEnd');
       continue;
     }
-    const view = actor.view;
-    const current = view.current ? detectCombo(view.current.cards) : null;
-    const mustThree = view.lastPlay === null && view.yourHand.includes(THREE_OF_DIAMONDS);
-    const pick = pickPlay(view.yourHand, current, mustThree);
 
-    if (pick) actor.send({ t: 'play', cards: pick });
-    else actor.send({ t: 'pass' });
+    // Өнжиж буй тоглогч ширээг харах ёстой ч хөзөргүй байх ёстой.
+    for (const c of clients) {
+      if (c.view && !c.view.youAreSeated && c.view.phase === 'playing') {
+        check(c.view.yourHand.length === 0, `${c.label}: өнжиж байхад хөзөр ирлээ`);
+      }
+    }
 
-    // Үйлдэл бүр шинэ төлөв цацна; алдаа гарвал тэр дороо мэдэрнэ.
-    const reply = await actor.await((m) => m.t === 'state' || m.t === 'error', 5000);
+    const actor = clients.find((c) => c.view && c.view.turnId === c.playerId);
+    if (!actor?.view) {
+      await new Promise((r) => setTimeout(r, 15));
+      continue;
+    }
+    const av = actor.view;
+    check(av.youAreSeated, `${actor.label}: өнжиж байхад ээлж ирлээ`);
+
+    const current = av.current ? detectCombo(av.current.cards) : null;
+    const mustThree = av.lastPlay === null && av.yourHand.includes(0);
+    const pick = pickPlay(av.yourHand, current, mustThree);
+
+    actor.send(pick ? { t: 'play', cards: pick } : { t: 'pass' });
+    const reply = await actor.await((m) => m.t === 'state' || m.t === 'error');
     if (reply.t === 'error') throw new Error(`${actor.label}: ${reply.message}`);
   }
 
   const final = clients[0].view!;
-  console.log(`✓ дугаар ${final.round} дууслаа, ${moves} үйлдэл`);
-  for (const p of [...final.players].sort((a, b) => (a.place ?? 9) - (b.place ?? 9))) {
-    const r = final.results?.find((x) => x.playerId === p.id);
-    console.log(`   ${p.place}. ${p.name.padEnd(8)} үлдсэн ${r?.cardsLeft ?? '?'} · оноо ${r?.net ?? '?'}`);
+  verifyRound(clients, scores);
+  console.log(`✓ ${final.round} дугуй тоглолоо, ${moves} үйлдэл`);
+
+  const table = [...final.players].sort((a, b) => a.score - b.score);
+  for (const p of table) {
+    const status = p.eliminated ? 'хасагдсан' : p.id === final.matchWinnerId ? '🏆 ЯЛАГЧ' : '';
+    console.log(`   ${p.name.padEnd(8)} ${String(p.score).padStart(3)} оноо  ${status}`);
   }
 
-  const netSum = final.results!.reduce((s, r) => s + r.net, 0);
-  if (netSum !== 0) throw new Error(`оноо тэнцэхгүй байна: ${netSum}`);
-  console.log('✓ оноо тэг нийлбэртэй');
+  const alive = final.players.filter((p) => !p.eliminated);
+  check(alive.length === 1, `яг нэг ялагч байх ёстой, гэтэл ${alive.length}`);
+  check(final.matchWinnerId === alive[0].id, 'ялагч буруу тэмдэглэгдлээ');
+  check(final.history.length === final.round, 'түүхийн бичлэг дутуу');
+  console.log('✓ нэг ялагч, түүх бүрэн');
 
   clients.forEach((c) => c.ws.close());
   console.log('\n✅ Бүх шалгалт амжилттай');
+}
+
+/** Оноо буурч болохгүй; түүхийн нийлбэр нийт онооны тэнцүү байх ёстой. */
+function verifyRound(clients: Client[], scores: Map<string, number>): void {
+  const view = clients[0].view!;
+  for (const p of view.players) {
+    const previous = scores.get(p.id) ?? 0;
+    check(p.score >= previous, `${p.name}: оноо ${previous} → ${p.score} болж буурлаа`);
+    scores.set(p.id, p.score);
+
+    const sum = view.history.reduce(
+      (s, rec) => s + (rec.entries.find((e) => e.playerId === p.id)?.delta ?? 0),
+      0,
+    );
+    check(sum === p.score, `${p.name}: түүхийн нийлбэр ${sum} ≠ оноо ${p.score}`);
+  }
+  // Өнжсөн тоглогчид оноо нэмэгдэхгүй.
+  const last = view.history.at(-1);
+  if (last && !last.dragonPlayerId) {
+    for (const e of last.entries) {
+      if (!e.played) check(e.delta === 0, 'өнжсөн тоглогчид оноо нэмэгджээ');
+    }
+  }
 }
 
 main().catch((err) => {

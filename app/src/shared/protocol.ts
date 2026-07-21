@@ -3,14 +3,15 @@
  *
  * Сервер бүрэн эрхтэй: клиент зөвхөн санал (үйлдэл) илгээж, хариуд нь
  * өөрт хамаарах харагдацыг (view) хүлээж авна. Бусад тоглогчийн хөзөр
- * хэзээ ч клиент рүү илгээгддэггүй.
+ * хэзээ ч клиент рүү илгээгддэггүй — өнжиж буй үзэгчид ч мөн адил зөвхөн
+ * ширээн дээрх хөзрийг харна.
  */
 
 import { Card } from './cards';
 import { comboLabel } from './combos';
-import { GameState, RoundResult } from './game';
+import { GameState, Phase, RoundRecord } from './game';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 // ── Клиент → сервер ────────────────────────────────────────────────────────
 
@@ -19,10 +20,12 @@ export type ClientMessage =
   | { t: 'join'; name: string; code: string }
   /** Тасарсны дараа өмнөх суудалдаа буцаж орох. */
   | { t: 'resume'; code: string; playerId: string; token: string }
-  | { t: 'start' }
+  /** Шинэ тоглолт эхлүүлэх (лобби эсвэл тоглолт дууссаны дараа). */
+  | { t: 'start'; targetScore: number }
+  /** Дараагийн дугуйг эхлүүлэх. */
+  | { t: 'next' }
   | { t: 'play'; cards: Card[] }
   | { t: 'pass' }
-  | { t: 'rematch' }
   | { t: 'chat'; text: string }
   | { t: 'leave' }
   | { t: 'ping' };
@@ -47,7 +50,13 @@ export interface PlayerView {
   place: number | null;
   connected: boolean;
   isHost: boolean;
-  total: number;
+  /** Хуримтлагдсан оноо. */
+  score: number;
+  eliminated: boolean;
+  /** Энэ дугуйд тоглож байгаа эсэх. */
+  seated: boolean;
+  /** Суудлын сонголтод сугалсан хөзөр (байвал). */
+  draw: Card | null;
 }
 
 export interface PlayView {
@@ -60,14 +69,21 @@ export interface GameView {
   code: string;
   youId: string;
   players: PlayerView[];
+  /** Энэ дугуйд суусан тоглогчид, ээлжийн дарааллаар. */
+  seats: string[];
   /** Зөвхөн энэ харагдацыг хүлээн авах тоглогчийн хөзөр. */
   yourHand: Card[];
+  /** Та энэ дугуйд тоглож байгаа эсэх (үгүй бол зөвхөн ажиглана). */
+  youAreSeated: boolean;
   turnId: string | null;
   current: PlayView | null;
   lastPlay: PlayView | null;
-  phase: GameState['phase'];
+  phase: Phase;
   round: number;
-  results: RoundResult[] | null;
+  targetScore: number;
+  /** Дугуй бүрийн оноог агуулсан бүтэн түүх. */
+  history: RoundRecord[];
+  matchWinnerId: string | null;
   log: string[];
 }
 
@@ -91,15 +107,22 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       place: p.place,
       connected: meta.connected.has(p.id),
       isHost: p.id === meta.hostId,
-      total: state.totals[p.id] ?? 0,
+      score: p.score,
+      eliminated: p.eliminated,
+      seated: p.seated,
+      draw: p.draw,
     })),
+    seats: state.seats.slice(),
     yourHand: you ? you.hand.slice() : [],
-    turnId: state.phase === 'playing' ? (state.players[state.turn]?.id ?? null) : null,
+    youAreSeated: you?.seated ?? false,
+    turnId: state.phase === 'playing' ? (state.seats[state.turn] ?? null) : null,
     current: toPlayView(state.current),
     lastPlay: toPlayView(state.lastPlay),
     phase: state.phase,
     round: state.round,
-    results: state.results,
+    targetScore: state.targetScore,
+    history: state.history,
+    matchWinnerId: state.matchWinnerId,
     log: state.log.slice(-12),
   };
 }
