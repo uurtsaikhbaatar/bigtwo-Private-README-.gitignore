@@ -8,18 +8,22 @@ import {
   MIN_PLAYERS,
   SEATS_PER_ROUND,
   TARGET_SCORE_CHOICES,
+  TURN_SECONDS_CHOICES,
 } from '../shared/game';
 import type { GameView } from '../shared/protocol';
 import { theme } from '../theme';
 
 interface Props {
   view: GameView;
-  onStart: (targetScore: number) => void;
+  onStart: (targetScore: number, turnSeconds: number) => void;
   onLeave: () => void;
 }
 
+const secondsLabel = (s: number): string => (s >= 60 ? `${s / 60} мин` : `${s} сек`);
+
 export function LobbyScreen({ view, onStart, onLeave }: Props) {
   const [target, setTarget] = useState<number>(TARGET_SCORE_CHOICES[0]);
+  const [turnSeconds, setTurnSeconds] = useState<number>(TURN_SECONDS_CHOICES[0]);
   const you = view.players.find((p) => p.id === view.youId);
   const isHost = you?.isHost ?? false;
   const enough = view.players.length >= MIN_PLAYERS;
@@ -66,7 +70,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
         {!enough && <Text style={styles.hint}>Дор хаяж нэг найзаа хүлээж байна…</Text>}
         {rotating && (
           <Text style={styles.hint}>
-            Хөзөр 52 тул дугуй бүрд {SEATS_PER_ROUND} хүн тоглоно — үлдсэн нь ээлжлэн өнжинө.
+            Хөзөр 52 тул тойрог бүрд {SEATS_PER_ROUND} хүн тоглоно — үлдсэн нь ээлжлэн өнжинө.
           </Text>
         )}
       </View>
@@ -98,9 +102,41 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
         </Text>
       </View>
 
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Нэг ээлжинд бодох хугацаа</Text>
+        <View style={styles.choices}>
+          {TURN_SECONDS_CHOICES.map((choice) => {
+            const active = turnSeconds === choice;
+            return (
+              <Pressable
+                key={choice}
+                onPress={() => setTurnSeconds(choice)}
+                disabled={!isHost}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                style={[styles.choice, active && styles.choiceActive, !isHost && styles.choiceLocked]}
+              >
+                <Text style={[styles.choiceText, active && styles.choiceTextActive]}>
+                  {choice >= 60 ? choice / 60 : choice}
+                </Text>
+                <Text style={styles.choiceLabel}>{choice >= 60 ? 'минут' : 'секунд'}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.hint}>
+          Хугацаа дуусахад автоматаар пас болно. Шинэ эргэлт эхлүүлэх ээлж байсан бол
+          хамгийн сул хөзөр тавигдана.
+        </Text>
+      </View>
+
       <View style={styles.actions}>
         {isHost ? (
-          <Button title="Тоглоом эхлүүлэх" onPress={() => onStart(target)} disabled={!enough} />
+          <Button
+            title={`Тоглоом эхлүүлэх (${target} оноо · ${secondsLabel(turnSeconds)})`}
+            onPress={() => onStart(target, turnSeconds)}
+            disabled={!enough}
+          />
         ) : (
           <Text style={styles.hint}>Өрөөний эзэн эхлүүлэхийг хүлээж байна…</Text>
         )}

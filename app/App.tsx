@@ -110,7 +110,7 @@ function Root() {
           onPlay={game.playCards}
           onPass={game.passTurn}
           onNextRound={game.nextRound}
-          onNewMatch={() => game.startGame(view.targetScore)}
+          onNewMatch={() => game.startGame(view.targetScore, view.turnSeconds)}
           onLeave={game.leaveRoom}
         />
       )}

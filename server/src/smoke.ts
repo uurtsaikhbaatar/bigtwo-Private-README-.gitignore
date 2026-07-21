@@ -1,8 +1,8 @@
 /**
  * Төгсгөлөөс төгсгөл хүртэлх шалгалт: 5 клиент бодит WebSocket-оор холбогдож,
- * бүтэн тоглолтыг (олон дугуй, хасалт хүртэл) тоглож дуусгана.
+ * бүтэн тоглолтыг (олон тойрог, хасалт хүртэл) тоглож дуусгана.
  *
- * 5 тоглогч сонгосон учир нь: дугуй бүрд нэг нь өнжих тул суудлын ээлж,
+ * 5 тоглогч сонгосон учир нь: тойрог бүрд нэг нь өнжих тул суудлын ээлж,
  * үзэгчийн горим хоёулаа шалгагдана.
  *
  * Ажиллуулах:  npm start   (өөр цонхонд)
@@ -17,6 +17,8 @@ import type { ClientMessage, GameView, ServerMessage } from '../../app/src/share
 
 const URL = process.env.SMOKE_URL ?? 'ws://localhost:8787';
 const TARGET_SCORE = 30;
+// Тестийн ботууд шууд хариулдаг тул хугацаа урт байхад асуудалгүй.
+const TURN_SECONDS = 300;
 const PLAYER_NAMES = ['Ану', 'Бат', 'Цэцэг', 'Дорж', 'Энхээ'];
 
 class Client {
@@ -116,7 +118,7 @@ async function main() {
   );
   console.log('✓ чат бүх тоглогчид хүрлээ');
 
-  clients[0].send({ t: 'start', targetScore: TARGET_SCORE });
+  clients[0].send({ t: 'start', targetScore: TARGET_SCORE, turnSeconds: TURN_SECONDS });
   await clients[0].await((m) => m.t === 'state' && m.view.phase === 'playing');
   console.log(`✓ тоглолт эхэллээ (босго ${TARGET_SCORE} оноо)`);
 
@@ -174,7 +176,7 @@ async function main() {
 
   const final = clients[0].view!;
   verifyRound(clients, scores);
-  console.log(`✓ ${final.round} дугуй тоглолоо, ${moves} үйлдэл`);
+  console.log(`✓ ${final.round} тойрог тоглолоо, ${moves} үйлдэл`);
 
   const table = [...final.players].sort((a, b) => a.score - b.score);
   for (const p of table) {

@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-n
 import { Button } from '../components/Button';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
 import { ScoreBoard } from '../components/ScoreBoard';
+import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import type { Card } from '../shared/cards';
 import { THREE_OF_DIAMONDS, cardName } from '../shared/cards';
 import { beats, comboLabel, detectCombo } from '../shared/combos';
@@ -45,6 +46,7 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
   const you = view.players.find((p) => p.id === view.youId);
   const yourTurn = view.turnId === view.youId;
   const overlap = handOverlap(view.yourHand.length, width);
+  const secondsLeft = useTurnCountdown(view.turnRemainingMs);
 
   // Гар өөрчлөгдөх бүрд сонголтыг цэвэрлэнэ.
   useEffect(() => setSelected([]), [view.yourHand.length, view.round]);
@@ -75,13 +77,21 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <Text style={styles.topText}>{view.round}-р дугуй</Text>
-        <Text style={styles.topText}>Босго {view.targetScore}</Text>
+        <Text style={styles.topText}>{view.round}-р тойрог</Text>
+        <View style={styles.topRight}>
+          <Text style={styles.topText}>Босго {view.targetScore}</Text>
+          <TurnTimer secondsLeft={secondsLeft} yours={yourTurn} />
+        </View>
       </View>
 
       <View style={styles.opponents}>
         {opponents.map((p) => (
-          <Opponent key={p.id} player={p} isTurn={view.turnId === p.id} />
+          <Opponent
+            key={p.id}
+            player={p}
+            isTurn={view.turnId === p.id}
+            secondsLeft={view.turnId === p.id ? secondsLeft : null}
+          />
         ))}
       </View>
 
@@ -170,10 +180,10 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
         </View>
       ) : (
         <View style={styles.spectator}>
-          <Text style={styles.spectatorTitle}>Та энэ дугуйд өнжиж байна</Text>
+          <Text style={styles.spectatorTitle}>Та энэ тойрогт өнжиж байна</Text>
           <Text style={styles.hint}>
             Ширээн дээрх хөзрийг харж болно, гэхдээ тоглогчдын гар харагдахгүй. Оноо
-            нэмэгдэхгүй — дараагийн дугуйд орно.
+            нэмэгдэхгүй — дараагийн тойрогт орно.
           </Text>
         </View>
       )}
@@ -202,7 +212,15 @@ function previewLabel(selected: Card[]): string {
   return combo ? `✓ ${comboLabel(combo)}` : '';
 }
 
-function Opponent({ player, isTurn }: { player: PlayerView; isTurn: boolean }) {
+function Opponent({
+  player,
+  isTurn,
+  secondsLeft,
+}: {
+  player: PlayerView;
+  isTurn: boolean;
+  secondsLeft: number | null;
+}) {
   return (
     <View style={[styles.opponent, isTurn && styles.opponentActive]}>
       <View style={styles.opponentHeader}>
@@ -212,7 +230,11 @@ function Opponent({ player, isTurn }: { player: PlayerView; isTurn: boolean }) {
         <Text style={styles.opponentName} numberOfLines={1}>
           {player.name}
         </Text>
-        <Text style={styles.opponentScore}>{player.score}</Text>
+        {isTurn ? (
+          <TurnTimer secondsLeft={secondsLeft} compact />
+        ) : (
+          <Text style={styles.opponentScore}>{player.score}</Text>
+        )}
       </View>
       <View style={styles.miniStack}>
         {Array.from({ length: Math.min(player.handCount, 5) }).map((_, i) => (
@@ -261,7 +283,7 @@ function Results({
         </View>
       ) : (
         <Text style={styles.resultTitle}>
-          {matchOver ? 'Тоглолт дууслаа' : `${view.round}-р дугуй дууслаа`}
+          {matchOver ? 'Тоглолт дууслаа' : `${view.round}-р тойрог дууслаа`}
         </Text>
       )}
 
@@ -289,7 +311,7 @@ function Results({
           matchOver ? (
             <Button title="Шинэ тоглолт" onPress={onNewMatch} />
           ) : (
-            <Button title="Дараагийн дугуй" onPress={onNextRound} />
+            <Button title="Дараагийн тойрог" onPress={onNextRound} />
           )
         ) : (
           <Text style={styles.hint}>
@@ -322,7 +344,8 @@ const styles = StyleSheet.create({
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between' },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topText: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
 
   opponents: { flexDirection: 'row', gap: 8 },

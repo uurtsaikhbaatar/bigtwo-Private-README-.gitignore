@@ -21,8 +21,8 @@ export type ClientMessage =
   /** Тасарсны дараа өмнөх суудалдаа буцаж орох. */
   | { t: 'resume'; code: string; playerId: string; token: string }
   /** Шинэ тоглолт эхлүүлэх (лобби эсвэл тоглолт дууссаны дараа). */
-  | { t: 'start'; targetScore: number }
-  /** Дараагийн дугуйг эхлүүлэх. */
+  | { t: 'start'; targetScore: number; turnSeconds: number }
+  /** Дараагийн тойргийг эхлүүлэх. */
   | { t: 'next' }
   | { t: 'play'; cards: Card[] }
   | { t: 'pass' }
@@ -53,7 +53,7 @@ export interface PlayerView {
   /** Хуримтлагдсан оноо. */
   score: number;
   eliminated: boolean;
-  /** Энэ дугуйд тоглож байгаа эсэх. */
+  /** Энэ тойрогт тоглож байгаа эсэх. */
   seated: boolean;
   /** Суудлын сонголтод сугалсан хөзөр (байвал). */
   draw: Card | null;
@@ -69,11 +69,11 @@ export interface GameView {
   code: string;
   youId: string;
   players: PlayerView[];
-  /** Энэ дугуйд суусан тоглогчид, ээлжийн дарааллаар. */
+  /** Энэ тойрогт суусан тоглогчид, ээлжийн дарааллаар. */
   seats: string[];
   /** Зөвхөн энэ харагдацыг хүлээн авах тоглогчийн хөзөр. */
   yourHand: Card[];
-  /** Та энэ дугуйд тоглож байгаа эсэх (үгүй бол зөвхөн ажиглана). */
+  /** Та энэ тойрогт тоглож байгаа эсэх (үгүй бол зөвхөн ажиглана). */
   youAreSeated: boolean;
   turnId: string | null;
   current: PlayView | null;
@@ -81,7 +81,14 @@ export interface GameView {
   phase: Phase;
   round: number;
   targetScore: number;
-  /** Дугуй бүрийн оноог агуулсан бүтэн түүх. */
+  /** Нэг ээлжинд бодох хугацаа (секунд). */
+  turnSeconds: number;
+  /**
+   * Одоогийн ээлж дуусахад үлдсэн хугацаа (ms). Клиент энэ мөчөөс тоолно —
+   * ингэснээр цагийн зөрүү нөлөөлөхгүй. Тоглоом идэвхгүй бол null.
+   */
+  turnRemainingMs: number | null;
+  /** Тойрог бүрийн оноог агуулсан бүтэн түүх. */
   history: RoundRecord[];
   matchWinnerId: string | null;
   log: string[];
@@ -121,6 +128,9 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
     phase: state.phase,
     round: state.round,
     targetScore: state.targetScore,
+    turnSeconds: state.turnSeconds,
+    turnRemainingMs:
+      state.turnEndsAt === null ? null : Math.max(0, state.turnEndsAt - Date.now()),
     history: state.history,
     matchWinnerId: state.matchWinnerId,
     log: state.log.slice(-12),

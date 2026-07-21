@@ -69,6 +69,10 @@ export class RoomStore {
     return this.rooms.size;
   }
 
+  forEach(fn: (room: Room) => void): void {
+    for (const room of this.rooms.values()) fn(room);
+  }
+
   private uniqueCode(): string {
     for (let attempt = 0; attempt < 50; attempt++) {
       const code = randomCode();

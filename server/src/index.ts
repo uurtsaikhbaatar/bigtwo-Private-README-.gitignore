@@ -11,6 +11,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 
 import {
   DEFAULT_TARGET_SCORE,
+  DEFAULT_TURN_SECONDS,
   MAX_PLAYERS,
   RuleError,
   addPlayer,
@@ -19,6 +20,7 @@ import {
   removePlayer,
   startMatch,
   startRound,
+  timeoutTurn,
 } from '../../app/src/shared/game';
 import {
   PROTOCOL_VERSION,
@@ -143,12 +145,16 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
   switch (msg.t) {
     case 'start': {
       if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн эхлүүлж чадна.');
-      startMatch(room.state, Number(msg.targetScore ?? DEFAULT_TARGET_SCORE));
+      startMatch(
+        room.state,
+        Number(msg.targetScore ?? DEFAULT_TARGET_SCORE),
+        Number(msg.turnSeconds ?? DEFAULT_TURN_SECONDS),
+      );
       return broadcast(room);
     }
     case 'next': {
       if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн үргэлжлүүлж чадна.');
-      if (room.state.phase !== 'roundEnd') throw new RuleError('Дугуй хараахан дуусаагүй байна.');
+      if (room.state.phase !== 'roundEnd') throw new RuleError('Тойрог хараахан дуусаагүй байна.');
       startRound(room.state);
       return broadcast(room);
     }
@@ -228,6 +234,34 @@ function cleanName(raw: unknown): string {
   const name = String(raw ?? '').trim().replace(/\s+/g, ' ').slice(0, MAX_NAME_LENGTH);
   return name || 'Тоглогч';
 }
+
+/**
+ * Ээлжийн хугацаа шалгах цохилт. Хугацаа дуусмагц автоматаар пас (эсвэл шинэ
+ * эргэлт бол хамгийн сул хөзөр) тавигдана.
+ *
+ * Өрөө бүрд тусад нь таймер барихын оронд нэг л цохилтоор бүх өрөөг шалгана —
+ * таймер алдагдах, давхардах эрсдэлгүй.
+ */
+const TICK_MS = 500;
+setInterval(() => {
+  const now = Date.now();
+  rooms.forEach((room) => {
+    const { state } = room;
+    if (state.phase !== 'playing') return;
+    if (state.turnEndsAt === null || state.turnEndsAt > now) return;
+    // Хэн ч холбогдоогүй өрөөг ажиллуулах шаардлагагүй.
+    const anyoneOnline = [...room.seats.values()].some((s) => s.socket !== null);
+    if (!anyoneOnline) return;
+
+    try {
+      timeoutTurn(state);
+      broadcast(room);
+    } catch (err) {
+      console.error('ээлжийн хугацаа боловсруулахад алдаа:', err);
+      state.turnEndsAt = null; // давтагдахаас сэргийлнэ
+    }
+  });
+}, TICK_MS).unref();
 
 setInterval(() => rooms.sweep(), 5 * 60 * 1000).unref();
 

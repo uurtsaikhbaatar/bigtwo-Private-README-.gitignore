@@ -16,12 +16,12 @@ const NAME_WIDTH = 92;
 const CELL_WIDTH = 56;
 
 /**
- * Дугуй бүрд тоглогч тус бүр хэдэн оноо нэмсэнийг харуулах хүснэгт.
+ * Тойрог бүрд тоглогч тус бүр хэдэн оноо нэмсэнийг харуулах хүснэгт.
  * Тоглогч олон байж болох тул хэвтээ чиглэлд гүйнэ.
  */
 export function ScoreBoard({ players, history, targetScore, youId }: Props) {
   if (history.length === 0) {
-    return <Text style={styles.empty}>Дугуй хараахан дуусаагүй байна.</Text>;
+    return <Text style={styles.empty}>Тойрог хараахан дуусаагүй байна.</Text>;
   }
 
   return (

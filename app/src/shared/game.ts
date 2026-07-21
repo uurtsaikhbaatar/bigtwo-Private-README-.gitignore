@@ -5,13 +5,13 @@
  * харагдац (view) хүлээж авна. Дүрмийн шалгалт бүхэлдээ энд байрлана.
  *
  * ТОГЛООМЫН БҮТЭЦ
- *   Тоглолт (match) = олон дугуй (round). Дугуй бүрийн төгсгөлд үлдсэн
+ *   Тоглолт (match) = олон тойрог (round). Тойрог бүрийн төгсгөлд үлдсэн
  *   хөзрөөр оноо нэмэгдэнэ; оноо хэзээ ч буурахгүй. Тохирсон босгод
  *   (30 эсвэл 40) хүрсэн тоглогч хасагдаж, бусад нь үргэлжлүүлнэ.
  *   Сүүлийн үлдсэн тоглогч тоглолтыг хожно.
  *
- *   Хөзөр 52 ширхэг тул нэг дугуйд дээд тал нь 4 тоглогч сууна. Өрөөнд
- *   4-өөс олон хүн байвал дугуй бүрд ээлжлэн өнжинө (`chooseSeats`).
+ *   Хөзөр 52 ширхэг тул нэг тойрогт дээд тал нь 4 тоглогч сууна. Өрөөнд
+ *   4-өөс олон хүн байвал тойрог бүрд ээлжлэн өнжинө (`chooseSeats`).
  */
 
 import { Card, RANKS, THREE_OF_DIAMONDS, deal, fullDeck, rankOf, shuffle } from './cards';
@@ -19,15 +19,21 @@ import { Combo, beats, detectCombo } from './combos';
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
-/** Нэг дугуйд суух дээд тоо — 52 хөзрийг 13-аар хуваахад. */
+/** Нэг тойрогт суух дээд тоо — 52 хөзрийг 13-аар хуваахад. */
 export const SEATS_PER_ROUND = 4;
-/** Дугуй бүрд дээд тал нь хэдэн тоглогч солигдох. */
+/** Тойрог бүрд дээд тал нь хэдэн тоглогч солигдох. */
 export const MAX_ROTATION = 2;
 
 export const DEFAULT_TARGET_SCORE = 30;
 export const TARGET_SCORE_CHOICES = [30, 40] as const;
 export const MIN_TARGET_SCORE = 10;
 export const MAX_TARGET_SCORE = 200;
+
+/** Нэг ээлжинд бодох хугацаа (секунд). */
+export const TURN_SECONDS_CHOICES = [30, 60] as const;
+export const DEFAULT_TURN_SECONDS = 30;
+export const MIN_TURN_SECONDS = 10;
+export const MAX_TURN_SECONDS = 300;
 
 export interface Player {
   id: string;
@@ -41,7 +47,7 @@ export interface Player {
   score: number;
   /** Босгод хүрч тоглолтоос хасагдсан эсэх. */
   eliminated: boolean;
-  /** Энэ дугуйд суусан эсэх (өнжиж байгаа бол false). */
+  /** Энэ тойрогт суусан эсэх (өнжиж байгаа бол false). */
   seated: boolean;
   /** Сонгон шалгаруулалтад сугалсан хөзөр — яагаад өнжсөнийг харуулна. */
   draw: Card | null;
@@ -59,9 +65,9 @@ export interface RoundEntry {
   cardsLeft: number;
   /** Торгуулийн үржүүлэгч: 1, 2 (10+ хөзөр) эсвэл 3 (13 хөзөр). */
   multiplier: number;
-  /** Энэ дугуйд нэмэгдсэн оноо. */
+  /** Энэ тойрогт нэмэгдсэн оноо. */
   delta: number;
-  /** Дугуйн дараах нийт оноо. */
+  /** Тойргийн дараах нийт оноо. */
   total: number;
   place: number | null;
 }
@@ -77,7 +83,7 @@ export type Phase = 'lobby' | 'playing' | 'roundEnd' | 'matchEnd';
 
 export interface GameState {
   players: Player[];
-  /** Энэ дугуйд тоглож буй тоглогчдын id, ээлжийн дарааллаар. */
+  /** Энэ тойрогт тоглож буй тоглогчдын id, ээлжийн дарааллаар. */
   seats: string[];
   /** `seats` доторх индекс. */
   turn: number;
@@ -86,8 +92,15 @@ export interface GameState {
   phase: Phase;
   round: number;
   targetScore: number;
+  /** Нэг ээлжинд бодох хугацаа (секунд). */
+  turnSeconds: number;
   /**
-   * Өмнөх дугуйд өнжих ээлж идэвхтэй байсан эсэх (4-өөс олон тоглогч).
+   * Одоогийн ээлж дуусах хугацаа (epoch ms). Тоглоом идэвхгүй үед `null`.
+   * Хугацаа дуусахад сервер `timeoutTurn`-ийг дуудна.
+   */
+  turnEndsAt: number | null;
+  /**
+   * Өмнөх тойрогт өнжих ээлж идэвхтэй байсан эсэх (4-өөс олон тоглогч).
    * Ээлж дуусмагц 3♦ сүүлийн нэг удаа эхлэгчийг тодорхойлдогт хэрэгтэй.
    */
   rotationWasActive: boolean;
@@ -109,6 +122,8 @@ export function createGame(): GameState {
     phase: 'lobby',
     round: 0,
     targetScore: DEFAULT_TARGET_SCORE,
+    turnSeconds: DEFAULT_TURN_SECONDS,
+    turnEndsAt: null,
     rotationWasActive: false,
     history: [],
     lastRoundWinnerId: null,
@@ -149,6 +164,7 @@ export function removePlayer(state: GameState, id: string): void {
 export function startMatch(
   state: GameState,
   targetScore: number = DEFAULT_TARGET_SCORE,
+  turnSeconds: number = DEFAULT_TURN_SECONDS,
   rng: () => number = Math.random,
 ): void {
   if (state.players.length < MIN_PLAYERS) {
@@ -158,8 +174,15 @@ export function startMatch(
   if (!Number.isFinite(target) || target < MIN_TARGET_SCORE || target > MAX_TARGET_SCORE) {
     throw new RuleError(`Босго оноо ${MIN_TARGET_SCORE}–${MAX_TARGET_SCORE} хооронд байх ёстой.`);
   }
+  const seconds = Math.round(turnSeconds);
+  if (!Number.isFinite(seconds) || seconds < MIN_TURN_SECONDS || seconds > MAX_TURN_SECONDS) {
+    throw new RuleError(
+      `Бодох хугацаа ${MIN_TURN_SECONDS}–${MAX_TURN_SECONDS} секунд хооронд байх ёстой.`,
+    );
+  }
 
   state.targetScore = target;
+  state.turnSeconds = seconds;
   state.round = 0;
   state.history = [];
   state.seats = [];
@@ -176,7 +199,7 @@ export function startMatch(
   startRound(state, rng);
 }
 
-/** Дараагийн дугуйг эхлүүлнэ. */
+/** Дараагийн тойргийг эхлүүлнэ. */
 export function startRound(state: GameState, rng: () => number = Math.random): void {
   if (state.phase === 'matchEnd') throw new RuleError('Тоглолт дууссан байна.');
   const contenders = state.players.filter((p) => !p.eliminated);
@@ -201,7 +224,7 @@ export function startRound(state: GameState, rng: () => number = Math.random): v
   state.lastPlay = null;
   state.turn = 0;
   state.phase = 'playing';
-  state.log = [`${state.round}-р дугуй эхэллээ.`];
+  state.log = [`${state.round}-р тойрог эхэллээ.`];
 
   const benched = contenders.filter((p) => !p.seated);
   if (benched.length > 0) {
@@ -216,6 +239,33 @@ export function startRound(state: GameState, rng: () => number = Math.random): v
   const rotating = contenders.length > SEATS_PER_ROUND;
   chooseStarter(state, previousSeats, rotating, state.rotationWasActive);
   state.rotationWasActive = rotating;
+  armTurn(state);
+}
+
+/** Ээлжийн цагийг шинэчилнэ. Тоглоом идэвхгүй бол цагийг цуцална. */
+function armTurn(state: GameState): void {
+  state.turnEndsAt = state.phase === 'playing' ? Date.now() + state.turnSeconds * 1000 : null;
+}
+
+/**
+ * Бодох хугацаа дуусахад автоматаар үйлдэл хийнэ.
+ *
+ * Ерөнхийдөө пас болно. Харин шинэ эргэлт эхлүүлэх ээлжтэй байсан бол пас
+ * хийх боломжгүй (тэгвэл тоглоом гацна) тул хамгийн сул хөзрийг нь тавина.
+ */
+export function timeoutTurn(state: GameState): void {
+  if (state.phase !== 'playing') return;
+  const id = state.seats[state.turn];
+  const player = playerById(state, id);
+
+  if (state.current) {
+    state.log.push(`${player.name}: хугацаа дуусч пас болов.`);
+    pass(state, id);
+  } else {
+    const lowest = player.hand[0];
+    state.log.push(`${player.name}: хугацаа дуусч хамгийн сул хөзөр тавигдлаа.`);
+    play(state, id, [lowest]);
+  }
 }
 
 /** Гарт 13 зэрэглэл бүрээс нэг байгаа эсэх (баг хамаарахгүй). */
@@ -232,6 +282,7 @@ function declareDragon(state: GameState, winner: Player): void {
   state.lastRoundWinnerId = winner.id;
   state.phase = 'matchEnd';
   state.current = null;
+  state.turnEndsAt = null;
   state.history.push({
     round: state.round,
     dragonPlayerId: winner.id,
@@ -249,11 +300,11 @@ function declareDragon(state: GameState, winner: Player): void {
 }
 
 /**
- * Энэ дугуйд хэн суухыг тодорхойлно.
+ * Энэ тойрогт хэн суухыг тодорхойлно.
  *
  * 4 ба түүнээс цөөн тоглогчтой бол бүгд сууна. Олон бол:
  *   - Эхний удаа: бүгд нэг хөзөр сугалж, хамгийн бага 4 нь сууна.
- *   - Дараа нь: өмнөх дугуйн 1-р (болон 2-р) байр эзэлсэн нь өнжиж,
+ *   - Дараа нь: өмнөх тойргийн 1-р (болон 2-р) байр эзэлсэн нь өнжиж,
  *     өнжсөн хүмүүсээс хамгийн бага хөзөр сугалсан нь ордог.
  */
 function chooseSeats(state: GameState, contenders: Player[], rng: () => number): string[] {
@@ -264,7 +315,7 @@ function chooseSeats(state: GameState, contenders: Player[], rng: () => number):
     .map((id) => state.players.find((p) => p.id === id))
     .filter((p): p is Player => !!p && !p.eliminated);
 
-  // Эхний дугуй (эсвэл өмнөх суудал алдагдсан): бүгд сугална.
+  // Эхний тойрог (эсвэл өмнөх суудал алдагдсан): бүгд сугална.
   if (previous.length === 0) {
     const drawn = drawFor(contenders, rng);
     state.log.push(`Хөзөр сугалж ${SEATS_PER_ROUND} тоглогч тодорлоо.`);
@@ -304,11 +355,11 @@ function drawFor(players: Player[], rng: () => number): Player[] {
  * Хэн эхлэхийг тодорхойлно.
  *
  * 3♦ дараах гурван тохиолдолд эхлэгчийг заана:
- *   - өнжих ээлж идэвхтэй (4-өөс олон тоглогч) — дугуй бүрд;
- *   - тоглолтын хамгийн эхний дугуй;
- *   - өнжих ээлж дуусаж, тоглогч 4 болсон эхний дугуй — 3♦ сүүлийн удаа заана.
+ *   - өнжих ээлж идэвхтэй (4-өөс олон тоглогч) — тойрог бүрд;
+ *   - тоглолтын хамгийн эхний тойрог;
+ *   - өнжих ээлж дуусаж, тоглогч 4 болсон эхний тойрог — 3♦ сүүлийн удаа заана.
  *
- * Түүнээс хойш өмнөх дугуйн хожигч түрүүлж гарна.
+ * Түүнээс хойш өмнөх тойргийн хожигч түрүүлж гарна.
  *
  * 3♦ нь зөвхөн ХЭН эхлэхийг заана — эхлэгч дуртай хослолоо тавьж болно.
  * 3♦-ээ заавал оруулах шаардлага энэ тоглоомд байхгүй.
@@ -325,7 +376,7 @@ function chooseStarter(
 
   if (!threeDecides && winner && state.seats.includes(winner)) {
     state.turn = state.seats.indexOf(winner);
-    state.log.push(`${playerById(state, winner).name} өмнөх дугуйг хожсон тул эхэлнэ.`);
+    state.log.push(`${playerById(state, winner).name} өмнөх тойргийг хожсон тул эхэлнэ.`);
     return;
   }
 
@@ -390,6 +441,7 @@ export function play(state: GameState, playerId: string, cards: Card[]): void {
   }
 
   advance(state, seat);
+  armTurn(state);
 }
 
 /** Пас хийх. Шинэ эргэлтийн эхэнд пас хийж болохгүй. */
@@ -400,12 +452,13 @@ export function pass(state: GameState, playerId: string): void {
   player.passed = true;
   state.log.push(`${player.name}: пас.`);
   advance(state, seat);
+  armTurn(state);
 }
 
 function requireTurn(state: GameState, playerId: string): number {
   if (state.phase !== 'playing') throw new RuleError('Тоглоом идэвхгүй байна.');
   const seat = state.seats.indexOf(playerId);
-  if (seat === -1) throw new RuleError('Та энэ дугуйд өнжиж байна.');
+  if (seat === -1) throw new RuleError('Та энэ тойрогт өнжиж байна.');
   if (seat !== state.turn) throw new RuleError('Одоо таны ээлж биш байна.');
   return seat;
 }
@@ -464,7 +517,7 @@ function nextActiveSeat(state: GameState, from: number): number | null {
   return null;
 }
 
-// ── Дугуй дуусах ба оноо ───────────────────────────────────────────────────
+// ── Тойрог дуусах ба оноо ───────────────────────────────────────────────────
 
 /**
  * Үлдсэн хөзрийн торгуулийн үржүүлэгч.
@@ -501,7 +554,7 @@ function finishRound(state: GameState): void {
 
   const winner = seatedPlayers(state).find((p) => p.place === 1);
   state.lastRoundWinnerId = winner?.id ?? null;
-  if (winner) state.log.push(`${winner.name} дугуйг хожлоо! 🎉`);
+  if (winner) state.log.push(`${winner.name} тойргийг хожлоо! 🎉`);
 
   applyEliminations(state);
 
@@ -514,6 +567,7 @@ function finishRound(state: GameState): void {
     state.phase = 'roundEnd';
   }
   state.current = null;
+  state.turnEndsAt = null;
 }
 
 function applyEliminations(state: GameState): void {
