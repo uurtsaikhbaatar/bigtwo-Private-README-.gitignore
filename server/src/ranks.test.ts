@@ -16,10 +16,30 @@ test('хожлын тоонд харгалзах цол', () => {
   assert.equal(rankFor(1).name, 'Ахлах байлдагч');
   assert.equal(rankFor(2).name, 'Ахлах байлдагч', 'шатны хооронд өмнөх цол хэвээр');
   assert.equal(rankFor(3).name, 'Дэд түрүүч');
+  assert.equal(rankFor(16).name, 'Ахлагч');
   assert.equal(rankFor(60).name, 'Ахмад');
-  assert.equal(rankFor(259).name, 'Хошууч генерал');
-  assert.equal(rankFor(260).name, 'Армийн генерал');
-  assert.equal(rankFor(99999).name, 'Армийн генерал', 'дээд цолноос цааш өсөхгүй');
+  assert.equal(rankFor(205).name, 'Дэслэгч генерал');
+  assert.equal(rankFor(244).name, 'Дэслэгч генерал');
+  assert.equal(rankFor(245).name, 'Генерал');
+  assert.equal(rankFor(99999).name, 'Генерал', 'дээд цолноос цааш өсөхгүй');
+});
+
+test('Монгол улсын цэргийн цолны бүрэн жагсаалт багтсан', () => {
+  const expected = [
+    'Байлдагч', 'Ахлах байлдагч', 'Дэд түрүүч', 'Түрүүч', 'Ахлах түрүүч',
+    'Дэд ахлагч', 'Ахлагч', 'Ахлах ахлагч', 'Сургагч ахлагч', 'Тэргүүн ахлагч',
+    'Дэслэгч', 'Ахлах дэслэгч', 'Ахмад',
+    'Хошууч', 'Дэд хурандаа', 'Хурандаа',
+    'Бригадын генерал', 'Хошууч генерал', 'Дэслэгч генерал', 'Генерал',
+  ];
+  assert.deepEqual(RANKS.map((r) => r.name), expected);
+  assert.equal(RANKS.length, 20);
+});
+
+test('бүлгүүд дараалан байрлана — холилдохгүй', () => {
+  const order = ['Байлдагч', 'Ахлагч', 'Офицер', 'Генерал'];
+  const seen = RANKS.map((r) => r.group).filter((g, i, arr) => i === 0 || arr[i - 1] !== g);
+  assert.deepEqual(seen, order);
 });
 
 test('буруу утгыг хамгийн доод цол гэж үзнэ', () => {
@@ -32,8 +52,8 @@ test('дараагийн цолд үлдсэн хожил', () => {
   assert.deepEqual(nextRank(0), { rank: RANKS[1], remaining: 1 });
   assert.equal(nextRank(1)?.rank.name, 'Дэд түрүүч');
   assert.equal(nextRank(1)?.remaining, 2);
-  assert.equal(nextRank(259)?.remaining, 1);
-  assert.equal(nextRank(260), null, 'дээд цолтой бол дараагийнх байхгүй');
+  assert.equal(nextRank(244)?.remaining, 1);
+  assert.equal(nextRank(245), null, 'дээд цолтой бол дараагийнх байхгүй');
   assert.equal(nextRank(1000), null);
 });
 
@@ -43,8 +63,9 @@ test('цол ахих мөчийг зөв илрүүлнэ', () => {
   assert.equal(promoted(0, 1)?.name, 'Ахлах байлдагч');
   assert.equal(promoted(2, 3)?.name, 'Дэд түрүүч');
   assert.equal(promoted(59, 60)?.name, 'Ахмад');
+  assert.equal(promoted(11, 12)?.name, 'Дэд ахлагч');
   // Хэд хэдэн шат нэг дор алгасвал хамгийн сүүлийнхийг нь буцаана.
-  assert.equal(promoted(0, 100)?.name, 'Хошууч');
+  assert.equal(promoted(0, 100)?.name, 'Дэд хурандаа');
 });
 
 test('тэмдэг бүр богино — нэрний хажууд багтана', () => {

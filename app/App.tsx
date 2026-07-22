@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChatButton } from './src/components/ChatPanel';
+import { HelpButton } from './src/components/HelpButton';
 import { PlayerInfoPanel } from './src/components/PlayerInfoPanel';
 import { ReportButton } from './src/components/ReportButton';
 import { clearRoomCodeFromUrl, pendingRoomCode } from './src/deeplink';
@@ -190,6 +191,7 @@ function Root() {
             onSend={game.sendChat}
             onSendVoice={game.sendVoice}
           />
+          <HelpButton wins={view.players.find((p) => p.id === view.youId)?.wins ?? null} />
           <PlayerInfoPanel
             pendingName={inspecting}
             info={game.playerInfo}
