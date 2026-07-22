@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { Button } from '../components/Button';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
@@ -48,9 +48,19 @@ interface Props {
   onNextRound: () => void;
   onNewMatch: () => void;
   onLeave: () => void;
+  /** Тоглогчийн нэр дээр дарахад ил мэдээллийг нь харуулна. */
+  onInspect: (playerId: string, name: string) => void;
 }
 
-export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onLeave }: Props) {
+export function TableScreen({
+  view,
+  onPlay,
+  onPass,
+  onNextRound,
+  onNewMatch,
+  onLeave,
+  onInspect,
+}: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
   const { width, height } = useWindowDimensions();
   const compact = height < COMPACT_HEIGHT;
@@ -84,6 +94,9 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
     .filter((p): p is PlayerView => !!p);
   const opponents = rotate(seated, view.youId).filter((p) => p.id !== view.youId);
   const benched = view.players.filter((p) => !p.seated && !p.eliminated);
+  // Хасагдсан тоглогчид тоглолтоос гарахгүй — үзэгч болж үлдэж, чатлана.
+  const knockedOut = view.players.filter((p) => p.eliminated);
+  const youAreOut = you?.eliminated ?? false;
   // Хэн нэгэн сүүлийн хөзөртэй үлдвэл бүх тоглогчид анхааруулна.
   const lastCardPlayers = seated.filter(
     (p) => p.handCount === LAST_CARD_WARNING && p.place === null,
@@ -106,6 +119,7 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
             player={p}
             isTurn={view.turnId === p.id}
             secondsLeft={view.turnId === p.id ? secondsLeft : null}
+            onInspect={() => onInspect(p.id, p.name)}
           />
         ))}
       </View>
@@ -114,11 +128,27 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
         <View style={styles.bench}>
           <Text style={styles.benchLabel}>Өнжиж байна:</Text>
           {benched.map((p) => (
-            <Text key={p.id} style={styles.benchName}>
-              {p.name}
-              {p.id === view.youId ? ' (та)' : ''} · {p.score} оноо
-              {p.draw !== null ? ` · ${cardName(p.draw)}` : ''}
-            </Text>
+            <Pressable key={p.id} onPress={() => onInspect(p.id, p.name)} accessibilityRole="button">
+              <Text style={styles.benchName}>
+                {p.name}
+                {p.id === view.youId ? ' (та)' : ''} · {p.score} оноо
+                {p.draw !== null ? ` · ${cardName(p.draw)}` : ''}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {knockedOut.length > 0 && (
+        <View style={styles.bench}>
+          <Text style={styles.benchLabel}>Хасагдсан (үзэж байна):</Text>
+          {knockedOut.map((p) => (
+            <Pressable key={p.id} onPress={() => onInspect(p.id, p.name)} accessibilityRole="button">
+              <Text style={[styles.benchName, styles.benchOut]}>
+                {p.name}
+                {p.id === view.youId ? ' (та)' : ''} · {p.score} оноо
+              </Text>
+            </Pressable>
           ))}
         </View>
       )}
@@ -206,10 +236,13 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
         </View>
       ) : (
         <View style={styles.spectator}>
-          <Text style={styles.spectatorTitle}>Та энэ тойрогт өнжиж байна</Text>
+          <Text style={styles.spectatorTitle}>
+            {youAreOut ? 'Та хасагдлаа — үзэж байна' : 'Та энэ тойрогт өнжиж байна'}
+          </Text>
           <Text style={styles.hint}>
-            Ширээн дээрх хөзрийг харж болно, гэхдээ тоглогчдын гар харагдахгүй. Оноо
-            нэмэгдэхгүй — дараагийн тойрогт орно.
+            {youAreOut
+              ? 'Тоглолт дуустал үзэж, чатлаж болно. Тоглогчдын гар харагдахгүй. Дараагийн тоглолтод дахин орно.'
+              : 'Ширээн дээрх хөзрийг харж болно, гэхдээ тоглогчдын гар харагдахгүй. Оноо нэмэгдэхгүй — дараагийн тойрогт орно.'}
           </Text>
         </View>
       )}
@@ -242,10 +275,12 @@ function Opponent({
   player,
   isTurn,
   secondsLeft,
+  onInspect,
 }: {
   player: PlayerView;
   isTurn: boolean;
   secondsLeft: number | null;
+  onInspect: () => void;
 }) {
   const lastCard = player.handCount === LAST_CARD_WARNING && player.place === null;
 
@@ -261,9 +296,12 @@ function Opponent({
         <View
           style={[styles.dot, { backgroundColor: player.connected ? theme.success : theme.danger }]}
         />
-        <Text style={styles.opponentName} numberOfLines={1}>
-          {player.name}
-        </Text>
+        {/* Нэр дээр дарахад токен, тоглолтын түүх нь харагдана. */}
+        <Pressable onPress={onInspect} accessibilityRole="button" style={styles.nameHit}>
+          <Text style={styles.opponentName} numberOfLines={1}>
+            {player.name}
+          </Text>
+        </Pressable>
         {/* Тоолуур нь онооны оронд ОРОХГҮЙ — оноо доод мөрөнд байнга харагдана. */}
         {isTurn && <TurnTimer secondsLeft={secondsLeft} compact />}
       </View>
@@ -475,6 +513,8 @@ const styles = StyleSheet.create({
   },
   benchLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '700' },
   benchName: { color: theme.textMuted, fontSize: 11 },
+  benchOut: { color: theme.danger },
+  nameHit: { flexShrink: 1 },
 
   table: {
     flex: 1,

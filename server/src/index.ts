@@ -332,6 +332,51 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       startRound(room.state);
       return broadcast(room);
     }
+    /**
+     * Өрөөн доторх тоглогчийн ил мэдээлэл — нэр дээр нь дарахад.
+     * Бүртгэлгүй зочны хувьд статистик байхгүй.
+     */
+    case 'inspect': {
+      const target = room.state.players.find((p) => p.id === msg.playerId);
+      if (!target) throw new RuleError('Тоглогч олдсонгүй.');
+
+      const seat = room.seats.get(target.id);
+      const account = seat?.socket ? accounts.get(seat.socket) : undefined;
+      const base = {
+        playerId: target.id,
+        name: target.name,
+        score: target.score,
+        eliminated: target.eliminated,
+      };
+
+      if (!seat?.userId || !dbEnabled()) {
+        return send(socket, {
+          t: 'playerInfo',
+          info: { ...base, registered: false, username: null, tokens: null, stats: null },
+        });
+      }
+
+      const userId = seat.userId;
+      void Promise.all([statsForUser(userId), balanceOf(userId)])
+        .then(([stats, tokens]) =>
+          send(socket, {
+            t: 'playerInfo',
+            info: {
+              ...base,
+              registered: true,
+              username: account?.username ?? target.name,
+              tokens,
+              stats,
+            },
+          }),
+        )
+        .catch((err) => {
+          console.error('inspect error:', err);
+          send(socket, { t: 'error', message: 'Тоглогчийн мэдээлэл уншиж чадсангүй.' });
+        });
+      return;
+    }
+
     case 'play': {
       play(room.state, playerId, Array.isArray(msg.cards) ? msg.cards : []);
       return broadcast(room);

@@ -16,6 +16,7 @@ import type {
   ClientMessage,
   GameView,
   MatchSummary,
+  PlayerInfo,
   PlayerStats,
   ReportKind,
   ServerMessage,
@@ -72,6 +73,8 @@ export function useBigTwo(serverUrl: string) {
   const [lastReportId, setLastReportId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
+  // Нэр дээр дарж нээсэн тоглогчийн мэдээлэл.
+  const [playerInfo, setPlayerInfo] = useState<PlayerInfo | null>(null);
   const [profile, setProfile] = useState<{ stats: PlayerStats; matches: MatchSummary[] } | null>(
     null,
   );
@@ -123,6 +126,9 @@ export function useBigTwo(serverUrl: string) {
         break;
       case 'profile':
         setProfile({ stats: msg.stats, matches: msg.matches });
+        break;
+      case 'playerInfo':
+        setPlayerInfo(msg.info);
         break;
       case 'notice':
         setNotice(msg.message);
@@ -228,6 +234,8 @@ export function useBigTwo(serverUrl: string) {
     clearNotice: () => setNotice(null),
     account,
     profile,
+    playerInfo,
+    closePlayerInfo: useCallback(() => setPlayerInfo(null), []),
     clearError: useCallback(() => setError(null), []),
 
     register: useCallback(
@@ -249,6 +257,14 @@ export function useBigTwo(serverUrl: string) {
     ),
     logOut: useCallback(() => send({ t: 'logout', token: authTokenRef.current ?? '' }), [send]),
     loadProfile: useCallback(() => send({ t: 'profile' }), [send]),
+    /** Өөр тоглогчийн ил мэдээллийг асуух. */
+    inspectPlayer: useCallback(
+      (playerId: string) => {
+        setPlayerInfo(null);
+        send({ t: 'inspect', playerId });
+      },
+      [send],
+    ),
     /** Имэйл рүү ирсэн кодыг шалгуулах. */
     verifyEmail: useCallback((code: string) => send({ t: 'verifyEmail', code }), [send]),
     resendCode: useCallback(() => send({ t: 'resendCode' }), [send]),

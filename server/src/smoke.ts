@@ -1,9 +1,10 @@
 /**
- * Төгсгөлөөс төгсгөл хүртэлх шалгалт: 5 клиент бодит WebSocket-оор холбогдож,
+ * Төгсгөлөөс төгсгөл хүртэлх шалгалт: 8 клиент бодит WebSocket-оор холбогдож,
  * бүтэн тоглолтыг (олон тойрог, хасалт хүртэл) тоглож дуусгана.
  *
- * 5 тоглогч сонгосон учир нь: тойрог бүрд нэг нь өнжих тул суудлын ээлж,
- * үзэгчийн горим хоёулаа шалгагдана.
+ * 8 нь дээд хязгаар — тойрог бүрд 4 нь суудаг тул өнжих, хасагдах, үзэгчийн
+ * горим бүгд шалгагдана. Хасагдсан ба өнжиж буй тоглогчид тоглолтыг үргэлж
+ * харж, чатлаж чадаж байгааг мөн шалгана.
  *
  * Ажиллуулах:  npm start   (өөр цонхонд)
  *              npm run smoke
@@ -13,14 +14,23 @@ import WebSocket from 'ws';
 
 import { Card } from '../../app/src/shared/cards';
 import { Combo, beats, detectCombo } from '../../app/src/shared/combos';
-import type { ClientMessage, GameView, ServerMessage } from '../../app/src/shared/protocol';
+import type {
+  ClientMessage,
+  GameView,
+  PlayerInfo,
+  ServerMessage,
+} from '../../app/src/shared/protocol';
 
 const URL = process.env.SMOKE_URL ?? 'ws://localhost:8787';
 const TARGET_SCORE = 30;
 // Тестийн ботууд шууд хариулдаг тул хугацаа урт байхад асуудалгүй.
 const TURN_SECONDS = 300;
-const STAKE = 25;
-const PLAYER_NAMES = ['Ану', 'Бат', 'Цэцэг', 'Дорж', 'Энхээ'];
+// MIN_STAKE-аас дээш байх ёстой — өмнө нь 25 байсан тул тоглолт эхлэхгүй гацаж байв.
+const STAKE = 1_000;
+const PLAYER_NAMES = ['Ану', 'Бат', 'Цэцэг', 'Дорж', 'Энхээ', 'Жаргал', 'Золбоо', 'Ирээдүй'];
+/** Шалгалтад ашиглах тогтмол бүртгэл — ажиллуулах бүрд шинээр үүсгэхгүй. */
+const SMOKE_ACCOUNT = 'smoke_tester';
+const SMOKE_PASSWORD = 'smoke-test-2026-daidi';
 
 class Client {
   readonly ws: WebSocket;
@@ -92,10 +102,41 @@ const check = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(message);
 };
 
+/**
+ * Нэг клиентийг бүртгэлтэй хэрэглэгч болгоно — ингэснээр "нэр дээр дарахад
+ * токен, статистик харагдах" урсгал бодит өгөгдлөөр шалгагдана.
+ *
+ * Тогтмол нэр ашиглана: анх нэг л удаа бүртгэгдэж, дараа нь нэвтэрнэ. Ингэснээр
+ * ажиллуулах бүрд сан руу шинэ хэрэглэгч нэмэгдэхгүй.
+ */
+async function signIn(client: Client): Promise<boolean> {
+  client.send({
+    t: 'register',
+    username: SMOKE_ACCOUNT,
+    password: SMOKE_PASSWORD,
+    email: `${SMOKE_ACCOUNT.toLowerCase()}@example.invalid`,
+  });
+  const first = await client.await((m) => m.t === 'auth' || m.t === 'error');
+  if (first.t === 'auth' && first.account) return true;
+
+  client.send({ t: 'login', username: SMOKE_ACCOUNT, password: SMOKE_PASSWORD });
+  const second = await client.await((m) => m.t === 'auth' || m.t === 'error');
+  return second.t === 'auth' && second.account !== null;
+}
+
 async function main() {
   const clients = PLAYER_NAMES.map((n) => new Client(n));
   await Promise.all(clients.map((c) => c.open()));
   console.log(`✓ ${clients.length} клиент холбогдлоо`);
+
+  // Хамгийн сүүлийн клиентийг бүртгэлтэй болгоно (өрөө үүсгэгч нь биш).
+  const registered = clients[clients.length - 1];
+  const signedIn = await signIn(registered);
+  console.log(
+    signedIn
+      ? `✓ ${registered.label} бүртгэлтэй хэрэглэгчээр нэвтэрлээ`
+      : `⚠ бүртгэл ажиллахгүй байна — токены шалгалт алгасагдана`,
+  );
 
   clients[0].send({ t: 'create', name: clients[0].label });
   await clients[0].await((m) => m.t === 'joined');
@@ -126,6 +167,7 @@ async function main() {
   const scores = new Map(clients.map((c) => [c.playerId, 0]));
   let moves = 0;
   let rounds = 0;
+  let knockedOutChecked = false;
 
   while (clients[0].view?.phase !== 'matchEnd') {
     if (++moves >= 60000) {
@@ -152,10 +194,68 @@ async function main() {
       continue;
     }
 
-    // Өнжиж буй тоглогч ширээг харах ёстой ч хөзөргүй байх ёстой.
+    // Өнжиж буй ба хасагдсан тоглогч ширээг харах ёстой ч хөзөргүй байх ёстой.
     for (const c of clients) {
       if (c.view && !c.view.youAreSeated && c.view.phase === 'playing') {
         check(c.view.yourHand.length === 0, `${c.label}: өнжиж байхад хөзөр ирлээ`);
+        // Тоглолтыг үргэлжлүүлэн харж байгаа эсэх: ширээний төлөв ирсээр байна.
+        check(c.view.seats.length > 0, `${c.label}: суудлын мэдээлэл ирэхээ больжээ`);
+        check(c.view.round === view.round, `${c.label}: тойргийн мэдээлэл хоцорчээ`);
+      }
+    }
+
+    // Хасагдсан хүн гарч байгаа мөчид: тэр хүн харсаар, чатлаж чадсаар байх ёстой.
+    if (!knockedOutChecked) {
+      const out = clients.find((c) => c.view?.players.find((p) => p.id === c.playerId)?.eliminated);
+      if (out) {
+        knockedOutChecked = true;
+        check(out.view !== null, `${out.label}: хасагдсаны дараа төлөв ирэхээ больжээ`);
+        // Тойргийн ТӨГСГӨЛД хасагдсан хүн тэр тойргийг тоглосон тул суудалтай
+        // хэвээр байх нь зөв. Суудал нь дараагийн тойрог эхлэхэд цэвэрлэгдэнэ —
+        // идэвхтэй тойргийн үед л суудалгүй байх ёстой.
+        if (out.view!.phase === 'playing') {
+          check(!out.view!.youAreSeated, `${out.label}: хасагдсан ч тоглож байна`);
+          check(out.view!.yourHand.length === 0, `${out.label}: хасагдсан ч хөзөртэй байна`);
+        }
+
+        const heardOut = clients.map((c) => c.await((m) => m.t === 'chat'));
+        out.send({ t: 'chat', text: 'Хасагдсан ч үзэж байна!' });
+        await Promise.all(heardOut);
+        check(
+          clients.every((c) => c.chat.some((l) => l.includes('Хасагдсан ч үзэж байна!'))),
+          'хасагдсан тоглогчийн чат бусдад хүрсэнгүй',
+        );
+        console.log(`✓ ${out.label} хасагдсан ч тоглолтыг үзэж, чатлаж байна`);
+
+        // Нэр дээр дарахад ил мэдээлэл ирэх ёстой. Зочны хувьд статистикгүй.
+        out.send({ t: 'inspect', playerId: clients[0].playerId });
+        const guest = await out.await((m) => m.t === 'playerInfo' || m.t === 'error');
+        check(guest.t === 'playerInfo', 'тоглогчийн мэдээлэл ирсэнгүй');
+        check(
+          guest.t === 'playerInfo' && guest.info.name === clients[0].label,
+          'тоглогчийн мэдээлэл буруу хүнийх байна',
+        );
+        check(
+          guest.t === 'playerInfo' && !guest.info.registered && guest.info.tokens === null,
+          'зочинд токен харагдаж байна',
+        );
+        console.log('✓ зочны нэр дээр дарахад мэдээлэл ирж байна (токенгүй)');
+
+        // Бүртгэлтэй тоглогчийн хувьд токен ба статистик ирэх ёстой.
+        if (signedIn) {
+          out.send({ t: 'inspect', playerId: registered.playerId });
+          const member = await out.await((m) => m.t === 'playerInfo' || m.t === 'error');
+          check(member.t === 'playerInfo', 'бүртгэлтэй тоглогчийн мэдээлэл ирсэнгүй');
+          const info = (member as { info: PlayerInfo }).info;
+          check(info.registered, 'бүртгэлтэй хэрэглэгч зочин мэт харагдлаа');
+          check(info.username === SMOKE_ACCOUNT, `нэвтрэх нэр буруу: ${info.username}`);
+          check(typeof info.tokens === 'number', 'токены үлдэгдэл ирсэнгүй');
+          check(info.stats !== null, 'статистик ирсэнгүй');
+          console.log(
+            `✓ бүртгэлтэй тоглогчийн мэдээлэл: ${info.username}, ` +
+              `${info.tokens} токен, ${info.stats!.matches} тоглолт, ${info.stats!.wins} ялалт`,
+          );
+        }
       }
     }
 
@@ -232,5 +332,5 @@ function verifyRound(clients: Client[], scores: Map<string, number>): void {
 
 main().catch((err) => {
   console.error('❌', err.message);
-  process.exit(1);
+  process.exitCode = 1;
 });

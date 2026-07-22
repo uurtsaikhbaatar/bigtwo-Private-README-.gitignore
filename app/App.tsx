@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChatButton } from './src/components/ChatPanel';
+import { PlayerInfoPanel } from './src/components/PlayerInfoPanel';
 import { ReportButton } from './src/components/ReportButton';
 import { clearRoomCodeFromUrl, pendingRoomCode } from './src/deeplink';
 import { installErrorReporter } from './src/errors';
@@ -125,6 +126,13 @@ function Root() {
     return () => clearTimeout(timer);
   }, [error, clearError]);
 
+  // Нэр дээр дарж нээсэн тоглогч. Хариу ирэхээс өмнө нэрийг нь харуулна.
+  const [inspecting, setInspecting] = useState<string | null>(null);
+  const closeInspect = () => {
+    setInspecting(null);
+    game.closePlayerInfo();
+  };
+
   const view = game.view;
 
   return (
@@ -166,6 +174,10 @@ function Root() {
           onNextRound={game.nextRound}
           onNewMatch={() => game.startGame(view.targetScore, view.turnSeconds, view.stake)}
           onLeave={game.leaveRoom}
+          onInspect={(playerId, name) => {
+            setInspecting(name);
+            game.inspectPlayer(playerId);
+          }}
         />
       )}
 
@@ -176,6 +188,11 @@ function Root() {
             youName={view.players.find((p) => p.id === view.youId)?.name ?? ''}
             onSend={game.sendChat}
             onSendVoice={game.sendVoice}
+          />
+          <PlayerInfoPanel
+            pendingName={inspecting}
+            info={game.playerInfo}
+            onClose={closeInspect}
           />
           <ReportButton
             lastReportId={game.lastReportId}

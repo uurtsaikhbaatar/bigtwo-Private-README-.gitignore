@@ -11,7 +11,7 @@ import { Card } from './cards';
 import { comboLabel } from './combos';
 import { GameState, Phase, RoundRecord, Settlement } from './game';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Алдааны мэдэгдлийн төрөл: хэрэглэгч бичсэн эсвэл апп өөрөө барьсан. */
 export type ReportKind = 'bug' | 'crash';
@@ -54,6 +54,8 @@ export type ClientMessage =
   | { t: 'logout'; token: string }
   /** Профайл: статистик ба сүүлийн тоглолтууд. */
   | { t: 'profile' }
+  /** Өрөөн доторх өөр тоглогчийн ил мэдээллийг асуух. */
+  | { t: 'inspect'; playerId: string }
   | { t: 'leave' }
   | { t: 'ping' };
 
@@ -70,6 +72,8 @@ export type ServerMessage =
   /** Нэвтрэлтийн төлөв. account null бол нэвтрээгүй. */
   | { t: 'auth'; account: Account | null; token?: string }
   | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[] }
+  /** Өөр тоглогчийн ил мэдээлэл. Бүртгэлгүй бол stats нь null. */
+  | { t: 'playerInfo'; info: PlayerInfo }
   /** Мэдээллийн мессеж (жишээ нь токен хүсэлт хүлээн авсан). */
   | { t: 'notice'; message: string }
   | { t: 'pong' };
@@ -84,6 +88,23 @@ export interface Account {
   emailVerified: boolean;
   /** Виртуал токены үлдэгдэл. Бодит мөнгө биш. */
   tokens: number;
+}
+
+/**
+ * Өрөөн доторх тоглогчийн ил мэдээлэл — нэр дээр нь дарахад харагдана.
+ * Бүртгэлгүй (зочин) тоглогчийн хувьд `tokens` ба `stats` нь null.
+ */
+export interface PlayerInfo {
+  playerId: string;
+  name: string;
+  /** Бүртгэлтэй хэрэглэгч эсэх. */
+  registered: boolean;
+  username: string | null;
+  tokens: number | null;
+  stats: PlayerStats | null;
+  /** Энэ тоглолт дахь оноо. */
+  score: number;
+  eliminated: boolean;
 }
 
 export interface PlayerStats {
