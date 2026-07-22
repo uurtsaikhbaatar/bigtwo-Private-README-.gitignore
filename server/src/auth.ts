@@ -119,14 +119,23 @@ export async function register(
     email: address,
     emailVerified: false,
   };
-  await issueCode(account);
+  // Имэйл илгээхэд алдаа гарсан ч бүртгэл хүчинтэй үлдэнэ — код нь санд
+  // хадгалагдсан тул хэрэглэгч дараа нь дахин илгээж авна.
+  await issueCode(account, false);
   return { account, token: await openSession(account.id) };
 }
 
 // ── Имэйл баталгаажуулалт ──────────────────────────────────────────────────
 
-/** 6 оронтой код үүсгэж, hash-лан хадгалаад имэйлээр илгээнэ. */
-async function issueCode(account: Account): Promise<void> {
+/**
+ * 6 оронтой код үүсгэж, hash-лан хадгалаад имэйлээр илгээнэ.
+ *
+ * `throwOnSendFailure` нь илгээлт бүтэлгүйтэхэд алдаа шидэх эсэхийг заана.
+ * Бүртгэлийн үед FALSE — имэйлийн үйлчилгээ доголдсоноос болж бүртгэл
+ * бүхэлдээ унах ёсгүй (хэрэглэгч аль хэдийн үүссэн байдаг). Хэрэглэгч дараа
+ * нь "дахин илгээх" дарж болох бөгөөд тэнд алдаа нь ил гарна.
+ */
+async function issueCode(account: Account, throwOnSendFailure = true): Promise<void> {
   if (!account.email) return;
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   const expires = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000);
@@ -140,7 +149,12 @@ async function issueCode(account: Account): Promise<void> {
   );
 
   const message = verificationEmail(account.username, code);
-  await sendEmail({ to: account.email, ...message });
+  try {
+    await sendEmail({ to: account.email, ...message });
+  } catch (err) {
+    console.error('Баталгаажуулах имэйл илгээж чадсангүй:', err instanceof Error ? err.message : err);
+    if (throwOnSendFailure) throw err;
+  }
 }
 
 /** Кодыг шалгаж, зөв бол имэйлийг баталгаажуулсанд тооцно. */
