@@ -24,6 +24,9 @@ const CONTENT_MAX_WIDTH = 780;
  */
 const COMPACT_HEIGHT = 520;
 
+/** Хэдэн хөзөр үлдэхэд анхааруулах вэ. */
+const LAST_CARD_WARNING = 1;
+
 /**
  * Гарын хөзрүүд хэр их давхарлагдахыг тооцно.
  * Зай хүрэлцвэл огт давхарлахгүй; хүрэлцэхгүй бол булангийн тэмдэглэгээ
@@ -81,6 +84,10 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
     .filter((p): p is PlayerView => !!p);
   const opponents = rotate(seated, view.youId).filter((p) => p.id !== view.youId);
   const benched = view.players.filter((p) => !p.seated && !p.eliminated);
+  // Хэн нэгэн сүүлийн хөзөртэй үлдвэл бүх тоглогчид анхааруулна.
+  const lastCardPlayers = seated.filter(
+    (p) => p.handCount === LAST_CARD_WARNING && p.place === null,
+  );
 
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
@@ -109,10 +116,19 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
           {benched.map((p) => (
             <Text key={p.id} style={styles.benchName}>
               {p.name}
-              {p.id === view.youId ? ' (та)' : ''} · {p.score}
+              {p.id === view.youId ? ' (та)' : ''} · {p.score} оноо
               {p.draw !== null ? ` · ${cardName(p.draw)}` : ''}
             </Text>
           ))}
+        </View>
+      )}
+
+      {lastCardPlayers.length > 0 && (
+        <View style={styles.alert}>
+          <Text style={styles.alertText} numberOfLines={2}>
+            ⚠ {lastCardPlayers.map((p) => (p.id === view.youId ? 'Та' : p.name)).join(', ')}{' '}
+            сүүлийн нэг хөзөртэй үлдлээ — дараагийн тавилтаараа дуусгаж магадгүй!
+          </Text>
         </View>
       )}
 
@@ -231,8 +247,16 @@ function Opponent({
   isTurn: boolean;
   secondsLeft: number | null;
 }) {
+  const lastCard = player.handCount === LAST_CARD_WARNING && player.place === null;
+
   return (
-    <View style={[styles.opponent, isTurn && styles.opponentActive]}>
+    <View
+      style={[
+        styles.opponent,
+        isTurn && styles.opponentActive,
+        lastCard && styles.opponentDanger,
+      ]}
+    >
       <View style={styles.opponentHeader}>
         <View
           style={[styles.dot, { backgroundColor: player.connected ? theme.success : theme.danger }]}
@@ -240,26 +264,33 @@ function Opponent({
         <Text style={styles.opponentName} numberOfLines={1}>
           {player.name}
         </Text>
-        {isTurn ? (
-          <TurnTimer secondsLeft={secondsLeft} compact />
-        ) : (
-          <Text style={styles.opponentScore}>{player.score}</Text>
-        )}
+        {/* Тоолуур нь онооны оронд ОРОХГҮЙ — оноо доод мөрөнд байнга харагдана. */}
+        {isTurn && <TurnTimer secondsLeft={secondsLeft} compact />}
       </View>
-      <View style={styles.miniStack}>
-        {Array.from({ length: Math.min(player.handCount, 5) }).map((_, i) => (
-          <View key={i} style={i === 0 ? undefined : styles.miniOverlap}>
-            <View style={styles.miniCard} />
-          </View>
-        ))}
+
+      {lastCard ? (
+        <Text style={styles.lastCardBadge} numberOfLines={1}>
+          ⚠ СҮҮЛИЙН ХӨЗӨР
+        </Text>
+      ) : (
+        <View style={styles.miniStack}>
+          {Array.from({ length: Math.min(player.handCount, 5) }).map((_, i) => (
+            <View key={i} style={i === 0 ? undefined : styles.miniOverlap}>
+              <View style={styles.miniCard} />
+            </View>
+          ))}
+        </View>
+      )}
+      <View style={styles.opponentFooter}>
+        <Text style={[styles.opponentMeta, lastCard && styles.dangerText]} numberOfLines={1}>
+          {player.place !== null
+            ? `${player.place}-р байр`
+            : player.passed
+              ? `пас · ${player.handCount} хөзөр`
+              : `${player.handCount} хөзөр`}
+        </Text>
+        <Text style={styles.opponentScore}>{player.score} оноо</Text>
       </View>
-      <Text style={styles.opponentMeta}>
-        {player.place !== null
-          ? `${player.place}-р байр`
-          : player.passed
-            ? `пас · ${player.handCount}`
-            : `${player.handCount} хөзөр`}
-      </Text>
     </View>
   );
 }
@@ -400,10 +431,26 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   opponentActive: { borderColor: theme.accent },
+  opponentDanger: { borderColor: theme.danger, backgroundColor: 'rgba(226,87,76,0.12)' },
   opponentHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   dot: { width: 7, height: 7, borderRadius: 4 },
   opponentName: { color: theme.text, fontSize: 13, fontWeight: '600', flex: 1 },
-  opponentScore: { color: theme.textMuted, fontSize: 12, fontWeight: '700' },
+  opponentScore: { color: theme.textMuted, fontSize: 11, fontWeight: '700' },
+  opponentFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
+  dangerText: { color: theme.danger, fontWeight: '800' },
+  lastCardBadge: {
+    color: theme.danger,
+    fontSize: 11,
+    fontWeight: '900',
+    paddingVertical: 6,
+  },
+  alert: {
+    backgroundColor: theme.danger,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  alertText: { color: theme.text, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   opponentMeta: { color: theme.textMuted, fontSize: 11 },
   miniStack: { flexDirection: 'row' },
   miniOverlap: { marginLeft: -14 },
