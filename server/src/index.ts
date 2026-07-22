@@ -126,6 +126,8 @@ const httpServer = createServer((req, res) => {
     void serveReports(req, res);
     return;
   }
+  if (req.url?.startsWith('/admin/rooms')) return serveLiveRooms(req, res);
+  if (req.url?.startsWith('/admin/announce')) return serveAnnounce(req, res);
   // Вэб хувилбар бүтээгдсэн бол түүнийг дамжуулна (`npm run build:web`).
   void serveStatic(req, res).then((served) => {
     if (served) return;
@@ -505,8 +507,14 @@ function seat(socket: WebSocket, room: Room, name: string): void {
  * Тохируулаагүй бол зөвхөн локал хандалт зөвшөөрөгдөнө — интернэтэд гарсан
  * сервер дээр мэдэгдэл санамсаргүй нээлттэй болохоос сэргийлнэ.
  */
-async function serveReports(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = new URL(req.url ?? '/', 'http://localhost');
+/**
+ * Админы хандалтыг шалгана.
+ *
+ * `REPORT_KEY` тохируулсан бол `?key=…` таарах ёстой. Тохируулаагүй бол
+ * зөвхөн локал хандалт зөвшөөрөгдөнө — интернэтэд гарсан сервер дээр
+ * санамсаргүй нээлттэй болохоос сэргийлнэ.
+ */
+function adminAllowed(req: IncomingMessage, url: URL): boolean {
   const expected = process.env.REPORT_KEY;
   // Render зэрэг үйлчилгээ хүсэлтийг контейнер дотор 127.0.0.1-ээс дамжуулдаг
   // тул зөвхөн remoteAddress-д итгэвэл интернэтээс ирсэн хүсэлт ч "локал"
@@ -514,13 +522,89 @@ async function serveReports(req: IncomingMessage, res: ServerResponse): Promise<
   const proxied = Boolean(req.headers['x-forwarded-for'] ?? req.headers['x-forwarded-proto']);
   const local =
     !proxied && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
-  const allowed = expected ? url.searchParams.get('key') === expected : local;
+  return expected ? url.searchParams.get('key') === expected : local;
+}
 
-  if (!allowed) {
-    res.writeHead(403, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ error: 'REPORT_KEY шаардлагатай.' }));
+function denyAdmin(res: ServerResponse): void {
+  res.writeHead(403, { 'content-type': 'application/json' });
+  res.end(JSON.stringify({ error: 'REPORT_KEY шаардлагатай.' }));
+}
+
+/**
+ * Одоо тоглож байгаа өрөө, тоглогчид.
+ *
+ * Байршуулахаас өмнө "хэн ч тоглож байгаа юу?" гэдгийг шалгахад хэрэглэнэ —
+ * сервер дахин ачаалахад тоглож байсан хүмүүс унадаг.
+ */
+function serveLiveRooms(req: IncomingMessage, res: ServerResponse): void {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (!adminAllowed(req, url)) return denyAdmin(res);
+
+  const now = Date.now();
+  const list: unknown[] = [];
+  rooms.forEach((room) => {
+    const seats = [...room.seats.values()];
+    list.push({
+      code: room.code,
+      phase: room.state.phase,
+      round: room.state.round,
+      stake: room.state.stake,
+      // Холбогдсон хүн байхгүй өрөө нь орхигдсон гэсэн үг.
+      online: seats.filter((s) => s.socket !== null).length,
+      players: room.state.players.map((p) => ({
+        name: p.name,
+        connected: room.seats.get(p.id)?.socket !== null,
+        registered: Boolean(room.seats.get(p.id)?.userId),
+        score: p.score,
+        eliminated: p.eliminated,
+      })),
+      idleSeconds: Math.round((now - room.lastActivity) / 1000),
+    });
+  });
+
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(
+    JSON.stringify(
+      { rooms: list.length, playing: list.filter((r) => (r as { online: number }).online > 0).length, list },
+      null,
+      2,
+    ),
+  );
+}
+
+/**
+ * Бүх өрөөнд мэдэгдэл илгээнэ — жишээ нь "5 минутын дараа шинэчилнэ".
+ *
+ * Чатын мөр болж очно: тоглогчид тусад нь цонх нээх шаардлагагүй, өмнөх
+ * мессежүүдтэй хамт үлдэнэ.
+ */
+function serveAnnounce(req: IncomingMessage, res: ServerResponse): void {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (!adminAllowed(req, url)) return denyAdmin(res);
+
+  const text = (url.searchParams.get('text') ?? '').trim().slice(0, MAX_CHAT_LENGTH);
+  if (!text) {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'text параметр хоосон байна.' }));
     return;
   }
+
+  const line: ServerMessage = { t: 'chat', from: 'Зарлал', text, at: Date.now() };
+  let reached = 0;
+  rooms.forEach((room) => {
+    room.chat.push(line);
+    if (room.chat.length > CHAT_HISTORY) room.chat.shift();
+    broadcastRaw(room, line);
+    reached += [...room.seats.values()].filter((s) => s.socket !== null).length;
+  });
+
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ sent: text, rooms: rooms.size, players: reached }, null, 2));
+}
+
+async function serveReports(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (!adminAllowed(req, url)) return denyAdmin(res);
 
   const limit = Math.min(Number(url.searchParams.get('limit')) || 100, 500);
   const reports = await readReports(limit);
