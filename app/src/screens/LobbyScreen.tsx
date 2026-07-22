@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AuthPanel } from '../components/AuthPanel';
 import { Button } from '../components/Button';
+import { GuestNotice } from '../components/GuestNotice';
 import { joinUrl } from '../deeplink';
 import { formatChips, groupDigits, shortChips } from '../chips';
 import {
@@ -20,12 +22,14 @@ import { theme } from '../theme';
 interface Props {
   view: GameView;
   onStart: (targetScore: number, turnSeconds: number, stake: number) => void;
+  /** Нэвтрэлтийн самбар — зочин байвал лоббид ч гаргана. */
+  auth: React.ComponentProps<typeof AuthPanel>;
   onLeave: () => void;
 }
 
 const secondsLabel = (s: number): string => (s >= 60 ? `${s / 60} мин` : `${s} сек`);
 
-export function LobbyScreen({ view, onStart, onLeave }: Props) {
+export function LobbyScreen({ view, onStart, onLeave, auth }: Props) {
   const [target, setTarget] = useState<number>(TARGET_SCORE_CHOICES[0]);
   const [turnSeconds, setTurnSeconds] = useState<number>(TURN_SECONDS_CHOICES[0]);
   const [stake, setStake] = useState<number>(STAKE_CHOICES[0]);
@@ -85,6 +89,8 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
           </Text>
         )}
       </View>
+
+      {!auth.account && <GuestNotice action={<AuthPanel {...auth} />} />}
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Хэдэн оноонд хүрвэл хасагдах вэ?</Text>

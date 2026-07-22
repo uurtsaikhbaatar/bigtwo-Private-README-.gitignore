@@ -85,6 +85,30 @@ function markOnline(socket: WebSocket, account: Account): void {
   const set = online.get(account.id) ?? new Set<WebSocket>();
   set.add(socket);
   online.set(account.id, set);
+  linkSeat(socket, account);
+}
+
+/**
+ * Өрөөнд аль хэдийн сууж байгаа бол суудлыг бүртгэлтэй нь холбоно.
+ *
+ * Суудал нь орох мөчид л холбогддог байсан тул зочноор орсны дараа нэвтэрсэн
+ * хүний токен, цол тооцогдохгүй байв. Тоглогч 9 тоглолтоос 6-д нь ингэж
+ * зочноор тоглож, бүх ахицаа алдсан.
+ */
+function linkSeat(socket: WebSocket, account: Account): void {
+  const session = sessions.get(socket);
+  if (!session) return;
+  const seat = session.room.seats.get(session.playerId);
+  if (!seat || seat.userId === account.id) return;
+
+  seat.userId = account.id;
+  const player = session.room.state.players.find((p) => p.id === session.playerId);
+  if (player && account.avatar) player.avatar = account.avatar;
+
+  if (dbEnabled()) {
+    void refreshWins(session.room).catch(() => undefined);
+  }
+  broadcast(session.room);
 }
 
 function markOffline(socket: WebSocket): void {

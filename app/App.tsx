@@ -144,6 +144,22 @@ function Root() {
     game.closePlayerInfo();
   };
 
+  // Нэвтрэлтийн самбарын бүх дамжуулга — нүүр ба лобби хоёуланд хэрэгтэй.
+  const authProps = {
+    account: game.account,
+    profile: game.profile,
+    onRegister: game.register,
+    onLogin: game.logIn,
+    onLogout: game.logOut,
+    onLoadProfile: game.loadProfile,
+    onVerifyEmail: game.verifyEmail,
+    onResendCode: game.resendCode,
+    onRequestTokens: game.requestTokens,
+    onSetAvatar: game.setAvatar,
+    onForgotPassword: game.forgotPassword,
+    onResetPassword: game.resetPassword,
+  };
+
   const view = game.view;
 
   return (
@@ -166,23 +182,15 @@ function Root() {
           invites={game.invites}
           onAcceptInvite={(roomCode) => game.joinRoom(name, roomCode)}
           onDeclineInvite={game.declineInvite}
-          auth={{
-            account: game.account,
-            profile: game.profile,
-            onRegister: game.register,
-            onLogin: game.logIn,
-            onLogout: game.logOut,
-            onLoadProfile: game.loadProfile,
-            onVerifyEmail: game.verifyEmail,
-            onResendCode: game.resendCode,
-            onRequestTokens: game.requestTokens,
-            onSetAvatar: game.setAvatar,
-            onForgotPassword: game.forgotPassword,
-            onResetPassword: game.resetPassword,
-          }}
+          auth={authProps}
         />
       ) : view.phase === 'lobby' ? (
-        <LobbyScreen view={view} onStart={game.startGame} onLeave={game.leaveRoom} />
+        <LobbyScreen
+          view={view}
+          onStart={game.startGame}
+          onLeave={game.leaveRoom}
+          auth={authProps}
+        />
       ) : (
         <TableScreen
           view={view}

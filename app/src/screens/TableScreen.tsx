@@ -211,7 +211,12 @@ export function TableScreen({
               <Text style={styles.meName} numberOfLines={1}>
                 {you?.name ?? ''}
               </Text>
-              <RankBadge wins={you?.rankedWins ?? null} />
+              {you?.rankedWins === null ? (
+                // Зочин — тоглолт нь тооцогдохгүй гэдгийг тоглох явцад ч сануулна.
+                <Text style={styles.guestTag}>зочин</Text>
+              ) : (
+                <RankBadge wins={you?.rankedWins ?? null} />
+              )}
             </Pressable>
 
             <Text style={[styles.turnText, yourTurn && styles.turnActive]}>
@@ -585,6 +590,14 @@ const styles = StyleSheet.create({
   },
   meRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   meName: { color: theme.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
+  guestTag: {
+    color: theme.textMuted,
+    fontSize: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
   turnText: { color: theme.textMuted, fontSize: 14, fontWeight: '600' },
   turnActive: { color: theme.accent },
   score: { color: theme.textMuted, fontSize: 13 },
