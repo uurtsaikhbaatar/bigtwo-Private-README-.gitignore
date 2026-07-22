@@ -120,6 +120,7 @@ export async function register(
     email: address,
     emailVerified: false,
     tokens: STARTING_TOKENS,
+    avatar: null,
   };
   // Имэйл илгээхэд алдаа гарсан ч бүртгэл хүчинтэй үлдэнэ — код нь санд
   // хадгалагдсан тул хэрэглэгч дараа нь дахин илгээж авна.
@@ -211,7 +212,8 @@ async function accountById(userId: string): Promise<Account | null> {
     email: string | null;
     email_verified: boolean;
     tokens: string;
-  }>('SELECT id, username, email, email_verified, tokens FROM users WHERE id = $1', [userId]);
+    avatar: string | null;
+  }>('SELECT id, username, email, email_verified, tokens, avatar FROM users WHERE id = $1', [userId]);
   const row = result.rows[0];
   return row
     ? {
@@ -220,6 +222,7 @@ async function accountById(userId: string): Promise<Account | null> {
         email: row.email ?? undefined,
         emailVerified: row.email_verified,
         tokens: Number(row.tokens),
+        avatar: row.avatar,
       }
     : null;
 }
@@ -237,8 +240,9 @@ export async function login(
     email: string | null;
     email_verified: boolean;
     tokens: string;
+    avatar: string | null;
   }>(
-    'SELECT id, username, password, email, email_verified, tokens FROM users WHERE username_key = $1',
+    'SELECT id, username, password, email, email_verified, tokens, avatar FROM users WHERE username_key = $1',
     [normalise(username)],
   );
 
@@ -252,6 +256,7 @@ export async function login(
     email: row.email ?? undefined,
     emailVerified: row.email_verified,
     tokens: Number(row.tokens),
+        avatar: row.avatar,
   };
   return { account, token: await openSession(account.id) };
 }
@@ -275,8 +280,9 @@ export async function accountForToken(token: string): Promise<Account | null> {
     email: string | null;
     email_verified: boolean;
     tokens: string;
+    avatar: string | null;
   }>(
-    `SELECT u.id, u.username, u.email, u.email_verified, u.tokens FROM sessions s
+    `SELECT u.id, u.username, u.email, u.email_verified, u.tokens, u.avatar FROM sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token = $1 AND s.expires_at > now()`,
     [token],
@@ -289,10 +295,16 @@ export async function accountForToken(token: string): Promise<Account | null> {
         email: row.email ?? undefined,
         emailVerified: row.email_verified,
         tokens: Number(row.tokens),
+        avatar: row.avatar,
       }
     : null;
 }
 
 export async function logout(token: string): Promise<void> {
   await getPool().query('DELETE FROM sessions WHERE token = $1', [token]);
+}
+
+/** Профайлын зургийг хадгална. null бол авч хаяна. */
+export async function saveAvatar(userId: string, avatar: string | null): Promise<void> {
+  await getPool().query('UPDATE users SET avatar = $2 WHERE id = $1', [userId, avatar]);
 }

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import { groupDigits } from '../chips';
+import { AvatarPicker } from './AvatarPicker';
 import { Button } from '../components/Button';
 import type { Account, MatchSummary, PlayerStats } from '../shared/protocol';
 import { Overlay } from './Overlay';
@@ -27,6 +28,7 @@ interface Props {
   onVerifyEmail: (code: string) => void;
   onResendCode: () => void;
   onRequestTokens: () => void;
+  onSetAvatar: (avatar: string | null) => void;
 }
 
 /**
@@ -43,6 +45,7 @@ export function AuthPanel({
   onVerifyEmail,
   onResendCode,
   onRequestTokens,
+  onSetAvatar,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -93,6 +96,12 @@ export function AuthPanel({
             {account ? (
               <ScrollView contentContainerStyle={styles.profileBody}>
                 <Text style={styles.who}>{account.username}</Text>
+
+                <AvatarPicker
+                  name={account.username}
+                  avatar={account.avatar}
+                  onChange={onSetAvatar}
+                />
 
                 {/* Баталгаажуулалт нь профайлыг ХААХГҮЙ — дээд талд сануулга
                     болж гарна. Имэйл ирээгүй ч токен, түүхээ харж, тоглож

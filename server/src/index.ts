@@ -23,6 +23,7 @@ import {
   startRound,
   timeoutTurn,
 } from '../../app/src/shared/game';
+import { isValidAvatar } from '../../app/src/shared/avatar';
 import type { Account } from '../../app/src/shared/protocol';
 import {
   MAX_REPORT_CHARS,
@@ -40,6 +41,7 @@ import {
   logout,
   register,
   resendCode,
+  saveAvatar,
   verifyEmail,
 } from './auth';
 import { dbEnabled, getPool } from './db';
@@ -281,6 +283,44 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     }
   }
 
+  /**
+   * Профайлын зураг тохируулах.
+   *
+   * Өрөөнөөс ГАДУУР ч ажиллана — профайлыг нүүр хуудаснаас нээдэг. Өрөөнд
+   * байвал бусдад тэр дороо харагдана; нэвтэрсэн бол санд хадгалагдана.
+   */
+  if (msg.t === 'setAvatar') {
+    const value = msg.avatar ?? null;
+    if (value !== null && !isValidAvatar(value)) {
+      throw new RuleError('Зураг хэтэрхий том эсвэл буруу хэлбэртэй байна.');
+    }
+
+    const active = sessions.get(socket);
+    if (active) {
+      const me = active.room.state.players.find((p) => p.id === active.playerId);
+      if (me) me.avatar = value;
+      broadcast(active.room);
+    }
+
+    const account = accounts.get(socket);
+    if (!account) return;
+    if (!dbEnabled()) {
+      accounts.set(socket, { ...account, avatar: value });
+      return send(socket, { t: 'auth', account: { ...account, avatar: value } });
+    }
+    void saveAvatar(account.id, value)
+      .then(() => {
+        const updated = { ...account, avatar: value };
+        accounts.set(socket, updated);
+        send(socket, { t: 'auth', account: updated });
+      })
+      .catch((err) => {
+        console.error('avatar хадгалж чадсангүй:', err);
+        send(socket, { t: 'error', message: 'Зургийг хадгалж чадсангүй.' });
+      });
+    return;
+  }
+
   // Доорх үйлдлүүдэд өрөөнд сууж байх шаардлагатай.
   const session = sessions.get(socket);
   if (!session) throw new RuleError('Эхлээд өрөөнд нэгдэнэ үү.');
@@ -347,6 +387,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         name: target.name,
         score: target.score,
         eliminated: target.eliminated,
+        avatar: target.avatar,
       };
 
       if (!seat?.userId || !dbEnabled()) {
@@ -438,9 +479,15 @@ function seat(socket: WebSocket, room: Room, name: string): void {
   }
   const s = newSeat();
   s.socket = socket;
-  s.userId = accounts.get(socket)?.id ?? null;
+  const account = accounts.get(socket);
+  s.userId = account?.id ?? null;
   room.seats.set(s.playerId, s);
   addPlayer(room.state, s.playerId, name);
+  // Нэвтэрсэн хүн хадгалсан зургаа авчирна.
+  if (account?.avatar) {
+    const player = room.state.players.find((p) => p.id === s.playerId);
+    if (player) player.avatar = account.avatar;
+  }
   sessions.set(socket, { room, playerId: s.playerId });
   room.lastActivity = Date.now();
   send(socket, { t: 'joined', code: room.code, playerId: s.playerId, token: s.token });

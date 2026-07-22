@@ -78,6 +78,8 @@ export async function initSchema(): Promise<void> {
 
     -- Виртуал токен: бүртгүүлэхэд бэлэглэгддэг, бооцоотой тоглолтод хэлбэлзэнэ.
     ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens BIGINT NOT NULL DEFAULT 1000000;
+    -- Профайлын зураг: emoji эсвэл data: URL (128×128 болгож жижигрүүлсэн).
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
 
     -- Токен дуусахад хэрэглэгч нэмэлт хүсэх бөгөөд админ гараар олгоно.
     CREATE TABLE IF NOT EXISTS token_requests (

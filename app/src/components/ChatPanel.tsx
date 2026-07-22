@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import type { ChatLine } from '../net';
+import { MicIcon, StopIcon } from './MicIcon';
 import { Overlay } from './Overlay';
 import { theme } from '../theme';
 import { Recording, playVoice, startRecording, voiceSupported } from '../voice';
@@ -129,7 +130,7 @@ export function ChatButton({ lines, youName, onSend, onSendVoice }: Props) {
                         accessibilityLabel="Дуут мессеж тоглуулах"
                         style={styles.voiceRow}
                       >
-                        <Text style={styles.voiceIcon}>▶︎</Text>
+                        <Text style={styles.voiceIcon}>▶</Text>
                         <View style={styles.waveform}>
                           {Array.from({ length: 14 }).map((_, bar) => (
                             <View
@@ -204,7 +205,7 @@ export function ChatButton({ lines, youName, onSend, onSendVoice }: Props) {
                   accessibilityLabel={recording ? 'Бичлэг зогсоох' : 'Дуут мессеж бичих'}
                   style={[styles.iconButton, recording && styles.iconButtonRecording]}
                 >
-                  <Text style={styles.iconText}>{recording ? '⏹' : '🎤'}</Text>
+                  {recording ? <StopIcon size={20} /> : <MicIcon size={20} />}
                 </Pressable>
               )}
 

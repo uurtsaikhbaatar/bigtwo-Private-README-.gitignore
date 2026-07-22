@@ -56,6 +56,8 @@ export type ClientMessage =
   | { t: 'profile' }
   /** Өрөөн доторх өөр тоглогчийн ил мэдээллийг асуух. */
   | { t: 'inspect'; playerId: string }
+  /** Профайлын зураг тохируулах. null бол авч хаяна. */
+  | { t: 'setAvatar'; avatar: string | null }
   | { t: 'leave' }
   | { t: 'ping' };
 
@@ -88,6 +90,8 @@ export interface Account {
   emailVerified: boolean;
   /** Виртуал токены үлдэгдэл. Бодит мөнгө биш. */
   tokens: number;
+  /** Профайлын зураг: emoji эсвэл data: URL. */
+  avatar: string | null;
 }
 
 /**
@@ -105,6 +109,7 @@ export interface PlayerInfo {
   /** Энэ тоглолт дахь оноо. */
   score: number;
   eliminated: boolean;
+  avatar: string | null;
 }
 
 export interface PlayerStats {
@@ -146,6 +151,8 @@ export interface PlayerView {
   seated: boolean;
   /** Суудлын сонголтод сугалсан хөзөр (байвал). */
   draw: Card | null;
+  /** Профайлын зураг: emoji эсвэл data: URL. */
+  avatar: string | null;
 }
 
 export interface PlayView {
@@ -213,6 +220,7 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       eliminated: p.eliminated,
       seated: p.seated,
       draw: p.draw,
+      avatar: p.avatar,
     })),
     seats: state.seats.slice(),
     yourHand: you ? you.hand.slice() : [],

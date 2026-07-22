@@ -257,6 +257,8 @@ export function useBigTwo(serverUrl: string) {
     ),
     logOut: useCallback(() => send({ t: 'logout', token: authTokenRef.current ?? '' }), [send]),
     loadProfile: useCallback(() => send({ t: 'profile' }), [send]),
+    /** Профайлын зураг тохируулах. */
+    setAvatar: useCallback((avatar: string | null) => send({ t: 'setAvatar', avatar }), [send]),
     /** Өөр тоглогчийн ил мэдээллийг асуух. */
     inspectPlayer: useCallback(
       (playerId: string) => {

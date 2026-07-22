@@ -162,6 +162,7 @@ function Root() {
             onVerifyEmail: game.verifyEmail,
             onResendCode: game.resendCode,
             onRequestTokens: game.requestTokens,
+            onSetAvatar: game.setAvatar,
           }}
         />
       ) : view.phase === 'lobby' ? (

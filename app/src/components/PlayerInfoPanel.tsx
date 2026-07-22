@@ -10,6 +10,7 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { groupDigits } from '../chips';
+import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { Overlay } from './Overlay';
 import type { PlayerInfo } from '../shared/protocol';
@@ -30,7 +31,10 @@ export function PlayerInfoPanel({ pendingName, info, onClose }: Props) {
     <Overlay visible={visible} onClose={onClose}>
       <View style={styles.sheet}>
         <View style={styles.header}>
-          <Text style={styles.title}>{info?.name ?? pendingName ?? ''}</Text>
+          <View style={styles.titleRow}>
+            <Avatar name={info?.name ?? pendingName ?? '?'} avatar={info?.avatar ?? null} size={40} />
+            <Text style={styles.title}>{info?.name ?? pendingName ?? ''}</Text>
+          </View>
           <Text style={styles.close} onPress={onClose}>
             Хаах
           </Text>
@@ -96,6 +100,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   title: { color: theme.text, fontSize: 18, fontWeight: '700' },
   close: { color: theme.textMuted, fontSize: 15 },
   loading: { paddingVertical: 32 },

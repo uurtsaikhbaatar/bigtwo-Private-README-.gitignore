@@ -62,6 +62,8 @@ export interface Player {
   seated: boolean;
   /** Сонгон шалгаруулалтад сугалсан хөзөр — яагаад өнжсөнийг харуулна. */
   draw: Card | null;
+  /** Профайлын зураг: emoji эсвэл data: URL. Сонгоогүй бол null. */
+  avatar: string | null;
 }
 
 export interface TablePlay {
@@ -177,6 +179,7 @@ export function addPlayer(state: GameState, id: string, name: string): void {
     eliminated: false,
     seated: false,
     draw: null,
+    avatar: null,
   });
 }
 

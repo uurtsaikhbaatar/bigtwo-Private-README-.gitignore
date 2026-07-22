@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
 import { ScoreBoard } from '../components/ScoreBoard';
@@ -298,6 +299,7 @@ function Opponent({
         />
         {/* Нэр дээр дарахад токен, тоглолтын түүх нь харагдана. */}
         <Pressable onPress={onInspect} accessibilityRole="button" style={styles.nameHit}>
+          <Avatar name={player.name} avatar={player.avatar} size={22} />
           <Text style={styles.opponentName} numberOfLines={1}>
             {player.name}
           </Text>
@@ -514,7 +516,7 @@ const styles = StyleSheet.create({
   benchLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '700' },
   benchName: { color: theme.textMuted, fontSize: 11 },
   benchOut: { color: theme.danger },
-  nameHit: { flexShrink: 1 },
+  nameHit: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
 
   table: {
     flex: 1,
