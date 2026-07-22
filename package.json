@@ -11,6 +11,7 @@
     "build:web": "npm --prefix app run build:web",
     "typecheck": "npm --prefix server run typecheck && npm --prefix app run typecheck",
     "setup": "npm --prefix server install && npm --prefix app install",
-    "reports": "npm --prefix server run reports --"
+    "reports": "npm --prefix server run reports --",
+    "db:init": "npm --prefix server run db:init"
   }
 }
