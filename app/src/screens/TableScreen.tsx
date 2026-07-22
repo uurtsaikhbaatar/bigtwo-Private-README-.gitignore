@@ -304,7 +304,7 @@ function Opponent({
           <Text style={styles.opponentName} numberOfLines={1}>
             {player.name}
           </Text>
-          <RankBadge wins={player.wins} />
+          <RankBadge wins={player.rankedWins} />
         </Pressable>
         {/* Тоолуур нь онооны оронд ОРОХГҮЙ — оноо доод мөрөнд байнга харагдана. */}
         {isTurn && <TurnTimer secondsLeft={secondsLeft} compact />}

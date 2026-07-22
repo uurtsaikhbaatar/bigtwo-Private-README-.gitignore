@@ -150,7 +150,7 @@ export function AuthPanel({
 
                 {profile ? (
                   <>
-                    <RankCard wins={profile.stats.wins} />
+                    <RankCard wins={profile.stats.rankedWins} />
 
                     <View style={styles.statRow}>
                       <Stat label="Тоглолт" value={profile.stats.matches} />
@@ -283,8 +283,12 @@ function RankCard({ wins }: { wins: number }) {
       </View>
       <Text style={styles.rankHint}>
         {next
-          ? `${next.rank.name} цол хүртэл ${next.remaining} хожил үлдлээ`
+          ? `${next.rank.name} цол хүртэл ${next.remaining} хожил үлдлээ` +
+            (next.rank.reward > 0 ? ` · шагнал ${groupDigits(next.rank.reward)} токен` : '')
           : 'Хамгийн дээд цолд хүрлээ 🎖'}
+      </Text>
+      <Text style={styles.rankHint}>
+        Чиптэй тоглолтын хожил: {wins}. Чипгүй тоглолт цолд тоологдохгүй.
       </Text>
     </View>
   );

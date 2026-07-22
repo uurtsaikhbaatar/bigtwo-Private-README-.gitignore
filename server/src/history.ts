@@ -62,11 +62,15 @@ export async function statsForUser(userId: string): Promise<PlayerStats> {
   const result = await getPool().query<{
     matches: string;
     wins: string;
+    ranked_wins: string;
     chips: string;
     dragons: string;
   }>(
+    // ranked_wins: ЗӨВХӨН чиптэй тоглолтын хожил — цол үүгээр тодорхойлогдоно.
+    // Чипгүй тоглолтоор цол цуглуулах боломжийг хаана.
     `SELECT count(*)                                            AS matches,
             count(*) FILTER (WHERE mp.won)                      AS wins,
+            count(*) FILTER (WHERE mp.won AND m.stake > 0)      AS ranked_wins,
             coalesce(sum(mp.chips), 0)                          AS chips,
             count(*) FILTER (WHERE m.dragon AND mp.won)         AS dragons
        FROM match_players mp
@@ -78,6 +82,7 @@ export async function statsForUser(userId: string): Promise<PlayerStats> {
   return {
     matches: Number(row?.matches ?? 0),
     wins: Number(row?.wins ?? 0),
+    rankedWins: Number(row?.ranked_wins ?? 0),
     chips: Number(row?.chips ?? 0),
     dragons: Number(row?.dragons ?? 0),
   };

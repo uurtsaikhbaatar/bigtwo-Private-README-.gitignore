@@ -191,7 +191,7 @@ function Root() {
             onSend={game.sendChat}
             onSendVoice={game.sendVoice}
           />
-          <HelpButton wins={view.players.find((p) => p.id === view.youId)?.wins ?? null} />
+          <HelpButton wins={view.players.find((p) => p.id === view.youId)?.rankedWins ?? null} />
           <PlayerInfoPanel
             pendingName={inspecting}
             info={game.playerInfo}

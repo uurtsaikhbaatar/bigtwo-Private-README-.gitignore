@@ -24,7 +24,7 @@ import {
   timeoutTurn,
 } from '../../app/src/shared/game';
 import { isValidAvatar } from '../../app/src/shared/avatar';
-import { promoted } from '../../app/src/shared/ranks';
+import { promoted, rewardBetween } from '../../app/src/shared/ranks';
 import type { Account } from '../../app/src/shared/protocol';
 import {
   MAX_REPORT_CHARS,
@@ -48,7 +48,7 @@ import {
 import { dbEnabled, getPool } from './db';
 import { recentMatches, recordMatch, statsForUser } from './history';
 import { readReports, saveReport } from './reports';
-import { applySettlement, balanceOf, balancesOf, requestTokens } from './tokens';
+import { applySettlement, awardTokens, balanceOf, balancesOf, requestTokens } from './tokens';
 import { Room, RoomStore, metaOf, newSeat } from './rooms';
 import { serveStatic } from './static';
 
@@ -598,21 +598,38 @@ async function refreshWins(room: Room, announce = false): Promise<void> {
     if (!player) continue;
 
     const stats = await statsForUser(seat.userId);
-    const before = player.wins;
-    if (before === stats.wins) continue;
+    const before = player.rankedWins;
+    if (before === stats.rankedWins) continue;
 
-    player.wins = stats.wins;
+    player.rankedWins = stats.rankedWins;
     changed = true;
 
-    if (announce && before !== null) {
-      const rank = promoted(before, stats.wins);
-      if (rank) {
-        broadcastRaw(room, {
-          t: 'chat',
-          from: 'Дай Ди',
-          text: `${rank.badge} ${player.name} — ${rank.name.toUpperCase()} боллоо!`,
-          at: Date.now(),
-        });
+    // Анх өрөөнд орох үед (before === null) зарлахгүй — тэр нь ахисан
+    // биш, зүгээр л одоогийн байдлыг уншиж байгаа хэрэг.
+    if (!announce || before === null) continue;
+
+    const rank = promoted(before, stats.rankedWins);
+    if (!rank) continue;
+
+    const reward = rewardBetween(before, stats.rankedWins);
+    broadcastRaw(room, {
+      t: 'chat',
+      from: 'Дай Ди',
+      text:
+        `${rank.badge} ${player.name} — ${rank.name.toUpperCase()} боллоо!` +
+        (reward > 0 ? ` Шагнал: ${reward.toLocaleString('en-US').replace(/,/g, ' ')} токен.` : ''),
+      at: Date.now(),
+    });
+
+    if (reward > 0) {
+      await awardTokens(seat.userId, reward);
+      if (seat.socket) {
+        const account = accounts.get(seat.socket);
+        if (account) {
+          const updated = { ...account, tokens: await balanceOf(seat.userId) };
+          accounts.set(seat.socket, updated);
+          send(seat.socket, { t: 'auth', account: updated });
+        }
       }
     }
   }

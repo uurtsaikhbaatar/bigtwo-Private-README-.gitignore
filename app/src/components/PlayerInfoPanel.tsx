@@ -36,7 +36,7 @@ export function PlayerInfoPanel({ pendingName, info, onClose }: Props) {
             <Avatar name={info?.name ?? pendingName ?? '?'} avatar={info?.avatar ?? null} size={40} />
             <View style={styles.titleText}>
               <Text style={styles.title}>{info?.name ?? pendingName ?? ''}</Text>
-              {info?.stats && <RankBadge wins={info.stats.wins} full />}
+              {info?.stats && <RankBadge wins={info.stats.rankedWins} full />}
             </View>
           </View>
           <Text style={styles.close} onPress={onClose}>

@@ -172,3 +172,19 @@ export async function grantTokens(username: string, amount: number): Promise<num
     client.release();
   }
 }
+
+/**
+ * Цол ахисны шагнал олгоно. Шинэ үлдэгдлийг буцаана.
+ *
+ * `grantTokens`-оос ялгаатай нь: админы хүсэлтийг хаахгүй, зөвхөн үлдэгдэл
+ * нэмнэ. Хожил нь түүхээс тоологддог тул давхар олгогдох эрсдэлгүй —
+ * тухайн тоглолт нэг л удаа бичигдэнэ.
+ */
+export async function awardTokens(userId: string, amount: number): Promise<number> {
+  if (!Number.isFinite(amount) || amount <= 0) return balanceOf(userId);
+  const result = await getPool().query<{ tokens: string }>(
+    'UPDATE users SET tokens = tokens + $2 WHERE id = $1 RETURNING tokens',
+    [userId, Math.round(amount)],
+  );
+  return Number(result.rows[0]?.tokens ?? 0);
+}

@@ -9,6 +9,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { groupDigits } from '../chips';
 import { RANKS, rankFor } from '../shared/ranks';
 import { Overlay } from './Overlay';
 import { theme } from '../theme';
@@ -64,12 +65,13 @@ export function HelpButton({ wins }: Props) {
           </View>
 
           <Text style={styles.lead}>
-            Нэг ТОГЛОЛТ хожих бүрд цолны оноо нэмэгдэнэ. Тойрог хожих нь тоологдохгүй
-            — тоглолтыг бүхэлд нь, сүүлчийн үлдсэн хүн байж хожих ёстой.
+            ЧИПТЭЙ тоглолтыг бүхэлд нь хожих бүрд цол ойртоно. Тойрог хожих,
+            эсвэл чипгүй тоглох нь тоологдохгүй — сүүлчийн үлдсэн хүн байж
+            хожсон байх ёстой.
           </Text>
           <Text style={styles.lead}>
-            Цол нь зөвхөн бүртгэлтэй тоглогчид олгогдоно. Зочноор тоглосон
-            тоглолт тоологдохгүй.
+            Цол ахих бүрд токен шагнал автоматаар нэмэгдэнэ. Цол нь зөвхөн
+            бүртгэлтэй тоглогчид олгогдоно — зочны түүх хадгалагддаггүй.
           </Text>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
@@ -88,6 +90,9 @@ export function HelpButton({ wins }: Props) {
                     <Text style={styles.wins}>
                       {rank.wins === 0 ? 'эхлэл' : `${rank.wins} хожил`}
                     </Text>
+                    <Text style={styles.reward}>
+                      {rank.reward > 0 ? `+${groupDigits(rank.reward)}` : ''}
+                    </Text>
                   </View>
                 </View>
               );
@@ -95,8 +100,8 @@ export function HelpButton({ wins }: Props) {
           </ScrollView>
 
           <Text style={styles.footer}>
-            Цол ахих бүрд чатад зарлагдана. Дэлгэц дээр хүрвэл энэ цонх дахин 30
-            секунд нээлттэй байна.
+            Баруун талын тоо нь цол ахихад шагнагдах токен. Цол ахих бүрд чатад
+            зарлагдана. Дэлгэц дээр хүрвэл энэ цонх дахин 30 секунд нээлттэй байна.
           </Text>
         </Pressable>
       </Overlay>
@@ -155,7 +160,8 @@ const styles = StyleSheet.create({
   badge: { color: theme.accent, fontSize: 11, width: 34 },
   name: { color: theme.text, fontSize: 13, flex: 1 },
   nameMine: { fontWeight: '800' },
-  wins: { color: theme.textMuted, fontSize: 12 },
+  wins: { color: theme.textMuted, fontSize: 12, width: 74, textAlign: 'right' },
+  reward: { color: theme.accent, fontSize: 12, width: 78, textAlign: 'right' },
 
   footer: { color: theme.textMuted, fontSize: 11, lineHeight: 16 },
 });

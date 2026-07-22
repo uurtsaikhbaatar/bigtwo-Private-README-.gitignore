@@ -115,6 +115,8 @@ export interface PlayerInfo {
 export interface PlayerStats {
   matches: number;
   wins: number;
+  /** Чиптэй тоглолтын хожил — ЗӨВХӨН энэ цолыг тодорхойлно. */
+  rankedWins: number;
   /** Хожсон/алдсан чипийн нийлбэр. */
   chips: number;
   dragons: number;
@@ -153,8 +155,8 @@ export interface PlayerView {
   draw: Card | null;
   /** Профайлын зураг: emoji эсвэл data: URL. */
   avatar: string | null;
-  /** Нийт хожсон тоглолт — цол тодорхойлно. Зочны хувьд null. */
-  wins: number | null;
+  /** Чиптэй тоглолтын хожил — цол тодорхойлно. Зочны хувьд null. */
+  rankedWins: number | null;
 }
 
 export interface PlayView {
@@ -223,7 +225,7 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       seated: p.seated,
       draw: p.draw,
       avatar: p.avatar,
-      wins: p.wins,
+      rankedWins: p.rankedWins,
     })),
     seats: state.seats.slice(),
     yourHand: you ? you.hand.slice() : [],

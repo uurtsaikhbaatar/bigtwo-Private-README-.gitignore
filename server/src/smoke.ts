@@ -257,13 +257,13 @@ async function main() {
           const seen = out.view!.players.find((p) => p.id === registered.playerId);
           check(seen !== undefined, 'бүртгэлтэй тоглогч харагдацад алга');
           check(
-            typeof seen!.wins === 'number',
-            `бүртгэлтэй тоглогчид хожлын тоо ирсэнгүй: ${seen!.wins}`,
+            typeof seen!.rankedWins === 'number',
+            `бүртгэлтэй тоглогчид хожлын тоо ирсэнгүй: ${seen!.rankedWins}`,
           );
           const guestSeen = out.view!.players.find((p) => p.id === clients[0].playerId);
-          check(guestSeen?.wins === null, 'зочинд хожлын тоо ирлээ');
+          check(guestSeen?.rankedWins === null, 'зочинд хожлын тоо ирлээ');
           console.log(
-            `✓ цол: ${info.username} ${rankFor(seen!.wins!).name} (${seen!.wins} хожил), зочинд цолгүй`,
+            `✓ цол: ${info.username} ${rankFor(seen!.rankedWins!).name} (${seen!.rankedWins} хожил), зочинд цолгүй`,
           );
           console.log(
             `✓ бүртгэлтэй тоглогчийн мэдээлэл: ${info.username}, ` +
