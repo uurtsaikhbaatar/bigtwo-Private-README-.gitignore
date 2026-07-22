@@ -180,18 +180,25 @@ npm run db:init                      # хүснэгтүүдийг үүсгэнэ
 Жинхэнэ имэйл илгээхэд хамгийн хялбар нь **Gmail** — шинэ бүртгэл, SMS
 баталгаажуулалт шаардлагагүй:
 
+```
+EMAIL_PROVIDER=gmail
+EMAIL_USER=тань@gmail.com
+EMAIL_APP_PASSWORD=xxxxxxxxxxxxxxxx
+```
 
-
- нь Google-ийн **App password** — жинхэнэ нууц үг биш.
+`EMAIL_APP_PASSWORD` нь Google-ийн **App password** — жинхэнэ нууц үг биш.
 [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
 дээрээс үүсгэнэ (2 алхамт баталгаажуулалт асаалттай байх шаардлагатай).
 Өдөрт ~500 захидал — найзуудын хүрээнд хангалттай.
 
-API-тай үйлчилгээ ч дэмжигдэнэ:  +
- + .
+API-тай үйлчилгээ ч дэмжигдэнэ: `EMAIL_PROVIDER=brevo|sendgrid|resend` +
+`EMAIL_API_KEY` + `EMAIL_FROM`.
 
 Тохиргоогоо шалгах:
 
+```bash
+npm run email:test -- тань@gmail.com
+```
 
 
 ## 🐞 Алдааны мэдэгдэл
