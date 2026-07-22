@@ -195,6 +195,21 @@ export function TableScreen({
       {view.youAreSeated ? (
         <View style={[styles.handArea, compact && styles.handAreaCompact]}>
           <View style={styles.statusRow}>
+            {/* Өөрийн зураг, цол — дарахад токен, тоглолтын түүх нь гарна.
+                Өмнө нь зөвхөн бусдын мэдээлэл харагддаг байв. */}
+            <Pressable
+              onPress={() => you && onInspect(you.id, you.name)}
+              accessibilityRole="button"
+              accessibilityLabel="Миний мэдээлэл"
+              style={styles.meRow}
+            >
+              <Avatar name={you?.name ?? ''} avatar={you?.avatar ?? null} size={22} />
+              <Text style={styles.meName} numberOfLines={1}>
+                {you?.name ?? ''}
+              </Text>
+              <RankBadge wins={you?.rankedWins ?? null} />
+            </Pressable>
+
             <Text style={[styles.turnText, yourTurn && styles.turnActive]}>
               {yourTurn ? 'Таны ээлж' : `${nameOf(view, view.turnId)}-ийн ээлж`}
             </Text>
@@ -238,6 +253,19 @@ export function TableScreen({
         </View>
       ) : (
         <View style={styles.spectator}>
+          <Pressable
+            onPress={() => you && onInspect(you.id, you.name)}
+            accessibilityRole="button"
+            accessibilityLabel="Миний мэдээлэл"
+            style={styles.meRow}
+          >
+            <Avatar name={you?.name ?? ''} avatar={you?.avatar ?? null} size={22} />
+            <Text style={styles.meName} numberOfLines={1}>
+              {you?.name ?? ''}
+            </Text>
+            <RankBadge wins={you?.rankedWins ?? null} />
+          </Pressable>
+
           <Text style={styles.spectatorTitle}>
             {youAreOut ? 'Та хасагдлаа — үзэж байна' : 'Та энэ тойрогт өнжиж байна'}
           </Text>
@@ -540,7 +568,14 @@ const styles = StyleSheet.create({
 
   handArea: { gap: 8 },
   handAreaCompact: { gap: 4 },
-  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  meRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  meName: { color: theme.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
   turnText: { color: theme.textMuted, fontSize: 14, fontWeight: '600' },
   turnActive: { color: theme.accent },
   score: { color: theme.textMuted, fontSize: 13 },

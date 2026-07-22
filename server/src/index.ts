@@ -105,11 +105,23 @@ async function pingDb(): Promise<boolean> {
   }
 }
 
-/** Бүртгэлийн алдааг тоглогчид ойлгомжтой хэлбэрээр буцаана. */
+/**
+ * Алдааг тоглогчид ойлгомжтой хэлбэрээр буцаана.
+ *
+ * AuthError ба RuleError хоёулаа хэрэглэгчид зориулсан тодорхой мессежтэй
+ * тул шууд дамжуулна. Зөвхөн санаанд ороогүй алдааг л ерөнхий үгээр орлуулж,
+ * лог руу бичнэ.
+ *
+ * ӨМНӨ НЬ зөвхөн AuthError-ыг таньдаг байсан тул "токен хүрэлцэхгүй байна"
+ * гэсэн тодорхой мессеж "Бүртгэлд алдаа гарлаа" болж хувирч, тоглогч яагаад
+ * эхлэхгүй байгааг мэдэхгүй байв.
+ */
 function sendAuthError(socket: WebSocket, err: unknown): void {
-  const message = err instanceof AuthError ? err.message : 'Бүртгэлд алдаа гарлаа.';
-  if (!(err instanceof AuthError)) console.error('auth error:', err);
-  send(socket, { t: 'error', message });
+  if (err instanceof AuthError || err instanceof RuleError) {
+    return send(socket, { t: 'error', message: err.message });
+  }
+  console.error('handler error:', err);
+  send(socket, { t: 'error', message: 'Алдаа гарлаа. Дахин оролдоно уу.' });
 }
 
 function requireDb(): void {

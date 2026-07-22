@@ -596,3 +596,31 @@ test('2-8 тоглогчтой бүтэн тоглолтууд дүрэм зөр
     }
   }
 });
+
+test('дууссан тоглолтын дараа шинийг эхлүүлж болно', () => {
+  const rng = mulberry32(31);
+  const state = makeGame(3);
+  startMatch(state, 12, DEFAULT_TURN_SECONDS, 1_000, rng);
+
+  // Тоглолтыг дуустал нь тоглоно.
+  let guard = 0;
+  while (state.phase !== 'matchEnd') {
+    assert.ok(++guard < 60, 'тоглолт дуусахгүй байна');
+    playOutRound(state, rng);
+    if (state.phase === 'roundEnd') startRound(state, rng);
+  }
+  assert.equal(state.phase, 'matchEnd');
+  const firstWinner = state.matchWinnerId;
+
+  // "Шинэ тоглолт" — өмнө нь энд "Тоглолт дууссан байна" гэж унадаг байв.
+  startMatch(state, 12, DEFAULT_TURN_SECONDS, 1_000, rng);
+
+  assert.equal(state.phase, 'playing', 'шинэ тоглолт эхлээгүй');
+  assert.equal(state.round, 1, 'тойргийн тоо тэглэгдээгүй');
+  assert.equal(state.matchWinnerId, null, 'өмнөх ялагч цэвэрлэгдээгүй');
+  assert.equal(state.settlement, null, 'өмнөх тооцоо цэвэрлэгдээгүй');
+  assert.equal(state.history.length, 0, 'өмнөх түүх цэвэрлэгдээгүй');
+  assert.ok(state.players.every((p) => p.score === 0), 'оноо тэглэгдээгүй');
+  assert.ok(state.players.every((p) => !p.eliminated), 'хасалт цэвэрлэгдээгүй');
+  assert.ok(firstWinner !== null, 'эхний тоглолтод ялагч гарсангүй');
+});
