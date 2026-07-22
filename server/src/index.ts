@@ -23,6 +23,8 @@ import {
   timeoutTurn,
 } from '../../app/src/shared/game';
 import {
+  MAX_VOICE_CHARS,
+  MAX_VOICE_MS,
   PROTOCOL_VERSION,
   type ClientMessage,
   type ServerMessage,
@@ -174,6 +176,15 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       room.chat.push(line);
       if (room.chat.length > CHAT_HISTORY) room.chat.shift();
       return broadcastRaw(room, line);
+    }
+    case 'voice': {
+      const data = String(msg.data ?? '');
+      if (!data.startsWith('data:audio/')) throw new RuleError('Дуут мессеж танигдсангүй.');
+      if (data.length > MAX_VOICE_CHARS) throw new RuleError('Дуут мессеж хэт урт байна.');
+      const ms = Math.min(Math.max(0, Number(msg.ms) || 0), MAX_VOICE_MS);
+      const from = room.state.players.find((p) => p.id === playerId)?.name ?? '?';
+      // Дуут мессеж хэмжээгээр том тул түүхэд хадгалахгүй — зөвхөн шууд дамжуулна.
+      return broadcastRaw(room, { t: 'voice', from, data, ms, at: Date.now() });
     }
     case 'leave': {
       releaseSeat(room, playerId);

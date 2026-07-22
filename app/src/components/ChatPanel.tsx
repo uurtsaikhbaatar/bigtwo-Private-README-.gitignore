@@ -13,33 +13,78 @@ import {
 
 import type { ChatLine } from '../net';
 import { theme } from '../theme';
+import { Recording, playVoice, startRecording, voiceSupported } from '../voice';
+
+/** Хурдан сонгох emoji-нууд — тоглоомд тохирсон. */
+const EMOJI = [
+  '😀', '😂', '😅', '😎', '🤔', '😱', '😭', '🥳',
+  '👍', '👎', '👏', '🙏', '🔥', '💪', '🎉', '💀',
+  '🃏', '♠️', '♥️', '♦️', '♣️', '🐉', '⏰', '🍀',
+];
 
 interface Props {
   lines: ChatLine[];
   youName: string;
   onSend: (text: string) => void;
+  onSendVoice: (data: string, ms: number) => void;
 }
 
 /**
- * Чат — товч дарахад нээгддэг цонх. Уншаагүй мессежийн тоог товчин дээр
- * харуулна.
+ * Чат — товч дарахад нээгддэг цонх. Бичвэр, emoji, дуут мессеж дэмжинэ.
+ * Уншаагүй мессежийн тоог товчин дээр харуулна.
  */
-export function ChatButton({ lines, youName, onSend }: Props) {
+export function ChatButton({ lines, youName, onSend, onSendVoice }: Props) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [seen, setSeen] = useState(0);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [recording, setRecording] = useState<Recording | null>(null);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const unread = Math.max(0, lines.length - seen);
+  const canRecord = voiceSupported();
 
   useEffect(() => {
     if (open) setSeen(lines.length);
   }, [open, lines.length]);
+
+  // Бичиж байх хугацааг тоолно.
+  useEffect(() => {
+    if (!recording) {
+      setRecordSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => setRecordSeconds(Math.floor((Date.now() - startedAt) / 1000)), 250);
+    return () => clearInterval(id);
+  }, [recording]);
 
   const submit = () => {
     const value = text.trim();
     if (!value) return;
     onSend(value);
     setText('');
+  };
+
+  const toggleRecording = async () => {
+    setVoiceError(null);
+    if (recording) {
+      const active = recording;
+      setRecording(null);
+      try {
+        const clip = await active.stop();
+        if (clip.ms > 400) onSendVoice(clip.data, clip.ms);
+      } catch {
+        setVoiceError('Бичлэгийг илгээж чадсангүй.');
+      }
+      return;
+    }
+    try {
+      setRecording(await startRecording());
+    } catch {
+      setVoiceError('Микрофон ашиглах зөвшөөрөл өгнө үү.');
+    }
   };
 
   return (
@@ -84,32 +129,102 @@ export function ChatButton({ lines, youName, onSend }: Props) {
                 return (
                   <View key={`${line.at}-${i}`} style={[styles.bubble, mine && styles.bubbleMine]}>
                     {!mine && <Text style={styles.from}>{line.from}</Text>}
-                    <Text style={styles.message}>{line.text}</Text>
+                    {line.audio ? (
+                      <Pressable
+                        onPress={() => playVoice(line.audio!)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Дуут мессеж тоглуулах"
+                        style={styles.voiceRow}
+                      >
+                        <Text style={styles.voiceIcon}>▶︎</Text>
+                        <View style={styles.waveform}>
+                          {Array.from({ length: 14 }).map((_, bar) => (
+                            <View
+                              key={bar}
+                              style={[styles.wave, { height: 4 + ((bar * 7) % 13) }]}
+                            />
+                          ))}
+                        </View>
+                        <Text style={styles.voiceLength}>
+                          {Math.max(1, Math.round((line.ms ?? 0) / 1000))}с
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.message}>{line.text}</Text>
+                    )}
                   </View>
                 );
               })}
             </ScrollView>
 
+            {showEmoji && (
+              <View style={styles.emojiTray}>
+                {EMOJI.map((e) => (
+                  <Pressable
+                    key={e}
+                    onPress={() => setText((prev) => prev + e)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Emoji ${e}`}
+                    style={styles.emojiButton}
+                  >
+                    <Text style={styles.emoji}>{e}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {voiceError && <Text style={styles.voiceError}>{voiceError}</Text>}
+
             <View style={styles.composer}>
-              <TextInput
-                value={text}
-                onChangeText={setText}
-                placeholder="Мессеж бичих…"
-                placeholderTextColor={theme.textMuted}
-                style={styles.input}
-                maxLength={200}
-                returnKeyType="send"
-                onSubmitEditing={submit}
-                blurOnSubmit={false}
-              />
               <Pressable
-                onPress={submit}
-                disabled={!text.trim()}
+                onPress={() => setShowEmoji((v) => !v)}
                 accessibilityRole="button"
-                style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
+                accessibilityLabel="Emoji"
+                style={[styles.iconButton, showEmoji && styles.iconButtonActive]}
               >
-                <Text style={styles.sendText}>Илгээх</Text>
+                <Text style={styles.iconText}>😊</Text>
               </Pressable>
+
+              {recording ? (
+                <View style={styles.recordingBar}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingText}>Бичиж байна… {recordSeconds}с</Text>
+                </View>
+              ) : (
+                <TextInput
+                  value={text}
+                  onChangeText={setText}
+                  placeholder="Мессеж бичих…"
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.input}
+                  maxLength={200}
+                  returnKeyType="send"
+                  onSubmitEditing={submit}
+                  blurOnSubmit={false}
+                />
+              )}
+
+              {canRecord && (
+                <Pressable
+                  onPress={toggleRecording}
+                  accessibilityRole="button"
+                  accessibilityLabel={recording ? 'Бичлэг зогсоох' : 'Дуут мессеж бичих'}
+                  style={[styles.iconButton, recording && styles.iconButtonRecording]}
+                >
+                  <Text style={styles.iconText}>{recording ? '⏹' : '🎤'}</Text>
+                </Pressable>
+              )}
+
+              {!recording && (
+                <Pressable
+                  onPress={submit}
+                  disabled={!text.trim()}
+                  accessibilityRole="button"
+                  style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
+                >
+                  <Text style={styles.sendText}>Илгээх</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -154,7 +269,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     paddingBottom: 16,
-    maxHeight: '75%',
+    maxHeight: '85%',
   },
   header: {
     flexDirection: 'row',
@@ -177,7 +292,36 @@ const styles = StyleSheet.create({
   bubbleMine: { alignSelf: 'flex-end', backgroundColor: '#1d7a52' },
   from: { color: theme.accent, fontSize: 11, fontWeight: '700', marginBottom: 2 },
   message: { color: theme.text, fontSize: 15 },
-  composer: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 8 },
+
+  voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 150 },
+  voiceIcon: { color: theme.text, fontSize: 16 },
+  waveform: { flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1 },
+  wave: { width: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.55)' },
+  voiceLength: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
+  voiceError: { color: theme.danger, fontSize: 12, paddingHorizontal: 16, paddingTop: 4 },
+
+  emojiTray: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    gap: 2,
+  },
+  emojiButton: { padding: 6 },
+  emoji: { fontSize: 22 },
+
+  composer: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingTop: 8 },
+  iconButton: {
+    width: 44,
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconButtonActive: { backgroundColor: '#1d7a52' },
+  iconButtonRecording: { backgroundColor: theme.danger },
+  iconText: { fontSize: 20 },
   input: {
     flex: 1,
     backgroundColor: theme.surfaceRaised,
@@ -187,8 +331,20 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 15,
   },
+  recordingBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceRaised,
+  },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.danger },
+  recordingText: { color: theme.text, fontSize: 14, fontWeight: '600' },
   sendButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     justifyContent: 'center',
     borderRadius: 10,
     backgroundColor: '#1d7a52',

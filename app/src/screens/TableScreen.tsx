@@ -18,6 +18,12 @@ import { theme } from '../theme';
 const CONTENT_MAX_WIDTH = 780;
 
 /**
+ * Энэ өндрөөс нам бол хөндлөн барьсан утас гэж үзээд зайг нягтруулна.
+ * Ингэснээр гар, товчнууд дэлгэцээс гарахгүй.
+ */
+const COMPACT_HEIGHT = 520;
+
+/**
  * Гарын хөзрүүд хэр их давхарлагдахыг тооцно.
  * Зай хүрэлцвэл огт давхарлахгүй; хүрэлцэхгүй бол булангийн тэмдэглэгээ
  * (зэрэглэл + баг) үргэлж харагдахуйц хэмжээгээр л давхарлана.
@@ -42,11 +48,12 @@ interface Props {
 
 export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onLeave }: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const compact = height < COMPACT_HEIGHT;
   const you = view.players.find((p) => p.id === view.youId);
   const yourTurn = view.turnId === view.youId;
   const overlap = handOverlap(view.yourHand.length, width);
-  const secondsLeft = useTurnCountdown(view.turnRemainingMs);
+  const secondsLeft = useTurnCountdown(view.turnRemainingMs, view.turnSeq);
 
   // Гар өөрчлөгдөх бүрд сонголтыг цэвэрлэнэ.
   useEffect(() => setSelected([]), [view.yourHand.length, view.round]);
@@ -75,7 +82,7 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
   const benched = view.players.filter((p) => !p.seated && !p.eliminated);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compact && styles.containerCompact]}>
       <View style={styles.topBar}>
         <Text style={styles.topText}>{view.round}-р тойрог</Text>
         <View style={styles.topRight}>
@@ -108,7 +115,7 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
         </View>
       )}
 
-      <View style={styles.table}>
+      <View style={[styles.table, compact && styles.tableCompact]}>
         {view.current ? (
           <>
             <Text style={styles.tableLabel}>
@@ -116,7 +123,7 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
             </Text>
             <View style={styles.tableCards}>
               {view.current.cards.map((c) => (
-                <PlayingCard key={c} card={c} size="md" />
+                <PlayingCard key={c} card={c} size={compact ? 'sm' : 'md'} />
               ))}
             </View>
           </>
@@ -130,12 +137,14 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
         )}
       </View>
 
-      <Text style={styles.log} numberOfLines={1}>
-        {view.log[view.log.length - 1] ?? ''}
-      </Text>
+      {!compact && (
+        <Text style={styles.log} numberOfLines={1}>
+          {view.log[view.log.length - 1] ?? ''}
+        </Text>
+      )}
 
       {view.youAreSeated ? (
-        <View style={styles.handArea}>
+        <View style={[styles.handArea, compact && styles.handAreaCompact]}>
           <View style={styles.statusRow}>
             <Text style={[styles.turnText, yourTurn && styles.turnActive]}>
               {yourTurn ? 'Таны ээлж' : `${nameOf(view, view.turnId)}-ийн ээлж`}
@@ -146,7 +155,7 @@ export function TableScreen({ view, onPlay, onPass, onNextRound, onNewMatch, onL
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.fan}
+            contentContainerStyle={[styles.fan, compact && styles.fanCompact]}
           >
             {view.yourHand.map((card, i) => (
               <View key={card} style={i === 0 ? undefined : { marginLeft: -overlap }}>
@@ -344,6 +353,7 @@ const styles = StyleSheet.create({
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
+  containerCompact: { padding: 6, gap: 4 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topText: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
@@ -399,6 +409,7 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: theme.feltDark,
   },
+  tableCompact: { borderRadius: 12, padding: 6, gap: 4, borderWidth: 2 },
   tableLabel: { color: theme.text, fontSize: 14, fontWeight: '600' },
   tableCards: { flexDirection: 'row', gap: 6 },
   emptyTable: { alignItems: 'center', gap: 6 },
@@ -406,6 +417,7 @@ const styles = StyleSheet.create({
   log: { color: theme.textMuted, fontSize: 12, textAlign: 'center' },
 
   handArea: { gap: 8 },
+  handAreaCompact: { gap: 4 },
   statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   turnText: { color: theme.textMuted, fontSize: 14, fontWeight: '600' },
   turnActive: { color: theme.accent },
@@ -417,6 +429,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
   },
+  fanCompact: { paddingTop: 18, paddingBottom: 0 },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1 },
   problem: { color: theme.textMuted, fontSize: 12, textAlign: 'center', minHeight: 16 },

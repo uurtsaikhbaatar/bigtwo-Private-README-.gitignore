@@ -120,6 +120,7 @@ function Root() {
           lines={game.chat}
           youName={view.players.find((p) => p.id === view.youId)?.name ?? ''}
           onSend={game.sendChat}
+          onSendVoice={game.sendVoice}
         />
       )}
 

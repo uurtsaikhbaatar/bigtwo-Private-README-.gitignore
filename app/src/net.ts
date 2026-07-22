@@ -40,8 +40,13 @@ export type ConnectionStatus = 'offline' | 'connecting' | 'online';
 
 export interface ChatLine {
   from: string;
-  text: string;
   at: number;
+  /** Бичвэр мессеж. */
+  text?: string;
+  /** Дуут мессеж — data URL. */
+  audio?: string;
+  /** Дуут мессежийн урт (ms). */
+  ms?: number;
 }
 
 export function useBigTwo(serverUrl: string) {
@@ -75,6 +80,12 @@ export function useBigTwo(serverUrl: string) {
         break;
       case 'chat':
         setChat((prev) => [...prev.slice(-49), { from: msg.from, text: msg.text, at: msg.at }]);
+        break;
+      case 'voice':
+        setChat((prev) => [
+          ...prev.slice(-49),
+          { from: msg.from, audio: msg.data, ms: msg.ms, at: msg.at },
+        ]);
         break;
       case 'error':
         setError(msg.message);
@@ -188,6 +199,10 @@ export function useBigTwo(serverUrl: string) {
     playCards: useCallback((cards: Card[]) => send({ t: 'play', cards }), [send]),
     passTurn: useCallback(() => send({ t: 'pass' }), [send]),
     sendChat: useCallback((text: string) => send({ t: 'chat', text }), [send]),
+    sendVoice: useCallback(
+      (data: string, ms: number) => send({ t: 'voice', data, ms }),
+      [send],
+    ),
     leaveRoom: useCallback(() => {
       send({ t: 'leave' });
       sessionRef.current = null;

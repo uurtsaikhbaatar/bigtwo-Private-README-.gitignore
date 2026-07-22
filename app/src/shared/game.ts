@@ -100,6 +100,11 @@ export interface GameState {
    */
   turnEndsAt: number | null;
   /**
+   * Ээлж эхлэх бүрд нэмэгддэг дугаар. Ээлж бүр ижил хугацаанаас эхэлдэг тул
+   * зөвхөн үлдсэн хугацаагаар клиент шинэ ээлж эхэлснийг ялгаж чадахгүй.
+   */
+  turnSeq: number;
+  /**
    * Өмнөх тойрогт өнжих ээлж идэвхтэй байсан эсэх (4-өөс олон тоглогч).
    * Ээлж дуусмагц 3♦ сүүлийн нэг удаа эхлэгчийг тодорхойлдогт хэрэгтэй.
    */
@@ -124,6 +129,7 @@ export function createGame(): GameState {
     targetScore: DEFAULT_TARGET_SCORE,
     turnSeconds: DEFAULT_TURN_SECONDS,
     turnEndsAt: null,
+    turnSeq: 0,
     rotationWasActive: false,
     history: [],
     lastRoundWinnerId: null,
@@ -245,6 +251,7 @@ export function startRound(state: GameState, rng: () => number = Math.random): v
 /** Ээлжийн цагийг шинэчилнэ. Тоглоом идэвхгүй бол цагийг цуцална. */
 function armTurn(state: GameState): void {
   state.turnEndsAt = state.phase === 'playing' ? Date.now() + state.turnSeconds * 1000 : null;
+  state.turnSeq += 1;
 }
 
 /**

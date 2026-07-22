@@ -3,7 +3,7 @@
     "name": "Дай Ди",
     "slug": "bigtwo",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0a1a2c",

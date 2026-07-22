@@ -11,7 +11,12 @@ import { Card } from './cards';
 import { comboLabel } from './combos';
 import { GameState, Phase, RoundRecord } from './game';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
+
+/** Дуут мессежийн дээд хэмжээ (base64 тэмдэгт). ~40 секунд Opus багтана. */
+export const MAX_VOICE_CHARS = 400_000;
+/** Дуут мессежийн дээд урт. */
+export const MAX_VOICE_MS = 30_000;
 
 // ── Клиент → сервер ────────────────────────────────────────────────────────
 
@@ -27,6 +32,8 @@ export type ClientMessage =
   | { t: 'play'; cards: Card[] }
   | { t: 'pass' }
   | { t: 'chat'; text: string }
+  /** Дуут мессеж — base64 data URL. */
+  | { t: 'voice'; data: string; ms: number }
   | { t: 'leave' }
   | { t: 'ping' };
 
@@ -38,6 +45,7 @@ export type ServerMessage =
   | { t: 'state'; view: GameView }
   | { t: 'error'; message: string }
   | { t: 'chat'; from: string; text: string; at: number }
+  | { t: 'voice'; from: string; data: string; ms: number; at: number }
   | { t: 'pong' };
 
 // ── Харагдац ───────────────────────────────────────────────────────────────
@@ -88,6 +96,8 @@ export interface GameView {
    * ингэснээр цагийн зөрүү нөлөөлөхгүй. Тоглоом идэвхгүй бол null.
    */
   turnRemainingMs: number | null;
+  /** Ээлж бүрд нэмэгддэг дугаар — клиент тоолуураа дахин эхлүүлэхэд ашиглана. */
+  turnSeq: number;
   /** Тойрог бүрийн оноог агуулсан бүтэн түүх. */
   history: RoundRecord[];
   matchWinnerId: string | null;
@@ -131,6 +141,7 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
     turnSeconds: state.turnSeconds,
     turnRemainingMs:
       state.turnEndsAt === null ? null : Math.max(0, state.turnEndsAt - Date.now()),
+    turnSeq: state.turnSeq,
     history: state.history,
     matchWinnerId: state.matchWinnerId,
     log: state.log.slice(-12),

@@ -10,9 +10,13 @@ const WARNING_SECONDS = 5;
  * Ээлжийн үлдсэн хугацааг тоолно.
  *
  * Сервер үнэмлэхүй цаг биш, ҮЛДСЭН хугацааг илгээдэг тул клиент, серверийн
- * цагийн зөрүү нөлөөлөхгүй. Шинэ төлөв ирэх бүрд дахин тохируулагдана.
+ * цагийн зөрүү нөлөөлөхгүй.
+ *
+ * `turnSeq` заавал хэрэгтэй: ээлж бүр яг ижил хугацаанаас (жишээ нь 30000ms)
+ * эхэлдэг тул зөвхөн `remainingMs`-ээр бол React хамаарал өөрчлөгдөөгүй гэж
+ * үзээд тоолуурыг дахин эхлүүлэхгүй — цаг эхний ээлжээс үргэлжлээд явна.
  */
-export function useTurnCountdown(remainingMs: number | null): number | null {
+export function useTurnCountdown(remainingMs: number | null, turnSeq: number): number | null {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -25,7 +29,8 @@ export function useTurnCountdown(remainingMs: number | null): number | null {
     tick();
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
-  }, [remainingMs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnSeq, remainingMs === null]);
 
   return secondsLeft;
 }
