@@ -8,6 +8,7 @@
     "app": "npm --prefix app start",
     "test": "npm --prefix server test",
     "games": "npm --prefix server run games --",
+    "ads": "npm --prefix server run ads --",
     "live": "npm --prefix server run live --",
     "smoke": "npm --prefix server run smoke",
     "build:web": "npm --prefix app run build:web",

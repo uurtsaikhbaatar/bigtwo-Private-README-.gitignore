@@ -170,6 +170,36 @@ export async function initSchema(): Promise<void> {
       context     JSONB NOT NULL DEFAULT '{}'::jsonb
     );
     CREATE INDEX IF NOT EXISTS reports_at_idx ON reports(at DESC);
+
+    -- Реклам. Зурагтай эсвэл зөвхөн текстээр байж болно. Зургийг өөрсдийн
+    -- санд хадгална: гадны хостинг хэрэггүй, холбоос эвдрэхгүй. Хөдөлдөг
+    -- GIF ч багтана.
+    CREATE TABLE IF NOT EXISTS ads (
+      id          BIGSERIAL PRIMARY KEY,
+      title       TEXT NOT NULL,
+      -- Зураг ба текст — дор хаяж нэг нь байх ёстой.
+      image       BYTEA,
+      mime        TEXT,
+      body        TEXT,
+      -- Дарахад нээгдэх хаяг. Байхгүй бол зүгээр зураг.
+      link        TEXT,
+      -- Харагдах хугацаа. NULL бол хязгааргүй.
+      starts_at   TIMESTAMPTZ,
+      ends_at     TIMESTAMPTZ,
+      -- Байршлын шүүлтүүр: цагийн бүс/хэлтэй тулгах хэсгүүд.
+      -- Хоосон бол хаана ч харагдана.
+      regions     TEXT[] NOT NULL DEFAULT '{}',
+      -- Эргэлтийн жин: их бол илүү олон удаа гарна.
+      weight      INTEGER NOT NULL DEFAULT 1,
+      active      BOOLEAN NOT NULL DEFAULT true,
+      impressions BIGINT NOT NULL DEFAULT 0,
+      clicks      BIGINT NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    ALTER TABLE ads ALTER COLUMN image DROP NOT NULL;
+    ALTER TABLE ads ALTER COLUMN mime  DROP NOT NULL;
+    ALTER TABLE ads ADD COLUMN IF NOT EXISTS body TEXT;
+    CREATE INDEX IF NOT EXISTS ads_active_idx ON ads(active) WHERE active;
   `;
   await getPool().query(sql);
 }

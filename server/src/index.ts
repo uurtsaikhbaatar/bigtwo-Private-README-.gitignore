@@ -54,6 +54,7 @@ import {
   saveAvatar,
   verifyEmail,
 } from './auth';
+import { adImage, adsFor, countAdEvent } from './ads';
 import { dbEnabled, getPool } from './db';
 import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
 import { recentMatches, recordMatch, statsForUser } from './history';
@@ -215,6 +216,10 @@ const httpServer = createServer((req, res) => {
   }
   if (req.url?.startsWith('/reports')) {
     void serveReports(req, res);
+    return;
+  }
+  if (req.url?.startsWith('/ads/image/')) {
+    void serveAdImage(req, res);
     return;
   }
   if (req.url?.startsWith('/admin/rooms')) return serveLiveRooms(req, res);
@@ -467,12 +472,32 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     return;
   }
 
+  if (msg.t === 'ads') {
+    if (!dbEnabled()) return send(socket, { t: 'ads', ads: [] });
+    void adsFor(String(msg.timezone ?? ''), String(msg.language ?? ''))
+      .then((ads) => send(socket, { t: 'ads', ads }))
+      .catch((err) => {
+        console.error('реклам уншиж чадсангүй:', err);
+        send(socket, { t: 'ads', ads: [] });
+      });
+    return;
+  }
+
   if (msg.t === 'declineInvite') {
     const account = accounts.get(socket);
     if (!account || !dbEnabled()) return;
     void dropInvite(account.id, String(msg.roomCode ?? ''))
       .then(() => pushInvites(account.id))
       .catch((err) => console.error('урилга устгаж чадсангүй:', err));
+    return;
+  }
+
+  if (msg.t === 'adEvent') {
+    if (!dbEnabled()) return;
+    const kind = msg.kind === 'click' ? 'click' : 'seen';
+    void countAdEvent(String(msg.id ?? ''), kind).catch(() => {
+      // Тоолуур алдагдсан ч тоглоомд нөлөөлөхгүй — чимээгүй өнгөрнө.
+    });
     return;
   }
 
@@ -857,6 +882,36 @@ function serveAnnounce(req: IncomingMessage, res: ServerResponse): void {
 
   res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ sent: text, rooms: rooms.size, players: reached }, null, 2));
+}
+
+/** Рекламын зураг. Нээлттэй — зураг нь нийтэд харагдах зүйл. */
+async function serveAdImage(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!dbEnabled()) {
+    res.writeHead(404).end();
+    return;
+  }
+  const id = (req.url ?? '').split('/ads/image/')[1]?.split('?')[0] ?? '';
+  if (!/^\d+$/.test(id)) {
+    res.writeHead(400).end();
+    return;
+  }
+  try {
+    const found = await adImage(id);
+    if (!found) {
+      res.writeHead(404).end();
+      return;
+    }
+    res.writeHead(200, {
+      'content-type': found.mime,
+      'content-length': found.image.byteLength,
+      // Зураг солигдвол шинэ id-тай болно тул удаан кэшлэхэд аюулгүй.
+      'cache-control': 'public, max-age=86400',
+    });
+    res.end(found.image);
+  } catch (err) {
+    console.error('рекламын зураг:', err);
+    res.writeHead(500).end();
+  }
 }
 
 async function serveReports(req: IncomingMessage, res: ServerResponse): Promise<void> {

@@ -18,6 +18,7 @@ import type {
   GameView,
   MatchSummary,
   Invite,
+  AdView,
   PlayerInfo,
   PlayerStats,
   Promotion,
@@ -82,6 +83,7 @@ export function useBigTwo(serverUrl: string) {
   const [promotion, setPromotion] = useState<Promotion | null>(null);
   // Найзаас ирсэн урилгууд — нүүр хуудсан дээр харагдана.
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [ads, setAds] = useState<AdView[]>([]);
   const [profile, setProfile] = useState<{ stats: PlayerStats; matches: MatchSummary[] } | null>(
     null,
   );
@@ -142,6 +144,9 @@ export function useBigTwo(serverUrl: string) {
         break;
       case 'invites':
         setInvites(msg.list);
+        break;
+      case 'ads':
+        setAds(msg.ads);
         break;
       case 'notice':
         setNotice(msg.message);
@@ -250,6 +255,9 @@ export function useBigTwo(serverUrl: string) {
     playerInfo,
     promotion,
     invites,
+    ads,
+    /** Рекламын зураг татах үндсэн хаяг (ws:// → http://). */
+    httpBase: serverUrl.replace(/^ws/, 'http').replace(/\/+$/, ''),
     clearPromotion: useCallback(() => setPromotion(null), []),
     closePlayerInfo: useCallback(() => setPlayerInfo(null), []),
     clearError: useCallback(() => setError(null), []),
@@ -289,6 +297,25 @@ export function useBigTwo(serverUrl: string) {
     ),
     /** Профайлын зураг тохируулах. */
     setAvatar: useCallback((avatar: string | null) => send({ t: 'setAvatar', avatar }), [send]),
+    /**
+     * Реклам асуух. Цагийн бүс, хэл нь хөтчөөс зөвшөөрөлгүй авдаг цорын ганц
+     * байршлын шинж — байршил асуух цонх гаргахгүй.
+     */
+    loadAds: useCallback(() => {
+      let timezone = '';
+      try {
+        timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
+      } catch {
+        timezone = '';
+      }
+      const language =
+        typeof navigator !== 'undefined' ? (navigator.language ?? '') : '';
+      send({ t: 'ads', timezone, language });
+    }, [send]),
+    adEvent: useCallback(
+      (id: string, kind: 'seen' | 'click') => send({ t: 'adEvent', id, kind }),
+      [send],
+    ),
     /** Өөр тоглогчийн ил мэдээллийг асуух. */
     inspectPlayer: useCallback(
       (playerId: string) => {

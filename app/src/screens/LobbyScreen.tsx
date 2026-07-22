@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AdSlot } from '../components/AdSlot';
 import { AuthPanel } from '../components/AuthPanel';
 import { Button } from '../components/Button';
 import { GuestNotice } from '../components/GuestNotice';
@@ -17,7 +18,7 @@ import {
   TURN_SECONDS_CHOICES,
 } from '../shared/game';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, type BotLevel } from '../shared/bot';
-import type { GameView } from '../shared/protocol';
+import type { AdView, GameView } from '../shared/protocol';
 import { theme } from '../theme';
 
 interface Props {
@@ -27,12 +28,25 @@ interface Props {
   auth: React.ComponentProps<typeof AuthPanel>;
   onAddBot: (level: BotLevel) => void;
   onRemoveBot: (playerId: string) => void;
+  ads: AdView[];
+  httpBase: string;
+  onAdEvent: (id: string, kind: 'seen' | 'click') => void;
   onLeave: () => void;
 }
 
 const secondsLabel = (s: number): string => (s >= 60 ? `${s / 60} мин` : `${s} сек`);
 
-export function LobbyScreen({ view, onStart, onLeave, auth, onAddBot, onRemoveBot }: Props) {
+export function LobbyScreen({
+  view,
+  onStart,
+  onLeave,
+  auth,
+  onAddBot,
+  onRemoveBot,
+  ads,
+  httpBase,
+  onAdEvent,
+}: Props) {
   const [target, setTarget] = useState<number>(TARGET_SCORE_CHOICES[0]);
   const [turnSeconds, setTurnSeconds] = useState<number>(TURN_SECONDS_CHOICES[0]);
   const [stake, setStake] = useState<number>(STAKE_CHOICES[0]);
@@ -263,6 +277,10 @@ export function LobbyScreen({ view, onStart, onLeave, auth, onAddBot, onRemoveBo
           </Text>
         )}
       </View>
+
+      {ads.length > 0 && (
+        <AdSlot ads={ads} httpBase={httpBase} onEvent={onAdEvent} height={96} />
+      )}
 
       <View style={styles.actions}>
         {isHost ? (

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
+import { AdSlot } from '../components/AdSlot';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { RankBadge } from '../components/RankBadge';
@@ -11,7 +12,7 @@ import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import type { Card } from '../shared/cards';
 import { THREE_OF_DIAMONDS, cardName, rankOf, suitOf } from '../shared/cards';
 import { beats, comboLabel, detectCombo } from '../shared/combos';
-import type { GameView, PlayerView } from '../shared/protocol';
+import type { AdView, GameView, PlayerView } from '../shared/protocol';
 import { theme } from '../theme';
 
 /**
@@ -54,6 +55,9 @@ interface Props {
   onInspect: (playerId: string, name: string) => void;
   /** Өрөөний найзуудыг дараагийн тоглолтод урих. */
   onInvite: () => void;
+  ads: AdView[];
+  httpBase: string;
+  onAdEvent: (id: string, kind: 'seen' | 'click') => void;
 }
 
 export function TableScreen({
@@ -65,6 +69,9 @@ export function TableScreen({
   onLeave,
   onInspect,
   onInvite,
+  ads,
+  httpBase,
+  onAdEvent,
 }: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
   // Хөзрийг хэрхэн эрэмбэлж харуулах: 'rank' = дараалалаар (3→2), 'suit' =
@@ -107,6 +114,9 @@ export function TableScreen({
         onNewMatch={onNewMatch}
         onLeave={onLeave}
         onInvite={onInvite}
+        ads={ads}
+        httpBase={httpBase}
+        onAdEvent={onAdEvent}
       />
     );
   }
@@ -415,6 +425,9 @@ function Results({
   onNewMatch,
   onLeave,
   onInvite,
+  ads,
+  httpBase,
+  onAdEvent,
 }: {
   view: GameView;
   isHost: boolean;
@@ -422,6 +435,9 @@ function Results({
   onNewMatch: () => void;
   onLeave: () => void;
   onInvite: () => void;
+  ads: AdView[];
+  httpBase: string;
+  onAdEvent: (id: string, kind: 'seen' | 'click') => void;
 }) {
   const matchOver = view.phase === 'matchEnd';
   const winner = view.players.find((p) => p.id === view.matchWinnerId);
@@ -490,6 +506,10 @@ function Results({
         <Text style={styles.hint}>
           Хасагдсан: {justOut.map((p) => `${p.name} (${p.score})`).join(', ')}
         </Text>
+      )}
+
+      {ads.length > 0 && (
+        <AdSlot ads={ads} httpBase={httpBase} onEvent={onAdEvent} height={72} />
       )}
 
       <View style={styles.resultActions}>

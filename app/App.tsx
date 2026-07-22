@@ -130,6 +130,12 @@ function Root() {
   useEffect(() => {
     if (accountId) loadInvites();
   }, [accountId, loadInvites]);
+  // Өрөөнд орсны дараа рекламыг нэг удаа татна.
+  const inRoom = Boolean(game.view);
+  const loadAds = game.loadAds;
+  useEffect(() => {
+    if (inRoom) loadAds();
+  }, [inRoom, loadAds]);
 
   // Өрөөнд орсны дараа хаягийг цэвэрлэнэ.
   useEffect(() => {
@@ -219,6 +225,9 @@ function Root() {
           auth={authProps}
           onAddBot={game.addBot}
           onRemoveBot={game.removeBot}
+          ads={game.ads}
+          httpBase={game.httpBase}
+          onAdEvent={game.adEvent}
         />
       ) : (
         <TableScreen
@@ -233,6 +242,9 @@ function Root() {
             game.inspectPlayer(playerId);
           }}
           onInvite={game.invitePlayers}
+          ads={game.ads}
+          httpBase={game.httpBase}
+          onAdEvent={game.adEvent}
         />
       )}
 

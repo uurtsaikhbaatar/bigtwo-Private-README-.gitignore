@@ -76,6 +76,15 @@ export type ClientMessage =
   | { t: 'declineInvite'; roomCode: string }
   /** Профайлын зураг тохируулах. null бол авч хаяна. */
   | { t: 'setAvatar'; avatar: string | null }
+  /**
+   * Харуулах рекламыг асуух.
+   *
+   * Цагийн бүс, хэл нь хөтчөөс зөвшөөрөлгүй авдаг цорын ганц байршлын шинж —
+   * байршил асуух цонх гаргахгүй.
+   */
+  | { t: 'ads'; timezone: string; language: string }
+  /** Реклам харагдсан эсвэл дарагдсаныг мэдэгдэх. */
+  | { t: 'adEvent'; id: string; kind: 'seen' | 'click' }
   | { t: 'leave' }
   | { t: 'ping' };
 
@@ -102,6 +111,7 @@ export type ServerMessage =
   /** Ирсэн урилгууд. Шинэ урилга ирэхэд ч бүтэн жагсаалт дахин илгээгдэнэ. */
   | { t: 'invites'; list: Invite[] }
   /** Мэдээллийн мессеж (жишээ нь токен хүсэлт хүлээн авсан). */
+  | { t: 'ads'; ads: AdView[] }
   | { t: 'notice'; message: string }
   | { t: 'pong' };
 
@@ -144,6 +154,23 @@ export interface Invite {
   from: string;
   roomCode: string;
   at: string;
+}
+
+/**
+ * Нэг реклам.
+ *
+ * Зурагтай эсвэл зөвхөн текстээр байж болно. Зурагтай бол серверийн
+ * `/ads/image/<id>` хаягаас авна.
+ */
+export interface AdView {
+  id: string;
+  title: string;
+  /** Текст реклам. Зөвхөн зурагтай бол null. */
+  text: string | null;
+  /** Зурагтай эсэх. */
+  hasImage: boolean;
+  /** Дарахад нээгдэх хаяг. Байхгүй бол зүгээр харагдана. */
+  link: string | null;
 }
 
 /** Цол ахисан тухай мэдээлэл — ёслолын дэлгэцэд хэрэглэнэ. */
