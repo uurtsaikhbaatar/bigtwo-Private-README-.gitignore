@@ -41,6 +41,14 @@ export type ClientMessage =
   | { t: 'voice'; data: string; ms: number }
   /** Алдааны мэдэгдэл — гараар бичсэн эсвэл автоматаар баригдсан. */
   | { t: 'report'; kind: ReportKind; text: string; context?: Record<string, unknown> }
+  /** Шинэ бүртгэл үүсгэх. */
+  | { t: 'register'; username: string; password: string }
+  | { t: 'login'; username: string; password: string }
+  /** Хадгалсан token-оор нэвтрэлтээ сэргээх. */
+  | { t: 'authResume'; token: string }
+  | { t: 'logout'; token: string }
+  /** Профайл: статистик ба сүүлийн тоглолтууд. */
+  | { t: 'profile' }
   | { t: 'leave' }
   | { t: 'ping' };
 
@@ -54,7 +62,39 @@ export type ServerMessage =
   | { t: 'chat'; from: string; text: string; at: number }
   | { t: 'voice'; from: string; data: string; ms: number; at: number }
   | { t: 'reported'; id: string }
+  /** Нэвтрэлтийн төлөв. account null бол нэвтрээгүй. */
+  | { t: 'auth'; account: Account | null; token?: string }
+  | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[] }
   | { t: 'pong' };
+
+// ── Бүртгэл ба түүх ────────────────────────────────────────────────────────
+
+export interface Account {
+  id: string;
+  username: string;
+}
+
+export interface PlayerStats {
+  matches: number;
+  wins: number;
+  /** Хожсон/алдсан чипийн нийлбэр. */
+  chips: number;
+  dragons: number;
+}
+
+export interface MatchSummary {
+  id: string;
+  roomCode: string;
+  rounds: number;
+  stake: number;
+  dragon: boolean;
+  finishedAt: string;
+  won: boolean;
+  score: number;
+  chips: number;
+  /** Оролцогчид, ялагчаас эхлэн. */
+  players: Array<{ name: string; score: number; won: boolean }>;
+}
 
 // ── Харагдац ───────────────────────────────────────────────────────────────
 

@@ -16,6 +16,8 @@ export interface Seat {
   /** Тасарсны дараа суудлаа эргүүлэн авахад ашиглах нууц түлхүүр. */
   token: string;
   socket: WebSocket | null;
+  /** Бүртгэлтэй бол хэрэглэгчийн id. Зочин бол null. */
+  userId: string | null;
 }
 
 export interface Room {
@@ -25,6 +27,8 @@ export interface Room {
   seats: Map<string, Seat>;
   /** Сүүлийн чат мессежүүд — шинээр орсон хүнд дамжуулна. */
   chat: ServerMessage[];
+  /** Одоогийн тоглолт түүхэд бичигдсэн эсэх — давхар бичихээс сэргийлнэ. */
+  matchRecorded: boolean;
   lastActivity: number;
 }
 
@@ -38,6 +42,7 @@ export class RoomStore {
       hostId: '',
       seats: new Map(),
       chat: [],
+      matchRecorded: false,
       lastActivity: Date.now(),
     };
     this.rooms.set(room.code, room);
@@ -92,7 +97,12 @@ function randomCode(): string {
 }
 
 export function newSeat(): Seat {
-  return { playerId: randomUUID(), token: randomBytes(16).toString('hex'), socket: null };
+  return {
+    playerId: randomUUID(),
+    token: randomBytes(16).toString('hex'),
+    socket: null,
+    userId: null,
+  };
 }
 
 export function metaOf(room: Room): RoomMeta {

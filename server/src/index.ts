@@ -23,6 +23,7 @@ import {
   startRound,
   timeoutTurn,
 } from '../../app/src/shared/game';
+import type { Account } from '../../app/src/shared/protocol';
 import {
   MAX_REPORT_CHARS,
   MAX_VOICE_CHARS,
@@ -32,6 +33,9 @@ import {
   type ServerMessage,
   viewFor,
 } from '../../app/src/shared/protocol';
+import { AuthError, accountForToken, login, logout, register } from './auth';
+import { dbEnabled } from './db';
+import { recentMatches, recordMatch, statsForUser } from './history';
 import { readReports, saveReport } from './reports';
 import { Room, RoomStore, metaOf, newSeat } from './rooms';
 import { serveStatic } from './static';
@@ -50,6 +54,12 @@ interface Session {
   playerId: string;
 }
 const sessions = new WeakMap<WebSocket, Session>();
+/** Сокет бүрийн нэвтэрсэн хэрэглэгч (нэвтрээгүй бол байхгүй). */
+const accounts = new WeakMap<WebSocket, Account>();
+
+function requireDb(): void {
+  if (!dbEnabled()) throw new RuleError('Бүртгэлийн үйлчилгээ идэвхгүй байна.');
+}
 
 const httpServer = createServer((req, res) => {
   if (req.url === '/health') {
@@ -129,6 +139,54 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       return broadcast(room);
     }
 
+    case 'register':
+    case 'login': {
+      requireDb();
+      const run = msg.t === 'register' ? register : login;
+      void run(String(msg.username ?? ''), String(msg.password ?? ''))
+        .then(({ account, token }) => {
+          accounts.set(socket, account);
+          send(socket, { t: 'auth', account, token });
+        })
+        .catch((err) => {
+          const message = err instanceof AuthError ? err.message : 'Бүртгэлд алдаа гарлаа.';
+          if (!(err instanceof AuthError)) console.error('auth error:', err);
+          send(socket, { t: 'error', message });
+        });
+      return;
+    }
+
+    case 'authResume': {
+      if (!dbEnabled()) return send(socket, { t: 'auth', account: null });
+      void accountForToken(String(msg.token ?? ''))
+        .then((account) => {
+          if (account) accounts.set(socket, account);
+          send(socket, { t: 'auth', account });
+        })
+        .catch(() => send(socket, { t: 'auth', account: null }));
+      return;
+    }
+
+    case 'logout': {
+      const token = String(msg.token ?? '');
+      accounts.delete(socket);
+      if (dbEnabled() && token) void logout(token).catch(() => {});
+      return send(socket, { t: 'auth', account: null });
+    }
+
+    case 'profile': {
+      requireDb();
+      const account = accounts.get(socket);
+      if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
+      void Promise.all([statsForUser(account.id), recentMatches(account.id, 10)])
+        .then(([stats, matches]) => send(socket, { t: 'profile', stats, matches }))
+        .catch((err) => {
+          console.error('profile error:', err);
+          send(socket, { t: 'error', message: 'Профайл уншиж чадсангүй.' });
+        });
+      return;
+    }
+
     case 'resume': {
       const room = rooms.get(msg.code ?? '');
       if (!room) throw new RuleError('Өрөө олдсонгүй — дуусаад устсан байж магадгүй.');
@@ -160,6 +218,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         Number(msg.turnSeconds ?? DEFAULT_TURN_SECONDS),
         Number(msg.stake ?? DEFAULT_STAKE),
       );
+      room.matchRecorded = false;
       return broadcast(room);
     }
     case 'next': {
@@ -229,6 +288,7 @@ function seat(socket: WebSocket, room: Room, name: string): void {
   }
   const s = newSeat();
   s.socket = socket;
+  s.userId = accounts.get(socket)?.id ?? null;
   room.seats.set(s.playerId, s);
   addPlayer(room.state, s.playerId, name);
   sessions.set(socket, { room, playerId: s.playerId });
@@ -277,12 +337,30 @@ function releaseSeat(room: Room, playerId: string): void {
 }
 
 function broadcast(room: Room): void {
+  saveFinishedMatch(room);
   const meta = metaOf(room);
   for (const s of room.seats.values()) {
     if (s.socket && s.socket.readyState === s.socket.OPEN) {
       send(s.socket, { t: 'state', view: viewFor(room.state, meta, s.playerId) });
     }
   }
+}
+
+/**
+ * Тоглолт дуусмагц түүхэд нэг л удаа хадгална.
+ * Өгөгдлийн сан унтраалттай бол чимээгүй өнгөрнө.
+ */
+function saveFinishedMatch(room: Room): void {
+  if (room.state.phase !== 'matchEnd' || room.matchRecorded || !dbEnabled()) return;
+  room.matchRecorded = true;
+
+  const players = new Map<string, string>();
+  for (const seat of room.seats.values()) {
+    if (seat.userId) players.set(seat.playerId, seat.userId);
+  }
+  void recordMatch(room.state, room.code, players).catch((err) =>
+    console.error('тоглолтыг түүхэд хадгалж чадсангүй:', err),
+  );
 }
 
 function broadcastRaw(room: Room, msg: ServerMessage): void {

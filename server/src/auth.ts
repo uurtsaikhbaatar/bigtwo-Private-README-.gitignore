@@ -9,6 +9,7 @@
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
+import type { Account } from '../../app/src/shared/protocol';
 import { getPool } from './db';
 
 const scryptAsync = promisify(scrypt) as (
@@ -28,10 +29,7 @@ export const MIN_PASSWORD = 6;
 
 export class AuthError extends Error {}
 
-export interface Account {
-  id: string;
-  username: string;
-}
+export type { Account };
 
 /** Нэрийг харьцуулахад ашиглах хэлбэр — том/жижиг үсэг ялгахгүй. */
 const normalise = (username: string): string => username.trim().toLowerCase();

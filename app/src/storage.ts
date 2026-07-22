@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 const KEY_NAME = 'bigtwo.name';
 const KEY_SERVER = 'bigtwo.server';
 const KEY_SESSION = 'bigtwo.session';
+const KEY_AUTH = 'bigtwo.auth';
 
 /**
  * Вэб дээр суудлыг таб тус бүрээр тусад нь хадгална.
@@ -73,3 +74,8 @@ export async function clearSession(): Promise<void> {
   if (tab) tab.removeItem(KEY_SESSION);
   else await write(KEY_SESSION, null);
 }
+
+/** Нэвтрэлтийн token — төхөөрөмж дээр үлдэж, дараагийн удаа автоматаар нэвтэрнэ. */
+export const loadAuthToken = () => read(KEY_AUTH);
+export const saveAuthToken = (token: string) => write(KEY_AUTH, token);
+export const clearAuthToken = () => write(KEY_AUTH, null);

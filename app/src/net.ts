@@ -11,8 +11,22 @@ import { Platform } from 'react-native';
 
 import type { Card } from './shared/cards';
 import { deviceContext } from './errors';
-import type { ClientMessage, GameView, ReportKind, ServerMessage } from './shared/protocol';
-import { SavedSession, clearSession, saveSession } from './storage';
+import type {
+  Account,
+  ClientMessage,
+  GameView,
+  MatchSummary,
+  PlayerStats,
+  ReportKind,
+  ServerMessage,
+} from './shared/protocol';
+import {
+  SavedSession,
+  clearAuthToken,
+  clearSession,
+  saveAuthToken,
+  saveSession,
+} from './storage';
 
 export const SERVER_PORT = 8787;
 const MAX_RECONNECT_ATTEMPTS = 6;
@@ -56,6 +70,11 @@ export function useBigTwo(serverUrl: string) {
   const [error, setError] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatLine[]>([]);
   const [lastReportId, setLastReportId] = useState<string | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [profile, setProfile] = useState<{ stats: PlayerStats; matches: MatchSummary[] } | null>(
+    null,
+  );
+  const authTokenRef = useRef<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
   const sessionRef = useRef<SavedSession | null>(null);
@@ -89,6 +108,21 @@ export function useBigTwo(serverUrl: string) {
           { from: msg.from, audio: msg.data, ms: msg.ms, at: msg.at },
         ]);
         break;
+      case 'auth':
+        setAccount(msg.account);
+        if (msg.token) {
+          authTokenRef.current = msg.token;
+          void saveAuthToken(msg.token);
+        }
+        if (!msg.account) {
+          authTokenRef.current = null;
+          setProfile(null);
+          void clearAuthToken();
+        }
+        break;
+      case 'profile':
+        setProfile({ stats: msg.stats, matches: msg.matches });
+        break;
       case 'reported':
         setLastReportId(msg.id);
         break;
@@ -117,6 +151,12 @@ export function useBigTwo(serverUrl: string) {
     ws.onopen = () => {
       setStatus('online');
       attemptsRef.current = 0;
+      // Нэвтрэлт нь холболт тус бүрд дахин батлагдах ёстой — сервер сокет
+      // бүрийн хэрэглэгчийг тусад нь санадаг. Эс бөгөөс дахин холбогдсоны
+      // дараа профайл, түүх ажиллахгүй.
+      if (authTokenRef.current) {
+        rawSend(ws, { t: 'authResume', token: authTokenRef.current });
+      }
       if (sessionRef.current) {
         resumingRef.current = true;
         rawSend(ws, { t: 'resume', ...sessionRef.current });
@@ -180,7 +220,28 @@ export function useBigTwo(serverUrl: string) {
     error,
     chat,
     lastReportId,
+    account,
+    profile,
     clearError: useCallback(() => setError(null), []),
+
+    register: useCallback(
+      (username: string, password: string) => send({ t: 'register', username, password }),
+      [send],
+    ),
+    logIn: useCallback(
+      (username: string, password: string) => send({ t: 'login', username, password }),
+      [send],
+    ),
+    /** Хадгалсан token-оор нэвтрэлтээ сэргээх. */
+    resumeAuth: useCallback(
+      (token: string) => {
+        authTokenRef.current = token;
+        send({ t: 'authResume', token });
+      },
+      [send],
+    ),
+    logOut: useCallback(() => send({ t: 'logout', token: authTokenRef.current ?? '' }), [send]),
+    loadProfile: useCallback(() => send({ t: 'profile' }), [send]),
 
     createRoom: useCallback((name: string) => send({ t: 'create', name }), [send]),
     joinRoom: useCallback(

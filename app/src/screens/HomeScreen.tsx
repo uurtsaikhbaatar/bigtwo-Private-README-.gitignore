@@ -9,10 +9,13 @@ import {
   View,
 } from 'react-native';
 
+import { AuthPanel } from '../components/AuthPanel';
 import { Button } from '../components/Button';
 import { theme } from '../theme';
 
 interface Props {
+  /** Нэвтрэлтийн самбарт дамжуулах бүх зүйл. */
+  auth: React.ComponentProps<typeof AuthPanel>;
   name: string;
   onNameChange: (name: string) => void;
   serverUrl: string;
@@ -25,6 +28,7 @@ interface Props {
 }
 
 export function HomeScreen({
+  auth,
   name,
   onNameChange,
   serverUrl,
@@ -48,6 +52,7 @@ export function HomeScreen({
         <View style={styles.hero}>
           <Text style={styles.title}>Дай Ди</Text>
           <Text style={styles.subtitle}>Найзуудтайгаа хятад покер тоглох</Text>
+          <AuthPanel {...auth} />
         </View>
 
         {invited && (

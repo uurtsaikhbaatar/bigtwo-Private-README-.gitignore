@@ -6,28 +6,8 @@
  */
 
 import type { GameState } from '../../app/src/shared/game';
+import type { MatchSummary, PlayerStats } from '../../app/src/shared/protocol';
 import { getPool } from './db';
-
-export interface MatchSummary {
-  id: string;
-  roomCode: string;
-  rounds: number;
-  stake: number;
-  dragon: boolean;
-  finishedAt: string;
-  won: boolean;
-  score: number;
-  chips: number;
-  /** Тухайн тоглолтын бүх оролцогч, ялагчаас эхлэн. */
-  players: Array<{ name: string; score: number; won: boolean }>;
-}
-
-export interface PlayerStats {
-  matches: number;
-  wins: number;
-  chips: number;
-  dragons: number;
-}
 
 /**
  * Дууссан тоглолтыг хадгална.

@@ -11,7 +11,14 @@ import { defaultServerUrl, useBigTwo } from './src/net';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LobbyScreen } from './src/screens/LobbyScreen';
 import { TableScreen } from './src/screens/TableScreen';
-import { loadName, loadServer, loadSession, saveName, saveServer } from './src/storage';
+import {
+  loadAuthToken,
+  loadName,
+  loadServer,
+  loadSession,
+  saveName,
+  saveServer,
+} from './src/storage';
 import type { GameView } from './src/shared/protocol';
 import { theme } from './src/theme';
 
@@ -43,21 +50,23 @@ function Root() {
   const [serverUrl, setServerUrl] = useState(defaultServerUrl());
   const [invitedCode, setInvitedCode] = useState('');
   const game = useBigTwo(serverUrl);
-  const { resumeSession, joinRoom, clearError, error } = game;
+  const { resumeSession, joinRoom, resumeAuth, clearError, error } = game;
   const startedRef = useRef(false);
 
   // Апп нээгдэхэд өмнөх нэр, серверийн хаяг, суудлыг сэргээнэ.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [savedName, savedServer, session] = await Promise.all([
+      const [savedName, savedServer, session, authToken] = await Promise.all([
         loadName(),
         loadServer(),
         loadSession(),
+        loadAuthToken(),
       ]);
       if (cancelled || startedRef.current) return;
       startedRef.current = true;
 
+      if (authToken) resumeAuth(authToken);
       if (savedName) setName(savedName);
       if (savedServer) setServerUrl(savedServer);
 
@@ -77,11 +86,17 @@ function Root() {
     return () => {
       cancelled = true;
     };
-  }, [resumeSession, joinRoom]);
+  }, [resumeSession, joinRoom, resumeAuth]);
 
   // Аппад гарсан алдааг автоматаар мэдэгдэнэ.
   const { sendReport } = game;
   useEffect(() => installErrorReporter(sendReport), [sendReport]);
+
+  // Нэвтэрсэн бол тоглогчийн нэрийг бүртгэлийн нэртэй нийцүүлнэ.
+  const accountName = game.account?.username;
+  useEffect(() => {
+    if (accountName) setName(accountName);
+  }, [accountName]);
 
   // Өрөөнд орсны дараа хаягийг цэвэрлэнэ.
   useEffect(() => {
@@ -122,6 +137,14 @@ function Root() {
           onJoin={(code) => game.joinRoom(name, code)}
           connecting={game.status === 'connecting'}
           initialCode={invitedCode}
+          auth={{
+            account: game.account,
+            profile: game.profile,
+            onRegister: game.register,
+            onLogin: game.logIn,
+            onLogout: game.logOut,
+            onLoadProfile: game.loadProfile,
+          }}
         />
       ) : view.phase === 'lobby' ? (
         <LobbyScreen view={view} onStart={game.startGame} onLeave={game.leaveRoom} />
