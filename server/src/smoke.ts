@@ -14,6 +14,7 @@ import WebSocket from 'ws';
 
 import { Card } from '../../app/src/shared/cards';
 import { Combo, beats, detectCombo } from '../../app/src/shared/combos';
+import { rankFor } from '../../app/src/shared/ranks';
 import type {
   ClientMessage,
   GameView,
@@ -251,6 +252,19 @@ async function main() {
           check(info.username === SMOKE_ACCOUNT, `нэвтрэх нэр буруу: ${info.username}`);
           check(typeof info.tokens === 'number', 'токены үлдэгдэл ирсэнгүй');
           check(info.stats !== null, 'статистик ирсэнгүй');
+
+          // Цол нь хожлын тооноос гардаг тул харагдацад хожил ирсэн байх ёстой.
+          const seen = out.view!.players.find((p) => p.id === registered.playerId);
+          check(seen !== undefined, 'бүртгэлтэй тоглогч харагдацад алга');
+          check(
+            typeof seen!.wins === 'number',
+            `бүртгэлтэй тоглогчид хожлын тоо ирсэнгүй: ${seen!.wins}`,
+          );
+          const guestSeen = out.view!.players.find((p) => p.id === clients[0].playerId);
+          check(guestSeen?.wins === null, 'зочинд хожлын тоо ирлээ');
+          console.log(
+            `✓ цол: ${info.username} ${rankFor(seen!.wins!).name} (${seen!.wins} хожил), зочинд цолгүй`,
+          );
           console.log(
             `✓ бүртгэлтэй тоглогчийн мэдээлэл: ${info.username}, ` +
               `${info.tokens} токен, ${info.stats!.matches} тоглолт, ${info.stats!.wins} ялалт`,

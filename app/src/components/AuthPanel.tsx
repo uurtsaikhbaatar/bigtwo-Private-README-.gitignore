@@ -10,8 +10,10 @@ import {
 
 import { groupDigits } from '../chips';
 import { AvatarPicker } from './AvatarPicker';
+import { RankBadge } from './RankBadge';
 import { Button } from '../components/Button';
 import type { Account, MatchSummary, PlayerStats } from '../shared/protocol';
+import { nextRank, rankFor } from '../shared/ranks';
 import { Overlay } from './Overlay';
 import { theme } from '../theme';
 
@@ -148,6 +150,8 @@ export function AuthPanel({
 
                 {profile ? (
                   <>
+                    <RankCard wins={profile.stats.wins} />
+
                     <View style={styles.statRow}>
                       <Stat label="Тоглолт" value={profile.stats.matches} />
                       <Stat label="Ялалт" value={profile.stats.wins} />
@@ -259,6 +263,33 @@ export function AuthPanel({
   );
 }
 
+/** Одоогийн цол ба дараагийн цол хүртэлх явц. */
+function RankCard({ wins }: { wins: number }) {
+  const rank = rankFor(wins);
+  const next = nextRank(wins);
+  const previous = rank.wins;
+  // Явцын судал: энэ цолноос дараагийн цол хүртэлх зай.
+  const span = next ? next.rank.wins - previous : 1;
+  const done = next ? (wins - previous) / span : 1;
+
+  return (
+    <View style={styles.rankBox}>
+      <View style={styles.rankTop}>
+        <Text style={styles.rankName}>{rank.name}</Text>
+        <RankBadge wins={wins} />
+      </View>
+      <View style={styles.rankTrack}>
+        <View style={[styles.rankFill, { width: `${Math.min(100, done * 100)}%` }]} />
+      </View>
+      <Text style={styles.rankHint}>
+        {next
+          ? `${next.rank.name} цол хүртэл ${next.remaining} хожил үлдлээ`
+          : 'Хамгийн дээд цолд хүрлээ 🎖'}
+      </Text>
+    </View>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -359,6 +390,22 @@ const styles = StyleSheet.create({
   tokenValue: { color: theme.text, fontSize: 24, fontWeight: '800' },
   tokenLow: { color: theme.danger, fontSize: 12, fontWeight: '700' },
   tokenNote: { color: theme.textMuted, fontSize: 10, fontStyle: 'italic' },
+  rankBox: {
+    backgroundColor: theme.surfaceRaised,
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+  },
+  rankTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rankName: { color: theme.text, fontSize: 16, fontWeight: '800' },
+  rankTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden',
+  },
+  rankFill: { height: 6, borderRadius: 3, backgroundColor: theme.accent },
+  rankHint: { color: theme.textMuted, fontSize: 12, lineHeight: 17 },
   statRow: { flexDirection: 'row', gap: 8 },
   stat: {
     flex: 1,

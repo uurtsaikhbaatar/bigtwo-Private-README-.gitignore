@@ -24,6 +24,7 @@ import {
   timeoutTurn,
 } from '../../app/src/shared/game';
 import { isValidAvatar } from '../../app/src/shared/avatar';
+import { promoted } from '../../app/src/shared/ranks';
 import type { Account } from '../../app/src/shared/protocol';
 import {
   MAX_REPORT_CHARS,
@@ -483,10 +484,13 @@ function seat(socket: WebSocket, room: Room, name: string): void {
   s.userId = account?.id ?? null;
   room.seats.set(s.playerId, s);
   addPlayer(room.state, s.playerId, name);
-  // Нэвтэрсэн хүн хадгалсан зургаа авчирна.
-  if (account?.avatar) {
+  // Нэвтэрсэн хүн хадгалсан зураг, цолоо авчирна.
+  if (account) {
     const player = room.state.players.find((p) => p.id === s.playerId);
-    if (player) player.avatar = account.avatar;
+    if (player && account.avatar) player.avatar = account.avatar;
+    if (dbEnabled()) {
+      void refreshWins(room).catch((err) => console.error('цол уншиж чадсангүй:', err));
+    }
   }
   sessions.set(socket, { room, playerId: s.playerId });
   room.lastActivity = Date.now();
@@ -560,9 +564,12 @@ function saveFinishedMatch(room: Room): void {
   for (const seat of room.seats.values()) {
     if (seat.userId) players.set(seat.playerId, seat.userId);
   }
-  void recordMatch(room.state, room.code, players).catch((err) =>
-    console.error('тоглолтыг түүхэд хадгалж чадсангүй:', err),
-  );
+  // Цол нь түүхээс тоологддог тул хожлыг бичиж ДУУССАНЫ ДАРАА л уншина.
+  // Зэрэг явуулбал энэ тоглолт нь тоологдоогүй байхад уншиж, цол ахисан
+  // мөчийг алдана.
+  void recordMatch(room.state, room.code, players)
+    .then(() => refreshWins(room, true))
+    .catch((err) => console.error('тоглолтыг түүхэд хадгалж чадсангүй:', err));
 
   // Бооцооны үр дүнг токены үлдэгдэлд тусгана. Зочид (бүртгэлгүй) хамаарахгүй.
   const changes = new Map<string, number>();
@@ -575,6 +582,41 @@ function saveFinishedMatch(room: Room): void {
       .then(() => refreshAccounts(room))
       .catch((err) => console.error('токены тооцоо хийж чадсангүй:', err));
   }
+}
+
+/**
+ * Бүртгэлтэй тоглогчдын нийт хожлыг санаас уншиж, харагдацад тусгана.
+ *
+ * `announce` үнэн бол цол ахисан хүн бүрийг чатад зарлана — тэр мөч нь
+ * цолны системийн хамгийн сонирхолтой хэсэг.
+ */
+async function refreshWins(room: Room, announce = false): Promise<void> {
+  let changed = false;
+  for (const seat of room.seats.values()) {
+    if (!seat.userId) continue;
+    const player = room.state.players.find((p) => p.id === seat.playerId);
+    if (!player) continue;
+
+    const stats = await statsForUser(seat.userId);
+    const before = player.wins;
+    if (before === stats.wins) continue;
+
+    player.wins = stats.wins;
+    changed = true;
+
+    if (announce && before !== null) {
+      const rank = promoted(before, stats.wins);
+      if (rank) {
+        broadcastRaw(room, {
+          t: 'chat',
+          from: 'Дай Ди',
+          text: `${rank.badge} ${player.name} — ${rank.name.toUpperCase()} боллоо!`,
+          at: Date.now(),
+        });
+      }
+    }
+  }
+  if (changed) broadcast(room);
 }
 
 /**

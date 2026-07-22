@@ -153,6 +153,8 @@ export interface PlayerView {
   draw: Card | null;
   /** Профайлын зураг: emoji эсвэл data: URL. */
   avatar: string | null;
+  /** Нийт хожсон тоглолт — цол тодорхойлно. Зочны хувьд null. */
+  wins: number | null;
 }
 
 export interface PlayView {
@@ -221,6 +223,7 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       seated: p.seated,
       draw: p.draw,
       avatar: p.avatar,
+      wins: p.wins,
     })),
     seats: state.seats.slice(),
     yourHand: you ? you.hand.slice() : [],

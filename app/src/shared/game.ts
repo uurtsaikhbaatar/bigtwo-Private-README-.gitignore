@@ -64,6 +64,8 @@ export interface Player {
   draw: Card | null;
   /** Профайлын зураг: emoji эсвэл data: URL. Сонгоогүй бол null. */
   avatar: string | null;
+  /** Нийт хожсон тоглолт — цол тодорхойлно. Зочны хувьд null. */
+  wins: number | null;
 }
 
 export interface TablePlay {
@@ -180,6 +182,7 @@ export function addPlayer(state: GameState, id: string, name: string): void {
     seated: false,
     draw: null,
     avatar: null,
+    wins: null,
   });
 }
 

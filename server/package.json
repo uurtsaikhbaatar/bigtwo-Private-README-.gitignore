@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node --env-file-if-exists=.env --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --env-file-if-exists=.env --import tsx --test src/game.test.ts src/match.test.ts src/db.test.ts src/avatar.test.ts",
+    "test": "node --env-file-if-exists=.env --import tsx --test src/game.test.ts src/match.test.ts src/db.test.ts src/avatar.test.ts src/ranks.test.ts",
     "smoke": "node --import tsx src/smoke.ts",
     "bots": "node --import tsx src/bots.ts",
     "reports": "node --env-file-if-exists=.env --import tsx src/show-reports.ts",

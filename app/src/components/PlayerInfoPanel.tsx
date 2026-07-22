@@ -13,6 +13,7 @@ import { groupDigits } from '../chips';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { Overlay } from './Overlay';
+import { RankBadge } from './RankBadge';
 import type { PlayerInfo } from '../shared/protocol';
 import { theme } from '../theme';
 
@@ -33,7 +34,10 @@ export function PlayerInfoPanel({ pendingName, info, onClose }: Props) {
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <Avatar name={info?.name ?? pendingName ?? '?'} avatar={info?.avatar ?? null} size={40} />
-            <Text style={styles.title}>{info?.name ?? pendingName ?? ''}</Text>
+            <View style={styles.titleText}>
+              <Text style={styles.title}>{info?.name ?? pendingName ?? ''}</Text>
+              {info?.stats && <RankBadge wins={info.stats.wins} full />}
+            </View>
           </View>
           <Text style={styles.close} onPress={onClose}>
             Хаах
@@ -101,6 +105,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
+  titleText: { gap: 4, flexShrink: 1, alignItems: 'flex-start' },
   title: { color: theme.text, fontSize: 18, fontWeight: '700' },
   close: { color: theme.textMuted, fontSize: 15 },
   loading: { paddingVertical: 32 },

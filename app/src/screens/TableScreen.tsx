@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } fr
 
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { RankBadge } from '../components/RankBadge';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
 import { ScoreBoard } from '../components/ScoreBoard';
 import { formatChips, formatSignedChips } from '../chips';
@@ -303,6 +304,7 @@ function Opponent({
           <Text style={styles.opponentName} numberOfLines={1}>
             {player.name}
           </Text>
+          <RankBadge wins={player.wins} />
         </Pressable>
         {/* Тоолуур нь онооны оронд ОРОХГҮЙ — оноо доод мөрөнд байнга харагдана. */}
         {isTurn && <TurnTimer secondsLeft={secondsLeft} compact />}
