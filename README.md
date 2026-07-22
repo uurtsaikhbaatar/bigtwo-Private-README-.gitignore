@@ -135,7 +135,7 @@ Expo Go ашиглах үед апп серверийн хаягийг Expo-ги
 ## Шалгалт
 
 ```bash
-npm test      # дүрмийн 42 тест (2–8 тоглогчтой санамсаргүй бүтэн тоглолтууд багтана)
+npm test      # 54 тест — дүрэм, бүртгэл, имэйл, тоглолтын түүх (2–8 тоглогчтой санамсаргүй бүтэн тоглолтууд багтана)
 npm run smoke # сервер ажиллаж байхад: 5 клиентээр бүтэн тоглолт хасалт хүртэл
 ```
 
@@ -177,27 +177,21 @@ npm run db:init                      # хүснэгтүүдийг үүсгэнэ
 Тохируулаагүй бол баталгаажуулах код **серверийн лог** руу бичигдэнэ — 
 үйлчилгээгүйгээр ч бүх урсгалыг турших боломжтой.
 
-Жинхэнэ имэйл илгээхэд хамгийн хялбар нь **Gmail** — шинэ бүртгэл, SMS
-баталгаажуулалт шаардлагагүй:
+Жинхэнэ имэйл илгээхэд **Brevo** (өдөрт 300 үнэгүй), SendGrid эсвэл Resend:
 
 ```
-EMAIL_PROVIDER=gmail
-EMAIL_USER=тань@gmail.com
-EMAIL_APP_PASSWORD=xxxxxxxxxxxxxxxx
+EMAIL_PROVIDER=brevo
+EMAIL_API_KEY=xkeysib-…
+EMAIL_FROM=Дай Ди <баталгаажуулсан@хаяг>
 ```
 
-`EMAIL_APP_PASSWORD` нь Google-ийн **App password** — жинхэнэ нууц үг биш.
-[myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-дээрээс үүсгэнэ (2 алхамт баталгаажуулалт асаалттай байх шаардлагатай).
-Өдөрт ~500 захидал — найзуудын хүрээнд хангалттай.
-
-API-тай үйлчилгээ ч дэмжигдэнэ: `EMAIL_PROVIDER=brevo|sendgrid|resend` +
-`EMAIL_API_KEY` + `EMAIL_FROM`.
+`EMAIL_FROM` дахь хаяг нь тухайн үйлчилгээн дээр **баталгаажсан** байх ёстой
+(Brevo: Settings → Senders → Add a sender → имэйл дэх линкийг дарах).
 
 Тохиргоогоо шалгах:
 
 ```bash
-npm run email:test -- тань@gmail.com
+npm run email:test -- өөрийн@имэйл.хаяг
 ```
 
 

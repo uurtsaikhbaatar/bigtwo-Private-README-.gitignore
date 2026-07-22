@@ -1,7 +1,7 @@
 /**
  * Имэйлийн тохиргоог шалгана — жинхэнэ захидал илгээж үзнэ.
  *
- *   npm run email:test -- тань@gmail.com
+ *   npm run email:test -- өөрийн@имэйл.хаяг
  *
  * Тохируулаагүй бол консол горимд ажиллаж, юу илгээх байсныг харуулна.
  */
@@ -10,7 +10,7 @@ import { emailProvider, sendEmail, verificationEmail } from './email';
 
 const to = process.argv[2];
 if (!to) {
-  console.error('Хэрэглээ: npm run email:test -- хаяг@жишээ.com');
+  console.error('Хэрэглээ: npm run email:test -- өөрийн@имэйл.хаяг');
   process.exit(1);
 }
 
