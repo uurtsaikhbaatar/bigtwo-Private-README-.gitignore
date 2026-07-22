@@ -22,7 +22,12 @@ export function formatSignedChips(amount: number): string {
 }
 
 /** Сонголтын товч дээр богино харуулах: 50000 → "50мянга". */
+/** Бутархай хэсгийг хэрэгтэй үед л харуулна: 1.5 → "1.5", 2.0 → "2". */
+const round = (value: number): string => String(Math.round(value * 10) / 10);
+
 export function shortChips(amount: number): string {
   if (amount === 0) return 'Токенгүй';
-  return amount >= 1000 ? `${amount / 1000}мянга` : String(amount);
+  if (amount >= 1_000_000) return `${round(amount / 1_000_000)}сая`;
+  if (amount >= 1000) return `${round(amount / 1000)}мянга`;
+  return String(amount);
 }

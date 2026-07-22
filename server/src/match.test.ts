@@ -11,6 +11,8 @@ import { beats, detectCombo } from '../../app/src/shared/combos';
 import {
   GameState,
   MAX_PLAYERS,
+  MAX_STAKE,
+  MIN_STAKE,
   RuleError,
   SEATS_PER_ROUND,
   addPlayer,
@@ -454,14 +456,28 @@ test('луу буусан ч чипийн тооцоо гарна', () => {
 
 test('хязгаараас гарсан чипийг татгалзана', () => {
   const state = makeGame(3);
-  assert.throws(() => startMatch(state, 30, 30, 50, mulberry32(1)), RuleError, 'хэт бага');
-  assert.throws(() => startMatch(state, 30, 30, 500_000, mulberry32(1)), RuleError, 'хэт их');
+  // Хязгаараас хамааруулж бичнэ — MIN/MAX өөрчлөгдөхөд тест эвдрэхгүй.
+  assert.throws(
+    () => startMatch(state, 30, 30, MIN_STAKE - 1, mulberry32(1)),
+    RuleError,
+    'хэт бага',
+  );
+  assert.throws(
+    () => startMatch(state, 30, 30, MAX_STAKE + 1, mulberry32(1)),
+    RuleError,
+    'хэт их',
+  );
   assert.throws(() => startMatch(state, 30, 30, -1, mulberry32(1)), RuleError, 'сөрөг');
+
   // Хил дээрх утгууд зөвшөөрөгдөнө.
-  startMatch(state, 30, 30, 100, mulberry32(1));
-  assert.equal(state.stake, 100);
-  startMatch(state, 30, 30, 100_000, mulberry32(1));
-  assert.equal(state.stake, 100_000);
+  startMatch(state, 30, 30, MIN_STAKE, mulberry32(1));
+  assert.equal(state.stake, MIN_STAKE);
+  startMatch(state, 30, 30, MAX_STAKE, mulberry32(1));
+  assert.equal(state.stake, MAX_STAKE);
+
+  // Чипгүй тоглох нь үргэлж зөвшөөрөгдөнө.
+  startMatch(state, 30, 30, 0, mulberry32(1));
+  assert.equal(state.stake, 0);
 });
 
 // ── Ээлжийн хугацаа ────────────────────────────────────────────────────────

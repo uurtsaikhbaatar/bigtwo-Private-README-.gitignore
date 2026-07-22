@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 
 
 import { Button } from '../components/Button';
 import { joinUrl } from '../deeplink';
-import { formatChips, shortChips } from '../chips';
+import { formatChips, groupDigits, shortChips } from '../chips';
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -183,7 +183,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
               !isHost && styles.choiceLocked,
             ]}
           >
-            <Text style={[styles.stakeText, customOn && styles.choiceTextActive]}>Өөрөө</Text>
+            <Text style={[styles.stakeText, customOn && styles.choiceTextActive]}>Өөр дүн</Text>
           </Pressable>
         </View>
 
@@ -192,7 +192,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
             <TextInput
               value={customText}
               onChangeText={(text) => {
-                const digits = text.replace(/[^0-9]/g, '').slice(0, 6);
+                const digits = text.replace(/[^0-9]/g, '').slice(0, 7);
                 setCustomText(digits);
                 const value = Number(digits);
                 // Хязгаарт багтсан үед л хүчинтэй болгоно; эс бөгөөс 0 болгож
@@ -200,7 +200,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
                 setStake(value >= MIN_STAKE && value <= MAX_STAKE ? value : 0);
               }}
               editable={isHost}
-              placeholder={`${MIN_STAKE}–${MAX_STAKE}`}
+              placeholder={`${groupDigits(MIN_STAKE)}–${groupDigits(MAX_STAKE)}`}
               placeholderTextColor={theme.textMuted}
               style={[styles.customInput, !isHost && styles.choiceLocked]}
               keyboardType="number-pad"
@@ -211,7 +211,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
         )}
         <Text style={[styles.hint, customInvalid && styles.warn]}>
           {customInvalid
-            ? `${MIN_STAKE}-аас ${MAX_STAKE} хооронд тоо оруулна уу.`
+            ? `${groupDigits(MIN_STAKE)}-аас ${groupDigits(MAX_STAKE)} хооронд тоо оруулна уу.`
             : stake === 0
               ? 'Чипгүй тоглоно.'
               : `Хожигч бусад тоглогч бүрээс ${formatChips(stake)} авна. Тоглолт дуусахад хэн хэдийг хожсон, алдсаныг харуулна.`}

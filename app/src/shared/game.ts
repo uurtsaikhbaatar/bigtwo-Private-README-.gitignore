@@ -40,7 +40,7 @@ export const DEFAULT_TURN_SECONDS = 30;
  */
 export const STAKE_CHOICES = [0, 1_000, 5_000, 10_000, 50_000] as const;
 export const MIN_STAKE = 100;
-export const MAX_STAKE = 100_000;
+export const MAX_STAKE = 1_000_000;
 export const DEFAULT_STAKE = 0;
 
 export const MIN_TURN_SECONDS = 10;
