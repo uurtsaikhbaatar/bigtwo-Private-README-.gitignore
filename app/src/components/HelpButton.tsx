@@ -1,9 +1,12 @@
 /**
  * "?" товч — цол хэрхэн авахыг товч тайлбарлана.
  *
- * Цонх нь ӨӨРӨӨ автоматаар хаагдана. Гэхдээ уншиж байхад нь хаачихвал
- * тааламжгүй тул: хугацааг товчин дээр харуулж, цонх дотор хүрэх бүрд
- * тоолуур эхнээсээ эхэлнэ. Ингэснээр уншсаар байгаа хүн хөөгдөхгүй.
+ * Хаах гурван арга: доод талын товч, толгойн "Хаах", эсвэл харанхуй
+ * дэвсгэр дээр дарах. Дээрээс нь 30 секундын дараа өөрөө хаагдана.
+ *
+ * ӨМНӨ НЬ цонх дотор хүрэх бүрд тоолуур эхнээсээ эхэлдэг байсан ("уншиж
+ * байгаа хүнийг хөөхгүй" гэж). Гэтэл гүйлгэх, хаах гэж хүрэх бүрд шинээр
+ * эхэлдэг тул цонх хаагдахгүй санагддаг байв. Тиймээс хассан.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -11,6 +14,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { groupDigits } from '../chips';
 import { RANKS, rankFor } from '../shared/ranks';
+import { Button } from './Button';
 import { Overlay } from './Overlay';
 import { theme } from '../theme';
 
@@ -25,8 +29,6 @@ interface Props {
 export function HelpButton({ wins }: Props) {
   const [open, setOpen] = useState(false);
   const [left, setLeft] = useState(AUTO_CLOSE_SECONDS);
-  // Хүрэх бүрд тоолуурыг эхлүүлэхийн тулд дугаарыг нь ахиулна.
-  const [restart, setRestart] = useState(0);
   const closeRef = useRef(() => setOpen(false));
   closeRef.current = () => setOpen(false);
 
@@ -40,7 +42,7 @@ export function HelpButton({ wins }: Props) {
       if (remaining <= 0) closeRef.current();
     }, 250);
     return () => clearInterval(id);
-  }, [open, restart]);
+  }, [open]);
 
   const mine = wins === null ? null : rankFor(wins);
 
@@ -56,7 +58,7 @@ export function HelpButton({ wins }: Props) {
       </Pressable>
 
       <Overlay visible={open} onClose={() => setOpen(false)}>
-        <Pressable style={styles.sheet} onPress={() => setRestart((n) => n + 1)}>
+        <View style={styles.sheet}>
           <View style={styles.header}>
             <Text style={styles.title}>Цол хэрхэн авах вэ?</Text>
             <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
@@ -117,10 +119,11 @@ export function HelpButton({ wins }: Props) {
           </ScrollView>
 
           <Text style={styles.footer}>
-            Цол ахих бүрд чатад зарлагдана. Дэлгэц дээр хүрвэл энэ цонх дахин 30
-            секунд нээлттэй байна.
+            Цол ахих бүрд чатад зарлагдана.
           </Text>
-        </Pressable>
+
+          <Button title="Хаах" variant="secondary" onPress={() => setOpen(false)} />
+        </View>
       </Overlay>
     </>
   );
