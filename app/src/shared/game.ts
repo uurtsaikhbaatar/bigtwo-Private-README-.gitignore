@@ -14,6 +14,7 @@
  *   4-өөс олон хүн байвал тойрог бүрд ээлжлэн өнжинө (`chooseSeats`).
  */
 
+import type { BotLevel } from './bot';
 import { Card, RANKS, THREE_OF_DIAMONDS, deal, fullDeck, rankOf, shuffle } from './cards';
 import { Combo, beats, detectCombo } from './combos';
 
@@ -66,6 +67,8 @@ export interface Player {
   avatar: string | null;
   /** Чиптэй тоглолтын хожил — цол тодорхойлно. Зочны хувьд null. */
   rankedWins: number | null;
+  /** Бот бол түвшин. Хүн бол null. */
+  bot: BotLevel | null;
 }
 
 export interface TablePlay {
@@ -183,6 +186,7 @@ export function addPlayer(state: GameState, id: string, name: string): void {
     draw: null,
     avatar: null,
     rankedWins: null,
+    bot: null,
   });
 }
 

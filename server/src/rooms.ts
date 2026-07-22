@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { WebSocket } from 'ws';
 
+import type { BotLevel } from '../../app/src/shared/bot';
 import { GameState, createGame } from '../../app/src/shared/game';
 import { RoomMeta, ServerMessage } from '../../app/src/shared/protocol';
 
@@ -18,6 +19,8 @@ export interface Seat {
   socket: WebSocket | null;
   /** Бүртгэлтэй бол хэрэглэгчийн id. Зочин бол null. */
   userId: string | null;
+  /** Бот бол түвшин. Хүн бол null. Ботод socket байхгүй. */
+  bot: BotLevel | null;
 }
 
 export interface Room {
@@ -37,6 +40,11 @@ export interface Room {
    */
   lastPlayers: string[];
   lastActivity: number;
+  /**
+   * Ботын дараагийн нүүдэл хэзээ болох вэ (epoch ms) ба аль ээлжийнх бэ.
+   * Шууд тавьбал хүн шиг санагдахгүй тул бага зэрэг "бодуулна".
+   */
+  botMove: { seq: number; at: number } | null;
 }
 
 export class RoomStore {
@@ -52,6 +60,7 @@ export class RoomStore {
       matchRecorded: false,
       lastPlayers: [],
       lastActivity: Date.now(),
+      botMove: null,
     };
     this.rooms.set(room.code, room);
     return room;
@@ -110,6 +119,7 @@ export function newSeat(): Seat {
     token: randomBytes(16).toString('hex'),
     socket: null,
     userId: null,
+    bot: null,
   };
 }
 

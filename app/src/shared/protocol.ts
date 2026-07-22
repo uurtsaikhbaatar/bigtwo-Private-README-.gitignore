@@ -7,6 +7,7 @@
  * ширээн дээрх хөзрийг харна.
  */
 
+import type { BotLevel } from './bot';
 import { Card } from './cards';
 import { comboLabel } from './combos';
 import { GameState, Phase, RoundRecord, Settlement } from './game';
@@ -34,6 +35,10 @@ export type ClientMessage =
   | { t: 'start'; targetScore: number; turnSeconds: number; stake: number }
   /** Дараагийн тойргийг эхлүүлэх. */
   | { t: 'next' }
+  /** Бот нэмэх — найз завгүй үед ганцаараа тоглох боломж. */
+  | { t: 'addBot'; level: BotLevel }
+  /** Бот хасах. */
+  | { t: 'removeBot'; playerId: string }
   | { t: 'play'; cards: Card[] }
   | { t: 'pass' }
   | { t: 'chat'; text: string }
@@ -197,6 +202,8 @@ export interface PlayerView {
   avatar: string | null;
   /** Чиптэй тоглолтын хожил — цол тодорхойлно. Зочны хувьд null. */
   rankedWins: number | null;
+  /** Бот бол түвшин, хүн бол null. */
+  bot: BotLevel | null;
 }
 
 export interface PlayView {
@@ -266,6 +273,7 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       draw: p.draw,
       avatar: p.avatar,
       rankedWins: p.rankedWins,
+      bot: p.bot,
     })),
     seats: state.seats.slice(),
     yourHand: you ? you.hand.slice() : [],

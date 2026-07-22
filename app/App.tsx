@@ -190,6 +190,8 @@ function Root() {
           onStart={game.startGame}
           onLeave={game.leaveRoom}
           auth={authProps}
+          onAddBot={game.addBot}
+          onRemoveBot={game.removeBot}
         />
       ) : (
         <TableScreen

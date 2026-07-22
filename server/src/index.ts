@@ -24,6 +24,13 @@ import {
   timeoutTurn,
 } from '../../app/src/shared/game';
 import { isValidAvatar } from '../../app/src/shared/avatar';
+import {
+  BOT_LEVELS,
+  BOT_LEVEL_NAMES,
+  BOT_THINK_MS,
+  type BotLevel,
+  chooseMove,
+} from '../../app/src/shared/bot';
 import { promoted, rewardBetween } from '../../app/src/shared/ranks';
 import type { Account } from '../../app/src/shared/protocol';
 import {
@@ -514,6 +521,37 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         .catch((err) => sendAuthError(socket, err));
       return;
     }
+    /**
+     * Бот нэмнэ — найз завгүй үед ганцаараа тоглох боломж.
+     * Зөвхөн лоббид, зөвхөн эзэн.
+     */
+    case 'addBot': {
+      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн бот нэмж чадна.');
+      if (room.state.phase !== 'lobby' && room.state.phase !== 'matchEnd') {
+        throw new RuleError('Тоглолт явагдаж байна. Дуусахыг хүлээнэ үү.');
+      }
+      const level = (BOT_LEVELS as readonly string[]).includes(String(msg.level))
+        ? (msg.level as BotLevel)
+        : 'medium';
+
+      const seat = newSeat();
+      seat.bot = level;
+      room.seats.set(seat.playerId, seat);
+      addPlayer(room.state, seat.playerId, botName(room, level));
+      const bot = room.state.players.find((p) => p.id === seat.playerId);
+      if (bot) bot.bot = level;
+      room.lastActivity = Date.now();
+      return broadcast(room);
+    }
+
+    case 'removeBot': {
+      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн бот хасаж чадна.');
+      const target = room.seats.get(String(msg.playerId ?? ''));
+      if (!target?.bot) throw new RuleError('Тэр бот олдсонгүй.');
+      releaseSeat(room, target.playerId);
+      return broadcast(room);
+    }
+
     case 'next': {
       if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн үргэлжлүүлж чадна.');
       if (room.state.phase !== 'roundEnd') throw new RuleError('Тойрог хараахан дуусаагүй байна.');
@@ -660,6 +698,18 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       return broadcast(room);
     }
   }
+}
+
+/** Ботын нэр — түвшнээ агуулна, өрөөнд давхардахгүй. */
+const BOT_NAMES = ['Бат', 'Сараа', 'Ганаа', 'Түвшин', 'Оюун', 'Мөнх', 'Наран'];
+
+function botName(room: Room, level: BotLevel): string {
+  const suffix = BOT_LEVEL_NAMES[level].toLowerCase();
+  // Суурь нэрийг ДАГАВАРГҮЙГЭЭР харьцуулна — эс бөгөөс өөр түвшний ботууд
+  // бүгд ижил нэртэй болно ("Бат (дунд)", "Бат (сайн)"…).
+  const used = new Set(room.state.players.map((p) => p.name.split(' (')[0]));
+  const free = BOT_NAMES.find((name) => !used.has(name));
+  return free ? `${free} (${suffix})` : `Бот ${room.state.players.length + 1} (${suffix})`;
 }
 
 function seat(socket: WebSocket, room: Room, name: string): void {
@@ -1002,6 +1052,66 @@ setInterval(() => {
     } catch (err) {
       console.error('ээлжийн хугацаа боловсруулахад алдаа:', err);
       state.turnEndsAt = null; // давтагдахаас сэргийлнэ
+    }
+  });
+}, TICK_MS).unref();
+
+/**
+ * Ботын ээлжийг ажиллуулна.
+ *
+ * Ээлжийн хугацаанаас ТУСДАА гогцоо: бот хугацаа дуусахыг хүлээх ёсгүй.
+ * Хэн ч холбогдоогүй өрөөнд ажиллуулахгүй — хүнгүй өрөөнд ботууд өөр хоорондоо
+ * тоглох нь утгагүй бөгөөс серверийг дэмий ачаална.
+ */
+setInterval(() => {
+  const now = Date.now();
+  rooms.forEach((room) => {
+    const { state } = room;
+    if (state.phase !== 'playing') return;
+    if (![...room.seats.values()].some((s) => s.socket !== null)) return;
+
+    const turnId = state.seats[state.turn];
+    const seat = turnId ? room.seats.get(turnId) : undefined;
+    if (!seat?.bot) {
+      room.botMove = null;
+      return;
+    }
+
+    // Шинэ ээлж — бодох хугацааг тохируулна.
+    if (!room.botMove || room.botMove.seq !== state.turnSeq) {
+      const [min, max] = BOT_THINK_MS[seat.bot];
+      room.botMove = { seq: state.turnSeq, at: now + min + Math.random() * (max - min) };
+      return;
+    }
+    if (now < room.botMove.at) return;
+    room.botMove = null;
+
+    const player = state.players.find((p) => p.id === turnId);
+    if (!player) return;
+
+    try {
+      const move = chooseMove(
+        {
+          hand: player.hand,
+          current: state.current?.combo ?? null,
+          opponentCards: state.players
+            .filter((p) => p.id !== turnId && p.seated && p.place === null)
+            .map((p) => p.hand.length),
+        },
+        seat.bot,
+      );
+      if (move) play(state, turnId, move);
+      else pass(state, turnId);
+      broadcast(room);
+    } catch (err) {
+      console.error('ботын нүүдэлд алдаа:', err);
+      // Гацахаас сэргийлж пас хийлгэнэ.
+      try {
+        pass(state, turnId);
+        broadcast(room);
+      } catch {
+        state.turnEndsAt = null;
+      }
     }
   });
 }, TICK_MS).unref();

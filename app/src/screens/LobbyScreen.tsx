@@ -16,6 +16,7 @@ import {
   TARGET_SCORE_CHOICES,
   TURN_SECONDS_CHOICES,
 } from '../shared/game';
+import { BOT_LEVELS, BOT_LEVEL_NAMES, type BotLevel } from '../shared/bot';
 import type { GameView } from '../shared/protocol';
 import { theme } from '../theme';
 
@@ -24,12 +25,14 @@ interface Props {
   onStart: (targetScore: number, turnSeconds: number, stake: number) => void;
   /** Нэвтрэлтийн самбар — зочин байвал лоббид ч гаргана. */
   auth: React.ComponentProps<typeof AuthPanel>;
+  onAddBot: (level: BotLevel) => void;
+  onRemoveBot: (playerId: string) => void;
   onLeave: () => void;
 }
 
 const secondsLabel = (s: number): string => (s >= 60 ? `${s / 60} мин` : `${s} сек`);
 
-export function LobbyScreen({ view, onStart, onLeave, auth }: Props) {
+export function LobbyScreen({ view, onStart, onLeave, auth, onAddBot, onRemoveBot }: Props) {
   const [target, setTarget] = useState<number>(TARGET_SCORE_CHOICES[0]);
   const [turnSeconds, setTurnSeconds] = useState<number>(TURN_SECONDS_CHOICES[0]);
   const [stake, setStake] = useState<number>(STAKE_CHOICES[0]);
@@ -79,9 +82,41 @@ export function LobbyScreen({ view, onStart, onLeave, auth }: Props) {
               {p.name}
               {p.id === view.youId ? ' (та)' : ''}
             </Text>
+            {p.bot && <Text style={styles.botTag}>бот</Text>}
             {p.isHost && <Text style={styles.badge}>эзэн</Text>}
+            {p.bot && isHost && (
+              <Pressable
+                onPress={() => onRemoveBot(p.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${p.name}-г хасах`}
+              >
+                <Text style={styles.removeBot}>✕</Text>
+              </Pressable>
+            )}
           </View>
         ))}
+
+        {isHost && view.players.length < MAX_PLAYERS && (
+          <View style={styles.botAdd}>
+            <Text style={styles.botAddLabel}>Бот нэмэх</Text>
+            <View style={styles.botLevels}>
+              {BOT_LEVELS.map((level) => (
+                <Pressable
+                  key={level}
+                  onPress={() => onAddBot(level)}
+                  accessibilityRole="button"
+                  style={styles.botLevel}
+                >
+                  <Text style={styles.botLevelText}>{BOT_LEVEL_NAMES[level]}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.hint}>
+              Найз завгүй үед ботуудтай тоглож болно. Ботын тоглолт токен, цолд
+              тооцогдохгүй.
+            </Text>
+          </View>
+        )}
         {!enough && <Text style={styles.hint}>Дор хаяж нэг найзаа хүлээж байна…</Text>}
         {rotating && (
           <Text style={styles.hint}>
@@ -297,6 +332,29 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.textMuted, fontSize: 24, fontWeight: '800' },
   choiceTextActive: { color: theme.accent },
   choiceLabel: { color: theme.textMuted, fontSize: 11 },
+  botTag: {
+    color: theme.textMuted,
+    fontSize: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  removeBot: { color: theme.textMuted, fontSize: 14, paddingHorizontal: 4 },
+  botAdd: { gap: 8, marginTop: 10 },
+  botAddLabel: { color: theme.textMuted, fontSize: 12, fontWeight: '700' },
+  botLevels: { flexDirection: 'row', gap: 8 },
+  botLevel: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  botLevelText: { color: theme.text, fontSize: 13, fontWeight: '700' },
+
   stakeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   stakeChoice: {
     flexGrow: 1,

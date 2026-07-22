@@ -9,6 +9,7 @@ import Constants from 'expo-constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
+import type { BotLevel } from './shared/bot';
 import type { Card } from './shared/cards';
 import { deviceContext } from './errors';
 import type {
@@ -323,6 +324,9 @@ export function useBigTwo(serverUrl: string) {
     ),
     /** Дараагийн тойргийг эхлүүлэх. */
     nextRound: useCallback(() => send({ t: 'next' }), [send]),
+    /** Бот нэмэх — найз завгүй үед ганцаараа тоглох боломж. */
+    addBot: useCallback((level: BotLevel) => send({ t: 'addBot', level }), [send]),
+    removeBot: useCallback((playerId: string) => send({ t: 'removeBot', playerId }), [send]),
     playCards: useCallback((cards: Card[]) => send({ t: 'play', cards }), [send]),
     passTurn: useCallback(() => send({ t: 'pass' }), [send]),
     sendChat: useCallback((text: string) => send({ t: 'chat', text }), [send]),
