@@ -117,10 +117,31 @@ test('оноо нь үлдсэн хөзөр × торгуультай тэнцэ
     const player = state.players.find((p) => p.id === entry.playerId)!;
     assert.equal(entry.total, player.score);
   }
-  // Тойрог нь ганц тоглогч хөзөртэй үлдэхэд дуусдаг тул бусад нь 0 хөзөртэй.
+  // Эхний хүн хөзрөө дуусгамагц тойрог дуусна — яг нэг хүн 0 хөзөртэй,
+  // бусад бүгд гартаа хөзөртэй үлдэнэ.
   assert.equal(record.entries.filter((e) => e.place === 1).length, 1, 'яг нэг ялагч');
-  assert.equal(record.entries.filter((e) => e.played && e.cardsLeft > 0).length, 1, 'нэг л хүн хожигдоно');
+  assert.equal(
+    record.entries.filter((e) => e.played && e.cardsLeft === 0).length,
+    1,
+    'зөвхөн ялагч хөзрөө дуусгана',
+  );
+  assert.equal(
+    record.entries.filter((e) => e.played && e.cardsLeft > 0).length,
+    3,
+    'үлдсэн гурав нь хөзөртэй үлдэнэ',
+  );
   assert.equal(record.entries.find((e) => e.place === 1)!.delta, 0, 'ялагч оноо авахгүй');
+
+  // Байрлал нь үлдсэн хөзрийн тоогоор эрэмбэлэгдэнэ.
+  const byPlace = record.entries
+    .filter((e) => e.played)
+    .sort((a, b) => (a.place ?? 0) - (b.place ?? 0));
+  for (let i = 1; i < byPlace.length; i += 1) {
+    assert.ok(
+      byPlace[i].cardsLeft >= byPlace[i - 1].cardsLeft,
+      'дээгүүр байрынх цөөн хөзөртэй байх ёстой',
+    );
+  }
 });
 
 test('босгод хүрсэн тоглогч хасагдаж, бусад үргэлжилнэ', () => {

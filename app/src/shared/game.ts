@@ -476,10 +476,12 @@ export function play(state: GameState, playerId: string, cards: Card[]): void {
   state.lastPlay = state.current;
   state.log.push(`${player.name}: ${cards.length} хөзөр тавилаа.`);
 
+  // Эхний хүн хөзрөө дуусгамагц тойрог ТЭР ДОРОО дуусна. Бусад нь 2, 3-р
+  // байрын төлөө үргэлжлүүлэхгүй — гартаа үлдсэн хөзрөөрөө торгууль авна.
   if (player.hand.length === 0) {
     player.place = nextPlace(state);
-    state.log.push(`${player.name} хөзрөө дуусгалаа (${player.place}-р байр).`);
-    if (activeSeats(state) <= 1) return finishRound(state);
+    state.log.push(`${player.name} хөзрөө дуусгалаа — тойрог дууслаа.`);
+    return finishRound(state);
   }
 
   advance(state, seat);
@@ -512,9 +514,6 @@ const playerById = (state: GameState, id: string): Player => {
 };
 
 const seatedPlayers = (state: GameState): Player[] => state.seats.map((id) => playerById(state, id));
-
-const activeSeats = (state: GameState): number =>
-  seatedPlayers(state).filter((p) => p.place === null).length;
 
 /** Дараагийн эзлэх байр. Эхний дуусгасан хүн 1-р байр эзэлнэ. */
 const nextPlace = (state: GameState): number =>
@@ -572,9 +571,14 @@ export function penaltyMultiplier(cardsLeft: number): number {
 }
 
 function finishRound(state: GameState): void {
-  seatedPlayers(state).forEach((p) => {
-    if (p.place === null) p.place = nextPlace(state);
-  });
+  // Дуусгаагүй тоглогчдыг гартаа үлдсэн хөзрийн тоогоор эрэмбэлнэ —
+  // цөөн хөзөртэй нь дээгүүр байр эзэлнэ. Тэнцвэл суудлын дараалал шийднэ.
+  seatedPlayers(state)
+    .filter((p) => p.place === null)
+    .sort((a, b) => a.hand.length - b.hand.length)
+    .forEach((p) => {
+      p.place = nextPlace(state);
+    });
 
   const entries: RoundEntry[] = state.players.map((p) => {
     const played = p.seated;

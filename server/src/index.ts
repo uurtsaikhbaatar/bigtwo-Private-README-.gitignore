@@ -412,7 +412,12 @@ function seat(socket: WebSocket, room: Room, name: string): void {
 async function serveReports(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const expected = process.env.REPORT_KEY;
-  const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+  // Render зэрэг үйлчилгээ хүсэлтийг контейнер дотор 127.0.0.1-ээс дамжуулдаг
+  // тул зөвхөн remoteAddress-д итгэвэл интернэтээс ирсэн хүсэлт ч "локал"
+  // мэт харагдана. Прокси дамжсан шинжийг илрүүлж хасна.
+  const proxied = Boolean(req.headers['x-forwarded-for'] ?? req.headers['x-forwarded-proto']);
+  const local =
+    !proxied && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
   const allowed = expected ? url.searchParams.get('key') === expected : local;
 
   if (!allowed) {
