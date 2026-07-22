@@ -1,8 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +9,7 @@ import {
 } from 'react-native';
 
 import type { ChatLine } from '../net';
+import { Overlay } from './Overlay';
 import { theme } from '../theme';
 import { Recording, playVoice, startRecording, voiceSupported } from '../voice';
 
@@ -103,12 +101,7 @@ export function ChatButton({ lines, youName, onSend, onSendVoice }: Props) {
         )}
       </Pressable>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView
-          style={styles.backdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <Pressable style={styles.backdropFill} onPress={() => setOpen(false)} />
+      <Overlay visible={open} onClose={() => setOpen(false)}>
           <View style={styles.sheet}>
             <View style={styles.header}>
               <Text style={styles.title}>Чат</Text>
@@ -227,8 +220,7 @@ export function ChatButton({ lines, youName, onSend, onSendVoice }: Props) {
               )}
             </View>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </Overlay>
     </>
   );
 }
@@ -262,8 +254,6 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: theme.text, fontSize: 11, fontWeight: '800' },
 
-  backdrop: { flex: 1, justifyContent: 'flex-end' },
-  backdropFill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
     backgroundColor: theme.surface,
     borderTopLeftRadius: 18,

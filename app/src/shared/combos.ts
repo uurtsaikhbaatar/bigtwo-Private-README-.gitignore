@@ -95,9 +95,22 @@ function detectFive(cards: Card[]): Combo | null {
   const top = wheel ? cards.find((c) => rankOf(c) === WHEEL_TOP_RANK)! : cards[cards.length - 1];
 
   if (flush && straight) return five(cards, 'straightflush', top);
-  if (flush) return five(cards, 'flush', suitOf(cards[0]) * 13 + sorted[4]);
+  if (flush) return five(cards, 'flush', flushPower(cards, sorted));
   if (straight) return five(cards, 'straight', top);
   return null;
+}
+
+/**
+ * Хоёр өнгийг (flush) жиших хүч.
+ *
+ * Эхлээд хамгийн өндөр хөзрөөс нь эхлэн зэрэглэлээр жишнэ, бүрэн тэнцсэн үед
+ * л өнгө шийднэ. Тоглогч мэдэгдсэний дагуу зассан: өмнө нь өнгийг зэрэглэлээс
+ * түрүүлж жишдэг байсан тул ноёнтой дөрвөлжин өнгө нь 9-тэй өндөр өнгийг дарж
+ * чаддаггүй байв.
+ */
+function flushPower(cards: Card[], ranksAsc: number[]): number {
+  const byRank = ranksAsc.reduceRight((acc, r) => acc * 13 + r, 0);
+  return byRank * 4 + suitOf(cards[0]);
 }
 
 /** A-2-3-4-5 буюу "wheel" — зэрэглэлийн индексээр: 3,4,5,A,2. */
@@ -105,12 +118,18 @@ const WHEEL_RANKS = [0, 1, 2, 11, 12];
 /** Wheel-ийн хүчийг тодорхойлох хөзөр: 5. */
 const WHEEL_TOP_RANK = 2;
 
+/**
+ * Ангилал нь ямагт эрэмбийг тодорхойлно — доторх жиших утга хэчнээн том байсан
+ * ч давахгүй байх зайтай сонгосон (өнгийн утга 1.5 сая хүрч болно).
+ */
+const CATEGORY_STEP = 10_000_000;
+
 function five(cards: Card[], category: FiveCategory, tiebreak: number): Combo {
   return {
     kind: 'five',
     size: 5,
     category,
-    power: FIVE_CATEGORY_ORDER[category] * 1000 + tiebreak,
+    power: FIVE_CATEGORY_ORDER[category] * CATEGORY_STEP + tiebreak,
     cards,
   };
 }

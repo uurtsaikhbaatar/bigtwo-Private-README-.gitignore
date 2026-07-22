@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +11,7 @@ import {
 import { groupDigits } from '../chips';
 import { Button } from '../components/Button';
 import type { Account, MatchSummary, PlayerStats } from '../shared/protocol';
+import { Overlay } from './Overlay';
 import { theme } from '../theme';
 
 /** Энэ хэмжээнээс доош унавал "токен хүсэх" товчийг харуулна. */
@@ -81,12 +79,7 @@ export function AuthPanel({
         </Text>
       </Pressable>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView
-          style={styles.backdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <Pressable style={styles.backdropFill} onPress={() => setOpen(false)} />
+      <Overlay visible={open} onClose={() => setOpen(false)}>
           <View style={styles.sheet}>
             <View style={styles.header}>
               <Text style={styles.title}>
@@ -252,8 +245,7 @@ export function AuthPanel({
               </View>
             )}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </Overlay>
     </>
   );
 }
@@ -292,8 +284,6 @@ const styles = StyleSheet.create({
   trigger: { paddingVertical: 10, alignItems: 'center' },
   triggerText: { color: theme.accent, fontSize: 14, fontWeight: '600' },
 
-  backdrop: { flex: 1, justifyContent: 'flex-end' },
-  backdropFill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
     backgroundColor: theme.surface,
     borderTopLeftRadius: 18,

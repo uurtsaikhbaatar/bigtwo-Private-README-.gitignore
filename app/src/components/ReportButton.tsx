@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +8,7 @@ import {
 } from 'react-native';
 
 import { MAX_REPORT_CHARS } from '../shared/protocol';
+import { Overlay } from './Overlay';
 import { theme } from '../theme';
 
 interface Props {
@@ -54,12 +52,7 @@ export function ReportButton({ onSend, lastReportId }: Props) {
         <Text style={styles.fabIcon}>🐞</Text>
       </Pressable>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={close}>
-        <KeyboardAvoidingView
-          style={styles.backdrop}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <Pressable style={styles.backdropFill} onPress={close} />
+      <Overlay visible={open} onClose={close}>
           <View style={styles.sheet}>
             <View style={styles.header}>
               <Text style={styles.title}>Алдаа мэдэгдэх</Text>
@@ -102,8 +95,7 @@ export function ReportButton({ onSend, lastReportId }: Props) {
               </>
             )}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </Overlay>
     </>
   );
 }
@@ -124,8 +116,6 @@ const styles = StyleSheet.create({
   },
   fabIcon: { fontSize: 18 },
 
-  backdrop: { flex: 1, justifyContent: 'flex-end' },
-  backdropFill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
     backgroundColor: theme.surface,
     borderTopLeftRadius: 18,

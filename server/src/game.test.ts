@@ -92,6 +92,35 @@ test('A-2-3-4-5 (wheel) нь хүчинтэй бөгөөд хамгийн сул
   assert.ok(beats(wheelSpade, wheel), '5♠-тэй wheel нь 5♦-тэйгээ дарна');
 });
 
+test('өнгийг эхлээд зэрэглэлээр, дараа нь өнгөөр жишнэ', () => {
+  // Тоглогч uuree мэдэгдсэн тохиолдол: ноёнтой дөрвөлжин өнгө нь 9-тэй
+  // гилэн өнгийг дарж чаддаггүй байв (өнгө нь зэрэглэлээс түрүүлж жишигдэж).
+  const kingDiamonds = detectCombo(hand('3♦', '5♦', '7♦', '9♦', 'K♦'))!;
+  const nineHearts = detectCombo(hand('3♥', '4♥', '6♥', '8♥', '9♥'))!;
+  assert.equal(kingDiamonds.category, 'flush');
+  assert.equal(nineHearts.category, 'flush');
+  assert.ok(beats(kingDiamonds, nineHearts), 'ноёнтой өнгө 9-тэй өнгийг дарна');
+  assert.ok(!beats(nineHearts, kingDiamonds));
+
+  // Зэрэглэл бүрэн тэнцсэн үед л өнгө шийднэ.
+  const lowSuit = detectCombo(hand('3♦', '5♦', '7♦', '9♦', 'K♦'))!;
+  const highSuit = detectCombo(hand('3♠', '5♠', '7♠', '9♠', 'K♠'))!;
+  assert.ok(beats(highSuit, lowSuit), 'тэнцвэл өндөр өнгө дарна');
+  assert.ok(!beats(lowSuit, highSuit));
+
+  // Дараагийн хөзрөөр шийдэгдэх тохиолдол.
+  const kingThenTen = detectCombo(hand('3♠', '5♠', '7♠', '10♠', 'K♠'))!;
+  const kingThenNine = detectCombo(hand('3♦', '5♦', '7♦', '9♦', 'K♦'))!;
+  assert.ok(beats(kingThenTen, kingThenNine), 'ноён тэнцвэл дараагийн хөзөр шийднэ');
+
+  // Ангилал нь ямагт дээгүүр: хамгийн сул дүүрэн байшин ч хамгийн хүчтэй
+  // өнгийг дарна.
+  const bestFlush = detectCombo(hand('9♠', '10♠', 'Q♠', 'K♠', '2♠'))!;
+  const worstFullHouse = detectCombo(hand('3♦', '3♣', '3♥', '4♠', '4♦'))!;
+  assert.equal(worstFullHouse.category, 'fullhouse');
+  assert.ok(beats(worstFullHouse, bestFlush), 'дүүрэн байшин өнгийг дарна');
+});
+
 test('wheel нь шулуун өнгө ч байж болно', () => {
   const wheelFlush = detectCombo(hand('A♥', '2♥', '3♥', '4♥', '5♥'))!;
   assert.equal(wheelFlush.category, 'straightflush');
