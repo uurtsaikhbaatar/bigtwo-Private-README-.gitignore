@@ -15,15 +15,35 @@ export function dbEnabled(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+/**
+ * Холболтын мөрөөс SSL-ийн параметрүүдийг хасна.
+ *
+ * `sslmode` нь `pg`-д ойлгомжгүй байдал үүсгэж, хувилбар солигдоход утга нь
+ * өөрчлөгдөх анхааруулга өгдөг. Бид TLS-ээ дээрх `ssl` тохиргоогоор
+ * тодорхой зааж өгсөн тул мөрөнд давхар байх шаардлагагүй.
+ */
+function stripSslParams(connectionString: string): string {
+  try {
+    const url = new URL(connectionString);
+    url.searchParams.delete('sslmode');
+    url.searchParams.delete('channel_binding');
+    return url.toString();
+  } catch {
+    return connectionString;
+  }
+}
+
 export function getPool(): pg.Pool {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL тохируулаагүй байна.');
   }
   if (!pool) {
     pool = new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
-      // Neon зэрэг үүлэн сан TLS шаарддаг.
-      ssl: { rejectUnauthorized: false },
+      connectionString: stripSslParams(process.env.DATABASE_URL),
+      // Neon зэрэг үүлэн сан TLS шаарддаг. Сертификатыг БҮРЭН шалгана —
+      // ингэснээр дундаас чагнах халдлагаас хамгаална. (Neon нь нийтийн
+      // CA-аар гарын үсэг зурсан тул нэмэлт тохиргоо шаардлагагүй.)
+      ssl: { rejectUnauthorized: true },
       max: 5,
       idleTimeoutMillis: 30_000,
     });
