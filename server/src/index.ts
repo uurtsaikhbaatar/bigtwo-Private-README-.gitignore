@@ -48,6 +48,7 @@ import {
   verifyEmail,
 } from './auth';
 import { dbEnabled, getPool } from './db';
+import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
 import { recentMatches, recordMatch, statsForUser } from './history';
 import { readReports, saveReport } from './reports';
 import { applySettlement, awardTokens, balanceOf, balancesOf, requestTokens } from './tokens';
@@ -70,6 +71,51 @@ interface Session {
 const sessions = new WeakMap<WebSocket, Session>();
 /** Сокет бүрийн нэвтэрсэн хэрэглэгч (нэвтрээгүй бол байхгүй). */
 const accounts = new WeakMap<WebSocket, Account>();
+/**
+ * Нэвтэрсэн хэрэглэгч → нээлттэй сокетууд.
+ *
+ * WeakMap нь урвуу хайлт хийх боломжгүй тул тусад нь хөтөлнө. Урилга ирэхэд
+ * хүлээн авагч онлайн эсэхийг мэдэж, тэр дороо мэдэгдэхэд хэрэгтэй.
+ */
+const online = new Map<string, Set<WebSocket>>();
+
+function markOnline(socket: WebSocket, account: Account): void {
+  markOffline(socket);
+  accounts.set(socket, account);
+  const set = online.get(account.id) ?? new Set<WebSocket>();
+  set.add(socket);
+  online.set(account.id, set);
+}
+
+function markOffline(socket: WebSocket): void {
+  const previous = accounts.get(socket);
+  if (!previous) return;
+  const set = online.get(previous.id);
+  if (!set) return;
+  set.delete(socket);
+  if (set.size === 0) online.delete(previous.id);
+}
+
+/**
+ * Хүчинтэй урилгууд — өрөө нь одоо ч байгаа эсэхийг шалгана.
+ *
+ * Өрөө нь устсан урилга харагдвал тоглогч дарж, "Ийм кодтой өрөө олдсонгүй"
+ * гэсэн алдаа авна. Тиймээс огт үзүүлэхгүй.
+ */
+async function liveInvites(userId: string) {
+  const all = await invitesFor(userId);
+  return all.filter((invite) => rooms.get(invite.roomCode) !== undefined);
+}
+
+/** Тухайн хэрэглэгчийн бүх нээлттэй цонхонд урилгуудыг дахин илгээнэ. */
+async function pushInvites(userId: string): Promise<void> {
+  const sockets = online.get(userId);
+  if (!sockets || sockets.size === 0) return;
+  const list = await liveInvites(userId);
+  for (const socket of sockets) {
+    if (socket.readyState === socket.OPEN) send(socket, { t: 'invites', list });
+  }
+}
 
 /**
  * Эрүүл мэндийн мэдээлэл. Өгөгдлийн сан үнэхээр холбогдож байгааг харуулна —
@@ -172,6 +218,7 @@ wss.on('connection', (socket) => {
   });
 
   socket.on('close', () => {
+    markOffline(socket);
     const session = sessions.get(socket);
     if (!session) return;
     const seat = session.room.seats.get(session.playerId);
@@ -203,8 +250,11 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     case 'join': {
       const room = rooms.get(msg.code ?? '');
       if (!room) throw new RuleError('Ийм кодтой өрөө олдсонгүй.');
-      if (room.state.phase !== 'lobby') {
-        throw new RuleError('Тоглоом аль хэдийн эхэлсэн байна.');
+      // Тоглолт ДУУССАН өрөөнд орохыг зөвшөөрнө: урилгаар ирсэн найз
+      // "Тоглоом эхэлсэн байна" гэж хөөгдөх ёсгүй. Явж байгаа тоглолтыг л
+      // хамгаална.
+      if (room.state.phase !== 'lobby' && room.state.phase !== 'matchEnd') {
+        throw new RuleError('Тоглолт явагдаж байна. Дуусахыг хүлээнэ үү.');
       }
       seat(socket, room, cleanName(msg.name));
       return broadcast(room);
@@ -223,7 +273,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
           : login(String(msg.username ?? ''), String(msg.password ?? ''));
       void started
         .then(({ account, token }) => {
-          accounts.set(socket, account);
+          markOnline(socket, account);
           send(socket, { t: 'auth', account, token });
         })
         .catch((err) => sendAuthError(socket, err));
@@ -256,7 +306,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         String(msg.password ?? ''),
       )
         .then(({ account, token }) => {
-          accounts.set(socket, account);
+          markOnline(socket, account);
           send(socket, { t: 'auth', account, token });
           send(socket, { t: 'notice', message: 'Нууц үг солигдлоо. Нэвтэрлээ.' });
         })
@@ -270,7 +320,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
       void verifyEmail(account.id, String(msg.code ?? ''))
         .then((updated) => {
-          accounts.set(socket, updated);
+          markOnline(socket, updated);
           send(socket, { t: 'auth', account: updated });
         })
         .catch((err) => sendAuthError(socket, err));
@@ -291,7 +341,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       if (!dbEnabled()) return send(socket, { t: 'auth', account: null });
       void accountForToken(String(msg.token ?? ''))
         .then((account) => {
-          if (account) accounts.set(socket, account);
+          if (account) markOnline(socket, account);
           send(socket, { t: 'auth', account });
         })
         .catch(() => send(socket, { t: 'auth', account: null }));
@@ -300,6 +350,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
 
     case 'logout': {
       const token = String(msg.token ?? '');
+      markOffline(socket);
       accounts.delete(socket);
       if (dbEnabled() && token) void logout(token).catch(() => {});
       return send(socket, { t: 'auth', account: null });
@@ -356,19 +407,41 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     const account = accounts.get(socket);
     if (!account) return;
     if (!dbEnabled()) {
-      accounts.set(socket, { ...account, avatar: value });
+      markOnline(socket, { ...account, avatar: value });
       return send(socket, { t: 'auth', account: { ...account, avatar: value } });
     }
     void saveAvatar(account.id, value)
       .then(() => {
         const updated = { ...account, avatar: value };
-        accounts.set(socket, updated);
+        markOnline(socket, updated);
         send(socket, { t: 'auth', account: updated });
       })
       .catch((err) => {
         console.error('avatar хадгалж чадсангүй:', err);
         send(socket, { t: 'error', message: 'Зургийг хадгалж чадсангүй.' });
       });
+    return;
+  }
+
+  /** Ирсэн урилгуудаа асуух. Нэвтрээгүй бол хоосон. */
+  if (msg.t === 'invites') {
+    const account = accounts.get(socket);
+    if (!account || !dbEnabled()) return send(socket, { t: 'invites', list: [] });
+    void liveInvites(account.id)
+      .then((list) => send(socket, { t: 'invites', list }))
+      .catch((err) => {
+        console.error('урилга уншиж чадсангүй:', err);
+        send(socket, { t: 'invites', list: [] });
+      });
+    return;
+  }
+
+  if (msg.t === 'declineInvite') {
+    const account = accounts.get(socket);
+    if (!account || !dbEnabled()) return;
+    void dropInvite(account.id, String(msg.roomCode ?? ''))
+      .then(() => pushInvites(account.id))
+      .catch((err) => console.error('урилга устгаж чадсангүй:', err));
     return;
   }
 
@@ -469,6 +542,47 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       return;
     }
 
+    /**
+     * Одоогийн өрөөнд байгаа бүртгэлтэй тоглогчдыг урина.
+     *
+     * Урих хүн өөрөө орхигдоно. Зочдод хүрэх суваг байхгүй тул зөвхөн
+     * бүртгэлтэй хүмүүст очно — хэдэнд очсоныг буцааж хэлнэ.
+     */
+    case 'invite': {
+      requireDb();
+      const me = room.state.players.find((p) => p.id === playerId);
+      const myUserId = room.seats.get(playerId)?.userId ?? null;
+
+      // Одоо өрөөнд байгаа хүмүүс БОЛОН сүүлийн тоглолтод оролцсон хүмүүс.
+      // Хоёр дахь нь чухал: найз "Гарах" дараад гарсан ч дахин урьж болно.
+      const targets = [
+        ...new Set([
+          ...[...room.seats.values()].filter((seat) => seat.userId).map((seat) => seat.userId!),
+          ...room.lastPlayers,
+        ]),
+      ].filter((userId) => userId !== myUserId);
+
+      if (targets.length === 0) {
+        throw new RuleError(
+          'Урих бүртгэлтэй тоглогч алга. Зочноор тоглосон хүнд урилга илгээх боломжгүй.',
+        );
+      }
+
+      void inviteUsers(targets, me?.name ?? 'Найз', room.code)
+        .then(async (invited) => {
+          for (const userId of invited) await pushInvites(userId);
+          send(socket, {
+            t: 'notice',
+            message: `${invited.length} тоглогчид урилга илгээлээ.`,
+          });
+        })
+        .catch((err) => {
+          console.error('урилга илгээж чадсангүй:', err);
+          send(socket, { t: 'error', message: 'Урилга илгээж чадсангүй.' });
+        });
+      return;
+    }
+
     case 'play': {
       play(room.state, playerId, Array.isArray(msg.cards) ? msg.cards : []);
       return broadcast(room);
@@ -534,6 +648,13 @@ function seat(socket: WebSocket, room: Room, name: string): void {
   s.userId = account?.id ?? null;
   room.seats.set(s.playerId, s);
   addPlayer(room.state, s.playerId, name);
+  // Урилгаар орсон бол тэр урилга хэрэггүй боллоо.
+  if (account && dbEnabled()) {
+    void dropInvite(account.id, room.code)
+      .then(() => pushInvites(account.id))
+      .catch(() => undefined);
+  }
+
   // Нэвтэрсэн хүн хадгалсан зураг, цолоо авчирна.
   if (account) {
     const player = room.state.players.find((p) => p.id === s.playerId);
@@ -696,6 +817,8 @@ function saveFinishedMatch(room: Room): void {
   for (const seat of room.seats.values()) {
     if (seat.userId) players.set(seat.playerId, seat.userId);
   }
+  // Урилга илгээхэд хэрэгтэй — гарсан хүнийг ч дахин дуудаж болно.
+  room.lastPlayers = [...new Set(players.values())];
   // Цол нь түүхээс тоологддог тул хожлыг бичиж ДУУССАНЫ ДАРАА л уншина.
   // Зэрэг явуулбал энэ тоглолт нь тоологдоогүй байхад уншиж, цол ахисан
   // мөчийг алдана.
@@ -858,6 +981,10 @@ setInterval(() => {
 }, TICK_MS).unref();
 
 setInterval(() => rooms.sweep(), 5 * 60 * 1000).unref();
+// Хугацаа нь дууссан урилгыг цэвэрлэнэ.
+setInterval(() => {
+  if (dbEnabled()) void purgeExpiredInvites().catch(() => undefined);
+}, 30 * 60 * 1000).unref();
 
 httpServer.listen(PORT, () => {
   console.log(`Big Two сервер http://localhost:${PORT} дээр ажиллаж байна`);

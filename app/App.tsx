@@ -102,6 +102,14 @@ function Root() {
     if (accountName) setName(accountName);
   }, [accountName]);
 
+  // Нэвтэрмэгц урилгуудаа татна. Сервер шинэ урилга ирэхэд өөрөө илгээх ч
+  // апп дахин нээгдэхэд нэг удаа асуух хэрэгтэй.
+  const accountId = game.account?.id ?? null;
+  const loadInvites = game.loadInvites;
+  useEffect(() => {
+    if (accountId) loadInvites();
+  }, [accountId, loadInvites]);
+
   // Өрөөнд орсны дараа хаягийг цэвэрлэнэ.
   useEffect(() => {
     if (game.view) clearRoomCodeFromUrl();
@@ -155,6 +163,9 @@ function Root() {
           onJoin={(code) => game.joinRoom(name, code)}
           connecting={game.status === 'connecting'}
           initialCode={invitedCode}
+          invites={game.invites}
+          onAcceptInvite={(roomCode) => game.joinRoom(name, roomCode)}
+          onDeclineInvite={game.declineInvite}
           auth={{
             account: game.account,
             profile: game.profile,
@@ -184,6 +195,7 @@ function Root() {
             setInspecting(name);
             game.inspectPlayer(playerId);
           }}
+          onInvite={game.invitePlayers}
         />
       )}
 

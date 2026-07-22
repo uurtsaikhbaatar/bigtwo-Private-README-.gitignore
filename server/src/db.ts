@@ -111,6 +111,20 @@ export async function initSchema(): Promise<void> {
       sent_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Урилга: хамт тоглосон найзаа дараагийн тоглолтод дуудна. Линк дахин
+    -- явуулах шаардлагагүй — апп дотор нь харагдана.
+    CREATE TABLE IF NOT EXISTS invites (
+      id         BIGSERIAL PRIMARY KEY,
+      to_user    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_name  TEXT NOT NULL,
+      room_code  TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS invites_to_idx ON invites(to_user, expires_at);
+    -- Нэг өрөөнөөс нэг хүнд нэг л урилга.
+    CREATE UNIQUE INDEX IF NOT EXISTS invites_unique_idx ON invites(to_user, room_code);
+
     CREATE TABLE IF NOT EXISTS sessions (
       token      TEXT PRIMARY KEY,
       user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

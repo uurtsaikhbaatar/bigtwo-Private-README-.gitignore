@@ -16,6 +16,7 @@ import type {
   ClientMessage,
   GameView,
   MatchSummary,
+  Invite,
   PlayerInfo,
   PlayerStats,
   Promotion,
@@ -78,6 +79,8 @@ export function useBigTwo(serverUrl: string) {
   const [playerInfo, setPlayerInfo] = useState<PlayerInfo | null>(null);
   // Цол ахисны ёслол — нэг дор нэг л ёслол харуулна.
   const [promotion, setPromotion] = useState<Promotion | null>(null);
+  // Найзаас ирсэн урилгууд — нүүр хуудсан дээр харагдана.
+  const [invites, setInvites] = useState<Invite[]>([]);
   const [profile, setProfile] = useState<{ stats: PlayerStats; matches: MatchSummary[] } | null>(
     null,
   );
@@ -135,6 +138,9 @@ export function useBigTwo(serverUrl: string) {
         break;
       case 'celebrate':
         setPromotion(msg.promotion);
+        break;
+      case 'invites':
+        setInvites(msg.list);
         break;
       case 'notice':
         setNotice(msg.message);
@@ -242,6 +248,7 @@ export function useBigTwo(serverUrl: string) {
     profile,
     playerInfo,
     promotion,
+    invites,
     clearPromotion: useCallback(() => setPromotion(null), []),
     closePlayerInfo: useCallback(() => setPlayerInfo(null), []),
     clearError: useCallback(() => setError(null), []),
@@ -272,6 +279,13 @@ export function useBigTwo(serverUrl: string) {
     ),
     logOut: useCallback(() => send({ t: 'logout', token: authTokenRef.current ?? '' }), [send]),
     loadProfile: useCallback(() => send({ t: 'profile' }), [send]),
+    /** Одоогийн өрөөний найзуудыг дараагийн тоглолтод урих. */
+    invitePlayers: useCallback(() => send({ t: 'invite' }), [send]),
+    loadInvites: useCallback(() => send({ t: 'invites' }), [send]),
+    declineInvite: useCallback(
+      (roomCode: string) => send({ t: 'declineInvite', roomCode }),
+      [send],
+    ),
     /** Профайлын зураг тохируулах. */
     setAvatar: useCallback((avatar: string | null) => send({ t: 'setAvatar', avatar }), [send]),
     /** Өөр тоглогчийн ил мэдээллийг асуух. */

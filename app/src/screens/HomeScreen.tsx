@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 
 import { AuthPanel } from '../components/AuthPanel';
+import { InviteList } from '../components/InviteList';
 import { Button } from '../components/Button';
+import type { Invite } from '../shared/protocol';
 import { theme } from '../theme';
 
 interface Props {
@@ -25,6 +27,10 @@ interface Props {
   connecting: boolean;
   /** Линкээр урьсан өрөөний код (`?code=…`). */
   initialCode?: string;
+  /** Найзаас ирсэн урилгууд. */
+  invites: Invite[];
+  onAcceptInvite: (roomCode: string) => void;
+  onDeclineInvite: (roomCode: string) => void;
 }
 
 export function HomeScreen({
@@ -37,6 +43,9 @@ export function HomeScreen({
   onJoin,
   connecting,
   initialCode = '',
+  invites,
+  onAcceptInvite,
+  onDeclineInvite,
 }: Props) {
   const [code, setCode] = useState(initialCode);
   const [showSettings, setShowSettings] = useState(false);
@@ -54,6 +63,12 @@ export function HomeScreen({
           <Text style={styles.subtitle}>Найзуудтайгаа хятад покер тоглох</Text>
           {auth.account && <AuthPanel {...auth} />}
         </View>
+
+        <InviteList
+          invites={invites}
+          onAccept={onAcceptInvite}
+          onDecline={onDeclineInvite}
+        />
 
         {invited && (
           <View style={styles.invite}>

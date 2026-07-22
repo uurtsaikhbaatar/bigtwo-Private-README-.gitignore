@@ -52,6 +52,8 @@ interface Props {
   onLeave: () => void;
   /** Тоглогчийн нэр дээр дарахад ил мэдээллийг нь харуулна. */
   onInspect: (playerId: string, name: string) => void;
+  /** Өрөөний найзуудыг дараагийн тоглолтод урих. */
+  onInvite: () => void;
 }
 
 export function TableScreen({
@@ -62,6 +64,7 @@ export function TableScreen({
   onNewMatch,
   onLeave,
   onInspect,
+  onInvite,
 }: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
   const { width, height } = useWindowDimensions();
@@ -87,6 +90,7 @@ export function TableScreen({
         onNextRound={onNextRound}
         onNewMatch={onNewMatch}
         onLeave={onLeave}
+        onInvite={onInvite}
       />
     );
   }
@@ -371,12 +375,14 @@ function Results({
   onNextRound,
   onNewMatch,
   onLeave,
+  onInvite,
 }: {
   view: GameView;
   isHost: boolean;
   onNextRound: () => void;
   onNewMatch: () => void;
   onLeave: () => void;
+  onInvite: () => void;
 }) {
   const matchOver = view.phase === 'matchEnd';
   const winner = view.players.find((p) => p.id === view.matchWinnerId);
@@ -459,6 +465,9 @@ function Results({
             Өрөөний эзэн {matchOver ? 'шинэ тоглолт эхлүүлэхийг' : 'үргэлжлүүлэхийг'} хүлээж
             байна…
           </Text>
+        )}
+        {matchOver && (
+          <Button title="Найзуудаа дахин урих" variant="secondary" onPress={onInvite} />
         )}
         <Button title="Гарах" variant="ghost" onPress={onLeave} />
       </View>

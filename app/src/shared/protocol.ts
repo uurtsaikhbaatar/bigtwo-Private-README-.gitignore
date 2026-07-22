@@ -60,6 +60,15 @@ export type ClientMessage =
   | { t: 'profile' }
   /** Өрөөн доторх өөр тоглогчийн ил мэдээллийг асуух. */
   | { t: 'inspect'; playerId: string }
+  /**
+   * Одоогийн өрөөнд байгаа бүртгэлтэй тоглогчдыг дараагийн тоглолтод урих.
+   * Линк дахин явуулах шаардлагагүй — урилга апп дотор нь харагдана.
+   */
+  | { t: 'invite' }
+  /** Ирсэн урилгуудаа асуух. */
+  | { t: 'invites' }
+  /** Урилгаас татгалзах. */
+  | { t: 'declineInvite'; roomCode: string }
   /** Профайлын зураг тохируулах. null бол авч хаяна. */
   | { t: 'setAvatar'; avatar: string | null }
   | { t: 'leave' }
@@ -85,6 +94,8 @@ export type ServerMessage =
    * шинжиж эффект асаах нь эмзэг, үг өөрчлөгдөхөд эвдэрнэ.
    */
   | { t: 'celebrate'; promotion: Promotion }
+  /** Ирсэн урилгууд. Шинэ урилга ирэхэд ч бүтэн жагсаалт дахин илгээгдэнэ. */
+  | { t: 'invites'; list: Invite[] }
   /** Мэдээллийн мессеж (жишээ нь токен хүсэлт хүлээн авсан). */
   | { t: 'notice'; message: string }
   | { t: 'pong' };
@@ -119,6 +130,15 @@ export interface PlayerInfo {
   score: number;
   eliminated: boolean;
   avatar: string | null;
+}
+
+/** Найзаас ирсэн урилга. */
+export interface Invite {
+  id: string;
+  /** Урьсан хүний тоглоом доторх нэр. */
+  from: string;
+  roomCode: string;
+  at: string;
 }
 
 /** Цол ахисан тухай мэдээлэл — ёслолын дэлгэцэд хэрэглэнэ. */

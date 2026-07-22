@@ -29,6 +29,13 @@ export interface Room {
   chat: ServerMessage[];
   /** Одоогийн тоглолт түүхэд бичигдсэн эсэх — давхар бичихээс сэргийлнэ. */
   matchRecorded: boolean;
+  /**
+   * Сүүлийн тоглолтод оролцсон бүртгэлтэй хүмүүсийн userId.
+   *
+   * Урилга илгээхэд хэрэгтэй: найз "Гарах" дараад өрөөнөөс бүрэн гарсан ч
+   * дахин урьж болно. Суудлын жагсаалт зөвхөн ОДОО байгаа хүмүүсийг агуулна.
+   */
+  lastPlayers: string[];
   lastActivity: number;
 }
 
@@ -43,6 +50,7 @@ export class RoomStore {
       seats: new Map(),
       chat: [],
       matchRecorded: false,
+      lastPlayers: [],
       lastActivity: Date.now(),
     };
     this.rooms.set(room.code, room);
