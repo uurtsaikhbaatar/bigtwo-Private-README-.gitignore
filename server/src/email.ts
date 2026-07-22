@@ -37,6 +37,26 @@ function sender(): string {
   return from;
 }
 
+/**
+ * API түлхүүрийг шалгана.
+ *
+ * Түлхүүр нь HTTP толгойд ордог тул зөвхөн ASCII тэмдэгт зөвшөөрөгдөнө.
+ * Загварын бичвэрийг сольж мартвал ойлгомжгүй "ByteString" алдаа гарах тул
+ * энд тодорхой мессеж өгнө.
+ */
+function apiKey(): string {
+  const key = (process.env.EMAIL_API_KEY ?? '').trim();
+  if (!key) throw new Error('EMAIL_API_KEY тохируулаагүй байна.');
+  if (!/^[\x20-\x7E]+$/.test(key)) {
+    throw new Error(
+      'EMAIL_API_KEY-д латин бус тэмдэгт байна. ' +
+        '.env доторх загварын бичвэрийг үйлчилгээнээс авсан жинхэнэ түлхүүрээр солино уу ' +
+        '(Brevo-гийнх "xkeysib-" гэж эхэлдэг).',
+    );
+  }
+  return key;
+}
+
 /** `"Нэр <хаяг>"` хэлбэрээс зөвхөн хаягийг салгана. */
 function bareAddress(value: string): string {
   const match = value.match(/<([^>]+)>/);
@@ -59,7 +79,7 @@ export async function sendEmail(message: EmailMessage): Promise<EmailProvider> {
     return provider;
   }
 
-  const key = process.env.EMAIL_API_KEY!;
+  const key = apiKey();
   const from = sender();
   const requests: Record<Exclude<EmailProvider, 'console'>, { url: string; init: RequestInit }> = {
     resend: {
