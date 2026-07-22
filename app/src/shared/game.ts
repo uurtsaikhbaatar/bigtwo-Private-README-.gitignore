@@ -32,10 +32,15 @@ export const MAX_TARGET_SCORE = 200;
 /** Нэг ээлжинд бодох хугацаа (секунд). */
 export const TURN_SECONDS_CHOICES = [30, 60] as const;
 export const DEFAULT_TURN_SECONDS = 30;
-/** Бооцооны дүн (төгрөг). 0 = бооцоогүй. */
-export const STAKE_CHOICES = [0, 100_000, 200_000, 300_000, 500_000] as const;
-export const MIN_STAKE = 100_000;
-export const MAX_STAKE = 500_000;
+/**
+ * Нэг тоглогчийн тавих ВИРТУАЛ чип. 0 = чипгүй.
+ *
+ * Энэ нь зөвхөн тоглоомын оноо — бодит мөнгө биш бөгөөд апп ямар ч төлбөр
+ * тооцоо хийдэггүй.
+ */
+export const STAKE_CHOICES = [0, 10, 25, 50, 100] as const;
+export const MIN_STAKE = 5;
+export const MAX_STAKE = 1000;
 export const DEFAULT_STAKE = 0;
 
 export const MIN_TURN_SECONDS = 10;
@@ -78,10 +83,10 @@ export interface RoundEntry {
   place: number | null;
 }
 
-/** Тоглолт дууссаны дараах мөнгөн тооцоо. */
+/** Тоглолт дууссаны дараах чипийн тооцоо. */
 export interface Settlement {
   playerId: string;
-  /** Эерэг = хожсон, сөрөг = алдсан (төгрөг). */
+  /** Эерэг = хожсон, сөрөг = алдсан (виртуал чип). */
   amount: number;
 }
 
@@ -105,7 +110,7 @@ export interface GameState {
   phase: Phase;
   round: number;
   targetScore: number;
-  /** Нэг тоглогчийн бооцоо (төгрөг). 0 бол бооцоогүй. */
+  /** Нэг тоглогчийн виртуал чип. 0 бол чипгүй. */
   stake: number;
   /** Тоглолт дуусахад бодогдоно. */
   settlement: Settlement[] | null;
@@ -210,7 +215,7 @@ export function startMatch(
   const bet = Math.round(stake);
   if (!Number.isFinite(bet) || bet < 0 || (bet > 0 && (bet < MIN_STAKE || bet > MAX_STAKE))) {
     throw new RuleError(
-      `Бооцоо 0 (бооцоогүй) эсвэл ${MIN_STAKE}–${MAX_STAKE}₮ хооронд байх ёстой.`,
+      `Чип 0 (чипгүй) эсвэл ${MIN_STAKE}–${MAX_STAKE} хооронд байх ёстой.`,
     );
   }
 
@@ -609,10 +614,10 @@ function finishRound(state: GameState): void {
 }
 
 /**
- * Мөнгөн тооцоо: тоглогч бүр бооцоогоо тавьж, ялагч бүгдийг нь авна.
- * Бооцоогүй (0) бол тооцоо гарахгүй.
+ * Чипийн тооцоо: тоглогч бүр чипээ тавьж, ялагч бүгдийг нь авна.
+ * Чипгүй (0) бол тооцоо гарахгүй.
  *
- * Энэ нь зөвхөн ТЭМДЭГЛЭЛ — апп ямар ч төлбөр гүйцэтгэдэггүй.
+ * Чип нь ВИРТУАЛ — бодит мөнгө биш, шилжүүлэг хийгддэггүй.
  */
 function settleMatch(state: GameState): void {
   const winnerId = state.matchWinnerId;
@@ -627,9 +632,7 @@ function settleMatch(state: GameState): void {
   }));
   const winner = state.players.find((p) => p.id === winnerId);
   if (winner) {
-    state.log.push(
-      `${winner.name} ${(state.stake * loserCount).toLocaleString('en-US')}₮ хожлоо.`,
-    );
+    state.log.push(`${winner.name} ${state.stake * loserCount} чип хожлоо.`);
   }
 }
 

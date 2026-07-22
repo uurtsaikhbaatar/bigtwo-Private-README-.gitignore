@@ -97,9 +97,9 @@ export interface GameView {
   phase: Phase;
   round: number;
   targetScore: number;
-  /** Нэг тоглогчийн бооцоо (төгрөг). 0 бол бооцоогүй. */
+  /** Нэг тоглогчийн виртуал чип. 0 бол чипгүй. */
   stake: number;
-  /** Тоглолт дууссаны дараах мөнгөн тооцоо. */
+  /** Тоглолт дууссаны дараах чипийн тооцоо. */
   settlement: Settlement[] | null;
   /** Нэг ээлжинд бодох хугацаа (секунд). */
   turnSeconds: number;

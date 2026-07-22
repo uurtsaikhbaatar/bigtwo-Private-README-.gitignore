@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-nati
 
 import { Button } from '../components/Button';
 import { joinUrl } from '../deeplink';
-import { formatTugrik, shortTugrik } from '../money';
+import { formatChips, shortChips } from '../chips';
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -134,7 +134,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Бооцоо (нэг тоглогч)</Text>
+        <Text style={styles.panelTitle}>Чип (нэг тоглогч)</Text>
         <View style={styles.stakeChoices}>
           {STAKE_CHOICES.map((choice) => {
             const active = stake === choice;
@@ -152,7 +152,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
                 ]}
               >
                 <Text style={[styles.stakeText, active && styles.choiceTextActive]}>
-                  {shortTugrik(choice)}
+                  {shortChips(choice)}
                 </Text>
               </Pressable>
             );
@@ -160,12 +160,12 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
         </View>
         <Text style={styles.hint}>
           {stake === 0
-            ? 'Бооцоогүй тоглоно.'
-            : `Хожигч бусад тоглогч бүрээс ${formatTugrik(stake)} авна. Тоглолт дуусахад хэн хэдийг хожсон, алдсаныг харуулна.`}
+            ? 'Чипгүй тоглоно.'
+            : `Хожигч бусад тоглогч бүрээс ${formatChips(stake)} авна. Тоглолт дуусахад хэн хэдийг хожсон, алдсаныг харуулна.`}
         </Text>
         {stake > 0 && (
           <Text style={styles.note}>
-            Апп зөвхөн тооцоог тэмдэглэнэ — мөнгө шилжүүлэх үйлдэл хийхгүй.
+            Чип нь виртуал — бодит мөнгө биш.
           </Text>
         )}
       </View>
@@ -174,7 +174,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
         {isHost ? (
           <Button
             title={`Эхлүүлэх · ${target} оноо · ${secondsLabel(turnSeconds)}${
-              stake ? ` · ${shortTugrik(stake)}` : ''
+              stake ? ` · ${shortChips(stake)}` : ''
             }`}
             onPress={() => onStart(target, turnSeconds, stake)}
             disabled={!enough}

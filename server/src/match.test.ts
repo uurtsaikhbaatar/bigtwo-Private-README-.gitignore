@@ -377,21 +377,21 @@ function playOutMatch(state: GameState, rng: () => number): void {
   }
 }
 
-test('бооцоогүй үед мөнгөн тооцоо гарахгүй', () => {
+test('чипгүй үед тооцоо гарахгүй', () => {
   const rng = mulberry32(555);
   const state = makeGame(3);
   startMatch(state, 12, DEFAULT_TURN_SECONDS, 0, rng);
   playOutMatch(state, rng);
 
   assert.equal(state.stake, 0);
-  assert.equal(state.settlement, null, 'бооцоогүй бол тооцоо байхгүй');
+  assert.equal(state.settlement, null, 'чипгүй бол тооцоо байхгүй');
 });
 
-test('ялагч бусад бүрээс бооцоог авна, нийлбэр нь тэг', () => {
+test('ялагч бусад бүрээс чипийг авна, нийлбэр нь тэг', () => {
   for (const playerCount of [2, 3, 4, 6]) {
     const rng = mulberry32(playerCount * 31);
     const state = makeGame(playerCount);
-    startMatch(state, 12, DEFAULT_TURN_SECONDS, 200_000, rng);
+    startMatch(state, 12, DEFAULT_TURN_SECONDS, 50, rng);
     playOutMatch(state, rng);
 
     const settlement = state.settlement;
@@ -402,16 +402,16 @@ test('ялагч бусад бүрээс бооцоог авна, нийлбэр
     assert.equal(total, 0, `${playerCount} тоглогч: тооцоо тэнцэхгүй`);
 
     const winner = settlement!.find((e) => e.playerId === state.matchWinnerId)!;
-    assert.equal(winner.amount, 200_000 * (playerCount - 1), 'ялагчийн дүн');
+    assert.equal(winner.amount, 50 * (playerCount - 1), 'ялагчийн дүн');
     settlement!
       .filter((e) => e.playerId !== state.matchWinnerId)
-      .forEach((e) => assert.equal(e.amount, -200_000, 'алдагчийн дүн'));
+      .forEach((e) => assert.equal(e.amount, -50, 'алдагчийн дүн'));
   }
 });
 
-test('луу буусан ч мөнгөн тооцоо гарна', () => {
+test('луу буусан ч чипийн тооцоо гарна', () => {
   const state = makeGame(4);
-  startMatch(state, 30, DEFAULT_TURN_SECONDS, 100_000, mulberry32(4242));
+  startMatch(state, 30, DEFAULT_TURN_SECONDS, 25, mulberry32(4242));
   // Луу гарах хүртэл тараалтыг давтана.
   let guard = 0;
   while (state.phase !== 'matchEnd' && guard < 4000) {
@@ -428,19 +428,19 @@ test('луу буусан ч мөнгөн тооцоо гарна', () => {
     0,
   );
   const winner = state.settlement!.find((e) => e.playerId === state.matchWinnerId)!;
-  assert.equal(winner.amount, 100_000 * 3);
+  assert.equal(winner.amount, 25 * 3);
 });
 
-test('хязгаараас гарсан бооцоог татгалзана', () => {
+test('хязгаараас гарсан чипийг татгалзана', () => {
   const state = makeGame(3);
-  assert.throws(() => startMatch(state, 30, 30, 50_000, mulberry32(1)), RuleError, 'хэт бага');
-  assert.throws(() => startMatch(state, 30, 30, 600_000, mulberry32(1)), RuleError, 'хэт их');
+  assert.throws(() => startMatch(state, 30, 30, 2, mulberry32(1)), RuleError, 'хэт бага');
+  assert.throws(() => startMatch(state, 30, 30, 5000, mulberry32(1)), RuleError, 'хэт их');
   assert.throws(() => startMatch(state, 30, 30, -1, mulberry32(1)), RuleError, 'сөрөг');
   // Хил дээрх утгууд зөвшөөрөгдөнө.
-  startMatch(state, 30, 30, 100_000, mulberry32(1));
-  assert.equal(state.stake, 100_000);
-  startMatch(state, 30, 30, 500_000, mulberry32(1));
-  assert.equal(state.stake, 500_000);
+  startMatch(state, 30, 30, 5, mulberry32(1));
+  assert.equal(state.stake, 5);
+  startMatch(state, 30, 30, 1000, mulberry32(1));
+  assert.equal(state.stake, 1000);
 });
 
 // ── Ээлжийн хугацаа ────────────────────────────────────────────────────────

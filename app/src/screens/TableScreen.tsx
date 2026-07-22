@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-n
 import { Button } from '../components/Button';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
 import { ScoreBoard } from '../components/ScoreBoard';
-import { formatSigned, formatTugrik } from '../money';
+import { formatChips, formatSignedChips } from '../chips';
 import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import type { Card } from '../shared/cards';
 import { THREE_OF_DIAMONDS, cardName } from '../shared/cards';
@@ -303,9 +303,9 @@ function Results({
 
       {matchOver && view.settlement && (
         <View style={styles.moneyPanel}>
-          <Text style={styles.moneyTitle}>Мөнгөн тооцоо</Text>
+          <Text style={styles.moneyTitle}>Чипийн тооцоо</Text>
           <Text style={styles.moneySubtitle}>
-            Нэг хүний бооцоо {formatTugrik(view.stake)}
+            Нэг хүний чип {formatChips(view.stake)}
           </Text>
           {[...view.settlement]
             .sort((a, b) => b.amount - a.amount)
@@ -320,13 +320,13 @@ function Results({
                   </Text>
                   <Text style={styles.moneyVerb}>{won ? 'хожсон' : 'алдсан'}</Text>
                   <Text style={[styles.moneyAmount, won ? styles.moneyWon : styles.moneyLost]}>
-                    {formatSigned(entry.amount)}
+                    {formatSignedChips(entry.amount)}
                   </Text>
                 </View>
               );
             })}
           <Text style={styles.moneyNote}>
-            Энэ бол зөвхөн тэмдэглэл — тооцоогоо өөрсдөө хийнэ.
+            Виртуал чип — бодит мөнгө биш.
           </Text>
         </View>
       )}
