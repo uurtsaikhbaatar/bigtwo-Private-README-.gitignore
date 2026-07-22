@@ -34,7 +34,7 @@ import {
   viewFor,
 } from '../../app/src/shared/protocol';
 import { AuthError, accountForToken, login, logout, register } from './auth';
-import { dbEnabled } from './db';
+import { dbEnabled, getPool } from './db';
 import { recentMatches, recordMatch, statsForUser } from './history';
 import { readReports, saveReport } from './reports';
 import { Room, RoomStore, metaOf, newSeat } from './rooms';
@@ -57,14 +57,50 @@ const sessions = new WeakMap<WebSocket, Session>();
 /** Сокет бүрийн нэвтэрсэн хэрэглэгч (нэвтрээгүй бол байхгүй). */
 const accounts = new WeakMap<WebSocket, Account>();
 
+/**
+ * Эрүүл мэндийн мэдээлэл. Өгөгдлийн сан үнэхээр холбогдож байгааг харуулна —
+ * байршуулсны дараа `DATABASE_URL` зөв ирсэн эсэхийг браузераар шалгахад тустай.
+ *
+ * Render эрүүл мэндийг байнга шалгадаг тул сангийн шалгалтыг кэшлэнэ.
+ */
+const DB_CHECK_CACHE_MS = 30_000;
+let dbCheck = { at: 0, connected: false };
+
+async function health(): Promise<Record<string, unknown>> {
+  const base = {
+    ok: true,
+    rooms: rooms.size,
+    uptime: Math.round(process.uptime()),
+    protocol: PROTOCOL_VERSION,
+  };
+  if (!dbEnabled()) return { ...base, database: 'тохируулаагүй' };
+
+  if (Date.now() - dbCheck.at > DB_CHECK_CACHE_MS) {
+    dbCheck = { at: Date.now(), connected: await pingDb() };
+  }
+  return { ...base, database: dbCheck.connected ? 'холбогдсон' : 'холбогдож чадсангүй' };
+}
+
+async function pingDb(): Promise<boolean> {
+  try {
+    await getPool().query('SELECT 1');
+    return true;
+  } catch (err) {
+    console.error('сангийн шалгалт амжилтгүй:', err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
 function requireDb(): void {
   if (!dbEnabled()) throw new RuleError('Бүртгэлийн үйлчилгээ идэвхгүй байна.');
 }
 
 const httpServer = createServer((req, res) => {
   if (req.url === '/health') {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, rooms: rooms.size, uptime: process.uptime() }));
+    void health().then((body) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(body, null, 2));
+    });
     return;
   }
   if (req.url?.startsWith('/reports')) {
