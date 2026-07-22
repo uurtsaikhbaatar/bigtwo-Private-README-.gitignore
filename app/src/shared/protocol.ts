@@ -9,7 +9,7 @@
 
 import { Card } from './cards';
 import { comboLabel } from './combos';
-import { GameState, Phase, RoundRecord } from './game';
+import { GameState, Phase, RoundRecord, Settlement } from './game';
 
 export const PROTOCOL_VERSION = 3;
 
@@ -26,7 +26,7 @@ export type ClientMessage =
   /** Тасарсны дараа өмнөх суудалдаа буцаж орох. */
   | { t: 'resume'; code: string; playerId: string; token: string }
   /** Шинэ тоглолт эхлүүлэх (лобби эсвэл тоглолт дууссаны дараа). */
-  | { t: 'start'; targetScore: number; turnSeconds: number }
+  | { t: 'start'; targetScore: number; turnSeconds: number; stake: number }
   /** Дараагийн тойргийг эхлүүлэх. */
   | { t: 'next' }
   | { t: 'play'; cards: Card[] }
@@ -89,6 +89,10 @@ export interface GameView {
   phase: Phase;
   round: number;
   targetScore: number;
+  /** Нэг тоглогчийн бооцоо (төгрөг). 0 бол бооцоогүй. */
+  stake: number;
+  /** Тоглолт дууссаны дараах мөнгөн тооцоо. */
+  settlement: Settlement[] | null;
   /** Нэг ээлжинд бодох хугацаа (секунд). */
   turnSeconds: number;
   /**
@@ -138,6 +142,8 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
     phase: state.phase,
     round: state.round,
     targetScore: state.targetScore,
+    stake: state.stake,
+    settlement: state.settlement,
     turnSeconds: state.turnSeconds,
     turnRemainingMs:
       state.turnEndsAt === null ? null : Math.max(0, state.turnEndsAt - Date.now()),

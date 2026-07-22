@@ -11,6 +11,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 
 import {
   DEFAULT_TARGET_SCORE,
+  DEFAULT_STAKE,
   DEFAULT_TURN_SECONDS,
   MAX_PLAYERS,
   RuleError,
@@ -151,6 +152,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         room.state,
         Number(msg.targetScore ?? DEFAULT_TARGET_SCORE),
         Number(msg.turnSeconds ?? DEFAULT_TURN_SECONDS),
+        Number(msg.stake ?? DEFAULT_STAKE),
       );
       return broadcast(room);
     }

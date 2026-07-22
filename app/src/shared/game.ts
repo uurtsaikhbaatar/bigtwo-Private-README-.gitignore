@@ -32,6 +32,12 @@ export const MAX_TARGET_SCORE = 200;
 /** Нэг ээлжинд бодох хугацаа (секунд). */
 export const TURN_SECONDS_CHOICES = [30, 60] as const;
 export const DEFAULT_TURN_SECONDS = 30;
+/** Бооцооны дүн (төгрөг). 0 = бооцоогүй. */
+export const STAKE_CHOICES = [0, 100_000, 200_000, 300_000, 500_000] as const;
+export const MIN_STAKE = 100_000;
+export const MAX_STAKE = 500_000;
+export const DEFAULT_STAKE = 0;
+
 export const MIN_TURN_SECONDS = 10;
 export const MAX_TURN_SECONDS = 300;
 
@@ -72,6 +78,13 @@ export interface RoundEntry {
   place: number | null;
 }
 
+/** Тоглолт дууссаны дараах мөнгөн тооцоо. */
+export interface Settlement {
+  playerId: string;
+  /** Эерэг = хожсон, сөрөг = алдсан (төгрөг). */
+  amount: number;
+}
+
 export interface RoundRecord {
   round: number;
   entries: RoundEntry[];
@@ -92,6 +105,10 @@ export interface GameState {
   phase: Phase;
   round: number;
   targetScore: number;
+  /** Нэг тоглогчийн бооцоо (төгрөг). 0 бол бооцоогүй. */
+  stake: number;
+  /** Тоглолт дуусахад бодогдоно. */
+  settlement: Settlement[] | null;
   /** Нэг ээлжинд бодох хугацаа (секунд). */
   turnSeconds: number;
   /**
@@ -127,6 +144,8 @@ export function createGame(): GameState {
     phase: 'lobby',
     round: 0,
     targetScore: DEFAULT_TARGET_SCORE,
+    stake: DEFAULT_STAKE,
+    settlement: null,
     turnSeconds: DEFAULT_TURN_SECONDS,
     turnEndsAt: null,
     turnSeq: 0,
@@ -171,6 +190,7 @@ export function startMatch(
   state: GameState,
   targetScore: number = DEFAULT_TARGET_SCORE,
   turnSeconds: number = DEFAULT_TURN_SECONDS,
+  stake: number = DEFAULT_STAKE,
   rng: () => number = Math.random,
 ): void {
   if (state.players.length < MIN_PLAYERS) {
@@ -187,8 +207,17 @@ export function startMatch(
     );
   }
 
+  const bet = Math.round(stake);
+  if (!Number.isFinite(bet) || bet < 0 || (bet > 0 && (bet < MIN_STAKE || bet > MAX_STAKE))) {
+    throw new RuleError(
+      `Бооцоо 0 (бооцоогүй) эсвэл ${MIN_STAKE}–${MAX_STAKE}₮ хооронд байх ёстой.`,
+    );
+  }
+
   state.targetScore = target;
   state.turnSeconds = seconds;
+  state.stake = bet;
+  state.settlement = null;
   state.round = 0;
   state.history = [];
   state.seats = [];
@@ -290,6 +319,7 @@ function declareDragon(state: GameState, winner: Player): void {
   state.phase = 'matchEnd';
   state.current = null;
   state.turnEndsAt = null;
+  settleMatch(state);
   state.history.push({
     round: state.round,
     dragonPlayerId: winner.id,
@@ -570,11 +600,37 @@ function finishRound(state: GameState): void {
     state.matchWinnerId = remaining[0]?.id ?? null;
     state.phase = 'matchEnd';
     if (remaining[0]) state.log.push(`🏆 ${remaining[0].name} тоглолтыг хожлоо!`);
+    settleMatch(state);
   } else {
     state.phase = 'roundEnd';
   }
   state.current = null;
   state.turnEndsAt = null;
+}
+
+/**
+ * Мөнгөн тооцоо: тоглогч бүр бооцоогоо тавьж, ялагч бүгдийг нь авна.
+ * Бооцоогүй (0) бол тооцоо гарахгүй.
+ *
+ * Энэ нь зөвхөн ТЭМДЭГЛЭЛ — апп ямар ч төлбөр гүйцэтгэдэггүй.
+ */
+function settleMatch(state: GameState): void {
+  const winnerId = state.matchWinnerId;
+  if (state.stake <= 0 || !winnerId) {
+    state.settlement = null;
+    return;
+  }
+  const loserCount = state.players.length - 1;
+  state.settlement = state.players.map((p) => ({
+    playerId: p.id,
+    amount: p.id === winnerId ? state.stake * loserCount : -state.stake,
+  }));
+  const winner = state.players.find((p) => p.id === winnerId);
+  if (winner) {
+    state.log.push(
+      `${winner.name} ${(state.stake * loserCount).toLocaleString('en-US')}₮ хожлоо.`,
+    );
+  }
 }
 
 function applyEliminations(state: GameState): void {

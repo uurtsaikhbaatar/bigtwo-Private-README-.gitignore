@@ -191,7 +191,8 @@ export function useBigTwo(serverUrl: string) {
     ),
     /** Шинэ тоглолт эхлүүлэх (босго оноотой). */
     startGame: useCallback(
-      (targetScore: number, turnSeconds: number) => send({ t: 'start', targetScore, turnSeconds }),
+      (targetScore: number, turnSeconds: number, stake: number) =>
+        send({ t: 'start', targetScore, turnSeconds, stake }),
       [send],
     ),
     /** Дараагийн тойргийг эхлүүлэх. */

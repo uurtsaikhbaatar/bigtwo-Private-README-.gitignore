@@ -3,10 +3,12 @@ import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-nati
 
 import { Button } from '../components/Button';
 import { joinUrl } from '../deeplink';
+import { formatTugrik, shortTugrik } from '../money';
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   SEATS_PER_ROUND,
+  STAKE_CHOICES,
   TARGET_SCORE_CHOICES,
   TURN_SECONDS_CHOICES,
 } from '../shared/game';
@@ -15,7 +17,7 @@ import { theme } from '../theme';
 
 interface Props {
   view: GameView;
-  onStart: (targetScore: number, turnSeconds: number) => void;
+  onStart: (targetScore: number, turnSeconds: number, stake: number) => void;
   onLeave: () => void;
 }
 
@@ -24,6 +26,7 @@ const secondsLabel = (s: number): string => (s >= 60 ? `${s / 60} мин` : `${s
 export function LobbyScreen({ view, onStart, onLeave }: Props) {
   const [target, setTarget] = useState<number>(TARGET_SCORE_CHOICES[0]);
   const [turnSeconds, setTurnSeconds] = useState<number>(TURN_SECONDS_CHOICES[0]);
+  const [stake, setStake] = useState<number>(STAKE_CHOICES[0]);
   const you = view.players.find((p) => p.id === view.youId);
   const isHost = you?.isHost ?? false;
   const enough = view.players.length >= MIN_PLAYERS;
@@ -130,11 +133,50 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
         </Text>
       </View>
 
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Бооцоо (нэг тоглогч)</Text>
+        <View style={styles.stakeChoices}>
+          {STAKE_CHOICES.map((choice) => {
+            const active = stake === choice;
+            return (
+              <Pressable
+                key={choice}
+                onPress={() => setStake(choice)}
+                disabled={!isHost}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                style={[
+                  styles.stakeChoice,
+                  active && styles.choiceActive,
+                  !isHost && styles.choiceLocked,
+                ]}
+              >
+                <Text style={[styles.stakeText, active && styles.choiceTextActive]}>
+                  {shortTugrik(choice)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.hint}>
+          {stake === 0
+            ? 'Бооцоогүй тоглоно.'
+            : `Хожигч бусад тоглогч бүрээс ${formatTugrik(stake)} авна. Тоглолт дуусахад хэн хэдийг хожсон, алдсаныг харуулна.`}
+        </Text>
+        {stake > 0 && (
+          <Text style={styles.note}>
+            Апп зөвхөн тооцоог тэмдэглэнэ — мөнгө шилжүүлэх үйлдэл хийхгүй.
+          </Text>
+        )}
+      </View>
+
       <View style={styles.actions}>
         {isHost ? (
           <Button
-            title={`Тоглоом эхлүүлэх (${target} оноо · ${secondsLabel(turnSeconds)})`}
-            onPress={() => onStart(target, turnSeconds)}
+            title={`Эхлүүлэх · ${target} оноо · ${secondsLabel(turnSeconds)}${
+              stake ? ` · ${shortTugrik(stake)}` : ''
+            }`}
+            onPress={() => onStart(target, turnSeconds, stake)}
             disabled={!enough}
           />
         ) : (
@@ -196,5 +238,19 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.textMuted, fontSize: 24, fontWeight: '800' },
   choiceTextActive: { color: theme.accent },
   choiceLabel: { color: theme.textMuted, fontSize: 11 },
+  stakeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  stakeChoice: {
+    flexGrow: 1,
+    minWidth: 84,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: theme.surfaceRaised,
+    backgroundColor: theme.surfaceRaised,
+    alignItems: 'center',
+  },
+  stakeText: { color: theme.textMuted, fontSize: 15, fontWeight: '700' },
+  note: { color: theme.textMuted, fontSize: 11, fontStyle: 'italic' },
   actions: { gap: 8, marginTop: 4 },
 });

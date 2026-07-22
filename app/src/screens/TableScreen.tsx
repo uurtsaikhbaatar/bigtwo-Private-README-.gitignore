@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-n
 import { Button } from '../components/Button';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
 import { ScoreBoard } from '../components/ScoreBoard';
+import { formatSigned, formatTugrik } from '../money';
 import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import type { Card } from '../shared/cards';
 import { THREE_OF_DIAMONDS, cardName } from '../shared/cards';
@@ -300,6 +301,36 @@ function Results({
         <Text style={styles.winner}>🏆 {winner.name} хожлоо!</Text>
       )}
 
+      {matchOver && view.settlement && (
+        <View style={styles.moneyPanel}>
+          <Text style={styles.moneyTitle}>Мөнгөн тооцоо</Text>
+          <Text style={styles.moneySubtitle}>
+            Нэг хүний бооцоо {formatTugrik(view.stake)}
+          </Text>
+          {[...view.settlement]
+            .sort((a, b) => b.amount - a.amount)
+            .map((entry) => {
+              const player = view.players.find((p) => p.id === entry.playerId);
+              const won = entry.amount > 0;
+              return (
+                <View key={entry.playerId} style={styles.moneyRow}>
+                  <Text style={styles.moneyName} numberOfLines={1}>
+                    {player?.name ?? '?'}
+                    {entry.playerId === view.youId ? ' (та)' : ''}
+                  </Text>
+                  <Text style={styles.moneyVerb}>{won ? 'хожсон' : 'алдсан'}</Text>
+                  <Text style={[styles.moneyAmount, won ? styles.moneyWon : styles.moneyLost]}>
+                    {formatSigned(entry.amount)}
+                  </Text>
+                </View>
+              );
+            })}
+          <Text style={styles.moneyNote}>
+            Энэ бол зөвхөн тэмдэглэл — тооцоогоо өөрсдөө хийнэ.
+          </Text>
+        </View>
+      )}
+
       <View style={styles.resultPanel}>
         <ScoreBoard
           players={view.players}
@@ -470,5 +501,22 @@ const styles = StyleSheet.create({
   dragonTitle: { color: theme.accent, fontSize: 26, fontWeight: '900', textAlign: 'center' },
   dragonText: { color: theme.text, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   resultPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12 },
+  moneyPanel: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.radius,
+    padding: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: theme.accent,
+  },
+  moneyTitle: { color: theme.accent, fontSize: 16, fontWeight: '800' },
+  moneySubtitle: { color: theme.textMuted, fontSize: 12 },
+  moneyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  moneyName: { color: theme.text, fontSize: 15, flex: 1, fontWeight: '600' },
+  moneyVerb: { color: theme.textMuted, fontSize: 12 },
+  moneyAmount: { fontSize: 16, fontWeight: '800', minWidth: 110, textAlign: 'right' },
+  moneyWon: { color: theme.success },
+  moneyLost: { color: theme.danger },
+  moneyNote: { color: theme.textMuted, fontSize: 11, fontStyle: 'italic' },
   resultActions: { gap: 8 },
 });

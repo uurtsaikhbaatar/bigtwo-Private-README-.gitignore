@@ -19,6 +19,7 @@ const URL = process.env.SMOKE_URL ?? 'ws://localhost:8787';
 const TARGET_SCORE = 30;
 // Тестийн ботууд шууд хариулдаг тул хугацаа урт байхад асуудалгүй.
 const TURN_SECONDS = 300;
+const STAKE = 100_000;
 const PLAYER_NAMES = ['Ану', 'Бат', 'Цэцэг', 'Дорж', 'Энхээ'];
 
 class Client {
@@ -118,7 +119,7 @@ async function main() {
   );
   console.log('✓ чат бүх тоглогчид хүрлээ');
 
-  clients[0].send({ t: 'start', targetScore: TARGET_SCORE, turnSeconds: TURN_SECONDS });
+  clients[0].send({ t: 'start', targetScore: TARGET_SCORE, turnSeconds: TURN_SECONDS, stake: STAKE });
   await clients[0].await((m) => m.t === 'state' && m.view.phase === 'playing');
   console.log(`✓ тоглолт эхэллээ (босго ${TARGET_SCORE} оноо)`);
 
@@ -188,6 +189,18 @@ async function main() {
   check(alive.length === 1, `яг нэг ялагч байх ёстой, гэтэл ${alive.length}`);
   check(final.matchWinnerId === alive[0].id, 'ялагч буруу тэмдэглэгдлээ');
   check(final.history.length === final.round, 'түүхийн бичлэг дутуу');
+
+  check(final.settlement !== null, 'мөнгөн тооцоо гарсангүй');
+  const settle = final.settlement!;
+  const total = settle.reduce((s, e) => s + e.amount, 0);
+  check(total === 0, `тооцоо тэнцэхгүй байна: ${total}`);
+  const win = settle.find((e) => e.playerId === final.matchWinnerId)!;
+  check(win.amount === STAKE * (clients.length - 1), 'ялагчийн дүн буруу');
+  check(
+    settle.filter((e) => e.playerId !== final.matchWinnerId).every((e) => e.amount === -STAKE),
+    'алдагчдын дүн буруу',
+  );
+  console.log(`✓ мөнгөн тооцоо зөв — ялагч +${win.amount.toLocaleString('en-US')}₮`);
   console.log('✓ нэг ялагч, түүх бүрэн');
 
   clients.forEach((c) => c.ws.close());
