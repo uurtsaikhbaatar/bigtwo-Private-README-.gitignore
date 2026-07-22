@@ -15,7 +15,15 @@ import {
   startMatch,
   type GameState,
 } from '../../app/src/shared/game';
-import { AuthError, accountForToken, login, logout, register } from './auth';
+import {
+  AuthError,
+  accountForToken,
+  login,
+  logout,
+  register,
+  resendCode,
+  verifyEmail,
+} from './auth';
 import { closePool, dbEnabled, getPool, initSchema } from './db';
 import { recentMatches, recordMatch, statsForUser } from './history';
 
@@ -23,6 +31,8 @@ const skip = dbEnabled() ? false : 'DATABASE_URL тохируулаагүй';
 
 /** Тест бүрд давхцахгүй нэр. */
 const uniqueName = () => `тест_${randomUUID().slice(0, 8)}`;
+/** Тест бүрд давхцахгүй имэйл. */
+const uniqueEmail = () => `${randomUUID().slice(0, 8)}@жишээ.тест`;
 
 /** Дууссан тоглолтын төлөв гараар угсарна. */
 function finishedMatch(winner: string, others: string[]): GameState {
@@ -63,7 +73,7 @@ test('схем үүсгэх нь давтахад аюулгүй', { skip }, asy
 
 test('бүртгүүлэх, нэвтрэх, session сэргээх', { skip }, async () => {
   const name = uniqueName();
-  const created = await register(name, 'нууц-үг-123');
+  const created = await register(name, 'нууц-үг-123', uniqueEmail());
   assert.equal(created.account.username, name);
   assert.ok(created.token.length > 20);
 
@@ -81,7 +91,7 @@ test('бүртгүүлэх, нэвтрэх, session сэргээх', { skip }, a
 test('нууц үг задлан хадгалагддаггүй', { skip }, async () => {
   const name = uniqueName();
   const password = 'маш-нууц-үг';
-  const { account } = await register(name, password);
+  const { account } = await register(name, password, uniqueEmail());
 
   const row = await getPool().query<{ password: string }>(
     'SELECT password FROM users WHERE id = $1',
@@ -94,18 +104,99 @@ test('нууц үг задлан хадгалагддаггүй', { skip }, asyn
 
 test('буруу нууц үг, давхардсан нэрийг татгалзана', { skip }, async () => {
   const name = uniqueName();
-  await register(name, 'зөв-нууц-үг');
+  await register(name, 'зөв-нууц-үг', uniqueEmail());
 
   await assert.rejects(() => login(name, 'буруу-нууц'), AuthError);
   await assert.rejects(() => login(uniqueName(), 'ямар ч'), AuthError);
-  await assert.rejects(() => register(name, 'өөр-нууц-үг'), AuthError, 'нэр давхардаж болохгүй');
-  await assert.rejects(() => register(uniqueName(), '123'), AuthError, 'нууц үг хэт богино');
-  await assert.rejects(() => register('a', 'нууц-үг-123'), AuthError, 'нэр хэт богино');
+  await assert.rejects(() => register(name, 'өөр-нууц-үг', uniqueEmail()), AuthError, 'нэр давхардаж болохгүй');
+  await assert.rejects(() => register(uniqueName(), '123', uniqueEmail()), AuthError, 'нууц үг хэт богино');
+  await assert.rejects(() => register('a', 'нууц-үг-123', uniqueEmail()), AuthError, 'нэр хэт богино');
+});
+
+// ── Имэйл баталгаажуулалт ──────────────────────────────────────────────────
+
+/** Илгээсэн кодыг лог руу бичдэг тул тестэд сангаас нь шууд шалгах боломжгүй —
+ *  оронд нь бүх боломжит кодыг туршихгүйгээр, код үүссэн эсэхийг шалгана. */
+async function codeRowFor(userId: string) {
+  const r = await getPool().query<{ attempts: number; expired: boolean }>(
+    `SELECT attempts, expires_at < now() AS expired FROM email_codes WHERE user_id = $1`,
+    [userId],
+  );
+  return r.rows[0] ?? null;
+}
+
+test('бүртгэхэд имэйл шаардана, буруу бол татгалзана', { skip }, async () => {
+  await assert.rejects(
+    () => register(uniqueName(), 'нууц-үг-123', 'имэйлбиш'),
+    AuthError,
+    '@ байхгүй',
+  );
+  await assert.rejects(
+    () => register(uniqueName(), 'нууц-үг-123', 'a@b'),
+    AuthError,
+    'домэйнгүй',
+  );
+  await assert.rejects(() => register(uniqueName(), 'нууц-үг-123', ''), AuthError, 'хоосон');
+});
+
+test('нэг имэйлээр хоёр бүртгэл үүсэхгүй', { skip }, async () => {
+  const email = uniqueEmail();
+  await register(uniqueName(), 'нууц-үг-123', email);
+  await assert.rejects(
+    () => register(uniqueName(), 'нууц-үг-123', email.toUpperCase()),
+    AuthError,
+    'том/жижиг үсгээр ялгагдахгүй',
+  );
+});
+
+test('бүртгүүлэхэд код үүсэж, имэйл баталгаажаагүй байна', { skip }, async () => {
+  const { account } = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  assert.equal(account.emailVerified, false, 'шинэ бүртгэл баталгаажаагүй');
+  assert.ok(account.email, 'имэйл хадгалагдсан');
+
+  const row = await codeRowFor(account.id);
+  assert.ok(row, 'код үүссэн байх');
+  assert.equal(row!.attempts, 0);
+  assert.equal(row!.expired, false, 'код хүчинтэй');
+});
+
+test('код нь задлан хадгалагддаггүй', { skip }, async () => {
+  const { account } = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  const stored = await getPool().query<{ code_hash: string }>(
+    'SELECT code_hash FROM email_codes WHERE user_id = $1',
+    [account.id],
+  );
+  assert.match(
+    stored.rows[0].code_hash,
+    /^[0-9a-f]{32}:[0-9a-f]{128}$/,
+    'давс:hash хэлбэртэй байх — 6 оронтой код задгай хадгалагдахгүй',
+  );
+});
+
+test('буруу код оролдлогыг тоолж, хязгаарт хүрвэл түгжинэ', { skip }, async () => {
+  const { account } = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+
+  // 6 оронтой кодыг таамаглах магадлал 1/1,000,000 — практикт буруу байна.
+  for (let i = 1; i <= 5; i++) {
+    await assert.rejects(() => verifyEmail(account.id, '000000'), AuthError);
+    const row = await codeRowFor(account.id);
+    assert.equal(row!.attempts, i, `${i} дэх оролдлого тоологдсон байх`);
+  }
+  await assert.rejects(
+    () => verifyEmail(account.id, '000000'),
+    /Хэт олон удаа/,
+    'хязгаарт хүрвэл түгжинэ',
+  );
+});
+
+test('код дахин илгээхийг хязгаарлана', { skip }, async () => {
+  const { account } = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  await assert.rejects(() => resendCode(account.id), /секундын дараа/, 'дараалан илгээхгүй');
 });
 
 test('тоглолтын түүх ба статистик бүртгэгдэнэ', { skip }, async () => {
   const name = uniqueName();
-  const { account } = await register(name, 'нууц-үг-123');
+  const { account } = await register(name, 'нууц-үг-123', uniqueEmail());
 
   const before = await statsForUser(account.id);
   const state = finishedMatch(name, ['Бат', 'Цэцэг']);

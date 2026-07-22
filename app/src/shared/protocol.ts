@@ -42,7 +42,10 @@ export type ClientMessage =
   /** Алдааны мэдэгдэл — гараар бичсэн эсвэл автоматаар баригдсан. */
   | { t: 'report'; kind: ReportKind; text: string; context?: Record<string, unknown> }
   /** Шинэ бүртгэл үүсгэх. */
-  | { t: 'register'; username: string; password: string }
+  | { t: 'register'; username: string; password: string; email: string }
+  /** Имэйл рүү ирсэн 6 оронтой кодыг шалгуулах. */
+  | { t: 'verifyEmail'; code: string }
+  | { t: 'resendCode' }
   | { t: 'login'; username: string; password: string }
   /** Хадгалсан token-оор нэвтрэлтээ сэргээх. */
   | { t: 'authResume'; token: string }
@@ -72,6 +75,9 @@ export type ServerMessage =
 export interface Account {
   id: string;
   username: string;
+  email?: string;
+  /** Имэйл баталгаажсан эсэх. */
+  emailVerified: boolean;
 }
 
 export interface PlayerStats {

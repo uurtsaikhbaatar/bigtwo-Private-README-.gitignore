@@ -33,7 +33,15 @@ import {
   type ServerMessage,
   viewFor,
 } from '../../app/src/shared/protocol';
-import { AuthError, accountForToken, login, logout, register } from './auth';
+import {
+  AuthError,
+  accountForToken,
+  login,
+  logout,
+  register,
+  resendCode,
+  verifyEmail,
+} from './auth';
 import { dbEnabled, getPool } from './db';
 import { recentMatches, recordMatch, statsForUser } from './history';
 import { readReports, saveReport } from './reports';
@@ -89,6 +97,13 @@ async function pingDb(): Promise<boolean> {
     console.error('сангийн шалгалт амжилтгүй:', err instanceof Error ? err.message : err);
     return false;
   }
+}
+
+/** Бүртгэлийн алдааг тоглогчид ойлгомжтой хэлбэрээр буцаана. */
+function sendAuthError(socket: WebSocket, err: unknown): void {
+  const message = err instanceof AuthError ? err.message : 'Бүртгэлд алдаа гарлаа.';
+  if (!(err instanceof AuthError)) console.error('auth error:', err);
+  send(socket, { t: 'error', message });
 }
 
 function requireDb(): void {
@@ -178,17 +193,43 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     case 'register':
     case 'login': {
       requireDb();
-      const run = msg.t === 'register' ? register : login;
-      void run(String(msg.username ?? ''), String(msg.password ?? ''))
+      const started =
+        msg.t === 'register'
+          ? register(
+              String(msg.username ?? ''),
+              String(msg.password ?? ''),
+              String(msg.email ?? ''),
+            )
+          : login(String(msg.username ?? ''), String(msg.password ?? ''));
+      void started
         .then(({ account, token }) => {
           accounts.set(socket, account);
           send(socket, { t: 'auth', account, token });
         })
-        .catch((err) => {
-          const message = err instanceof AuthError ? err.message : 'Бүртгэлд алдаа гарлаа.';
-          if (!(err instanceof AuthError)) console.error('auth error:', err);
-          send(socket, { t: 'error', message });
-        });
+        .catch((err) => sendAuthError(socket, err));
+      return;
+    }
+
+    case 'verifyEmail': {
+      requireDb();
+      const account = accounts.get(socket);
+      if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
+      void verifyEmail(account.id, String(msg.code ?? ''))
+        .then((updated) => {
+          accounts.set(socket, updated);
+          send(socket, { t: 'auth', account: updated });
+        })
+        .catch((err) => sendAuthError(socket, err));
+      return;
+    }
+
+    case 'resendCode': {
+      requireDb();
+      const account = accounts.get(socket);
+      if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
+      void resendCode(account.id)
+        .then(() => send(socket, { t: 'auth', account }))
+        .catch((err) => sendAuthError(socket, err));
       return;
     }
 

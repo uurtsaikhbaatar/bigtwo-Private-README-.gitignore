@@ -68,6 +68,23 @@ export async function initSchema(): Promise<void> {
       created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Имэйл нь хожим нэмэгдсэн тул одоо байгаа хүснэгтэд ч тавигдана.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email          TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_key      TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
+    -- Имэйлгүй (хуучин) бүртгэлүүд давхцлын шалгалтад орохгүй.
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_key_idx
+      ON users(email_key) WHERE email_key IS NOT NULL;
+
+    -- Баталгаажуулах код. Хэрэглэгч тутамд нэг л идэвхтэй код байна.
+    CREATE TABLE IF NOT EXISTS email_codes (
+      user_id    BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      code_hash  TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      attempts   INTEGER NOT NULL DEFAULT 0,
+      sent_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       token      TEXT PRIMARY KEY,
       user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

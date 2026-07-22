@@ -144,6 +144,8 @@ function Root() {
             onLogin: game.logIn,
             onLogout: game.logOut,
             onLoadProfile: game.loadProfile,
+            onVerifyEmail: game.verifyEmail,
+            onResendCode: game.resendCode,
           }}
         />
       ) : view.phase === 'lobby' ? (

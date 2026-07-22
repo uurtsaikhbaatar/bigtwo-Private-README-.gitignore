@@ -18,10 +18,12 @@ import { theme } from '../theme';
 interface Props {
   account: Account | null;
   profile: { stats: PlayerStats; matches: MatchSummary[] } | null;
-  onRegister: (username: string, password: string) => void;
+  onRegister: (username: string, password: string, email: string) => void;
   onLogin: (username: string, password: string) => void;
   onLogout: () => void;
   onLoadProfile: () => void;
+  onVerifyEmail: (code: string) => void;
+  onResendCode: () => void;
 }
 
 /**
@@ -35,27 +37,32 @@ export function AuthPanel({
   onLogin,
   onLogout,
   onLoadProfile,
+  onVerifyEmail,
+  onResendCode,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
 
   // Нэвтэрсний дараа (эсвэл цонх нээгдэхэд) профайлыг автоматаар татна.
-  const needsProfile = open && Boolean(account) && profile === null;
+  const verifying = Boolean(account && account.email && !account.emailVerified);
+  const needsProfile = open && Boolean(account) && !verifying && profile === null;
   useEffect(() => {
     if (needsProfile) onLoadProfile();
   }, [needsProfile, onLoadProfile]);
 
   const openPanel = () => {
     setOpen(true);
-    if (account) onLoadProfile();
+    if (account && !verifying) onLoadProfile();
   };
 
   const submit = () => {
     const name = username.trim();
     if (!name || !password) return;
-    if (mode === 'register') onRegister(name, password);
+    if (mode === 'register') onRegister(name, password, email.trim());
     else onLogin(name, password);
     setPassword('');
   };
@@ -76,13 +83,45 @@ export function AuthPanel({
           <Pressable style={styles.backdropFill} onPress={() => setOpen(false)} />
           <View style={styles.sheet}>
             <View style={styles.header}>
-              <Text style={styles.title}>{account ? 'Профайл' : 'Бүртгэл'}</Text>
+              <Text style={styles.title}>
+                {verifying ? 'Баталгаажуулалт' : account ? 'Профайл' : 'Бүртгэл'}
+              </Text>
               <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
                 <Text style={styles.close}>Хаах</Text>
               </Pressable>
             </View>
 
-            {account ? (
+            {account && !account.emailVerified && account.email ? (
+              /* Имэйл баталгаажаагүй бол эхлээд кодыг асууна. Гэхдээ тоглоомд
+                 саад болохгүй — цонхыг хааж тоглож болно. */
+              <View style={styles.formBody}>
+                <Text style={styles.verifyTitle}>Имэйлээ баталгаажуулна уу</Text>
+                <Text style={styles.hint}>
+                  <Text style={styles.verifyEmail}>{account.email}</Text> хаяг руу 6 оронтой код
+                  илгээлээ. Хүрээгүй бол спам хавтсаа шалгаарай.
+                </Text>
+                <TextInput
+                  value={code}
+                  onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  placeholderTextColor={theme.textMuted}
+                  style={[styles.input, styles.codeInput]}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  onSubmitEditing={() => code.length === 6 && onVerifyEmail(code)}
+                />
+                <Button
+                  title="Баталгаажуулах"
+                  onPress={() => onVerifyEmail(code)}
+                  disabled={code.length !== 6}
+                />
+                <Button title="Кодыг дахин илгээх" variant="ghost" onPress={onResendCode} />
+                <Text style={styles.hint}>
+                  Дараа нь баталгаажуулж болно — одоо ч тоглох боломжтой.
+                </Text>
+                <Button title="Гарах" variant="ghost" onPress={onLogout} />
+              </View>
+            ) : account ? (
               <ScrollView contentContainerStyle={styles.profileBody}>
                 <Text style={styles.who}>{account.username}</Text>
 
@@ -159,6 +198,18 @@ export function AuthPanel({
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+                {mode === 'register' && (
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Имэйл хаяг"
+                    placeholderTextColor={theme.textMuted}
+                    style={styles.input}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                  />
+                )}
                 <TextInput
                   value={password}
                   onChangeText={setPassword}
@@ -173,7 +224,7 @@ export function AuthPanel({
                 <Button
                   title={mode === 'login' ? 'Нэвтрэх' : 'Бүртгүүлэх'}
                   onPress={submit}
-                  disabled={!username.trim() || !password}
+                  disabled={!username.trim() || !password || (mode === 'register' && !email.trim())}
                 />
                 <Text style={styles.hint}>
                   Бүртгүүлэхгүйгээр зочноор тоглож болно. Бүртгэлтэй бол тоглолтын түүх,
@@ -261,6 +312,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   hint: { color: theme.textMuted, fontSize: 12, lineHeight: 17 },
+  verifyTitle: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  verifyEmail: { color: theme.accent, fontWeight: '700' },
+  codeInput: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 10,
+    textAlign: 'center',
+  },
 
   profileBody: { paddingHorizontal: 16, gap: 12, paddingBottom: 8 },
   who: { color: theme.accent, fontSize: 20, fontWeight: '800' },

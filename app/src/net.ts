@@ -225,7 +225,8 @@ export function useBigTwo(serverUrl: string) {
     clearError: useCallback(() => setError(null), []),
 
     register: useCallback(
-      (username: string, password: string) => send({ t: 'register', username, password }),
+      (username: string, password: string, email: string) =>
+        send({ t: 'register', username, password, email }),
       [send],
     ),
     logIn: useCallback(
@@ -242,6 +243,9 @@ export function useBigTwo(serverUrl: string) {
     ),
     logOut: useCallback(() => send({ t: 'logout', token: authTokenRef.current ?? '' }), [send]),
     loadProfile: useCallback(() => send({ t: 'profile' }), [send]),
+    /** Имэйл рүү ирсэн кодыг шалгуулах. */
+    verifyEmail: useCallback((code: string) => send({ t: 'verifyEmail', code }), [send]),
+    resendCode: useCallback(() => send({ t: 'resendCode' }), [send]),
 
     createRoom: useCallback((name: string) => send({ t: 'create', name }), [send]),
     joinRoom: useCallback(
