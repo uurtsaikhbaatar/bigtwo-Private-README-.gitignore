@@ -46,6 +46,8 @@ export type ClientMessage =
   /** Имэйл рүү ирсэн 6 оронтой кодыг шалгуулах. */
   | { t: 'verifyEmail'; code: string }
   | { t: 'resendCode' }
+  /** Токен дуусахад админаас нэмж хүсэх. */
+  | { t: 'requestTokens' }
   | { t: 'login'; username: string; password: string }
   /** Хадгалсан token-оор нэвтрэлтээ сэргээх. */
   | { t: 'authResume'; token: string }
@@ -68,6 +70,8 @@ export type ServerMessage =
   /** Нэвтрэлтийн төлөв. account null бол нэвтрээгүй. */
   | { t: 'auth'; account: Account | null; token?: string }
   | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[] }
+  /** Мэдээллийн мессеж (жишээ нь токен хүсэлт хүлээн авсан). */
+  | { t: 'notice'; message: string }
   | { t: 'pong' };
 
 // ── Бүртгэл ба түүх ────────────────────────────────────────────────────────
@@ -78,6 +82,8 @@ export interface Account {
   email?: string;
   /** Имэйл баталгаажсан эсэх. */
   emailVerified: boolean;
+  /** Виртуал токены үлдэгдэл. Бодит мөнгө биш. */
+  tokens: number;
 }
 
 export interface PlayerStats {

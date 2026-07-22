@@ -12,6 +12,7 @@ import { promisify } from 'node:util';
 import type { Account } from '../../app/src/shared/protocol';
 import { getPool } from './db';
 import { sendEmail, verificationEmail } from './email';
+import { STARTING_TOKENS } from './tokens';
 
 const scryptAsync = promisify(scrypt) as (
   password: string,
@@ -118,6 +119,7 @@ export async function register(
     username: name,
     email: address,
     emailVerified: false,
+    tokens: STARTING_TOKENS,
   };
   // Имэйл илгээхэд алдаа гарсан ч бүртгэл хүчинтэй үлдэнэ — код нь санд
   // хадгалагдсан тул хэрэглэгч дараа нь дахин илгээж авна.
@@ -208,7 +210,8 @@ async function accountById(userId: string): Promise<Account | null> {
     username: string;
     email: string | null;
     email_verified: boolean;
-  }>('SELECT id, username, email, email_verified FROM users WHERE id = $1', [userId]);
+    tokens: string;
+  }>('SELECT id, username, email, email_verified, tokens FROM users WHERE id = $1', [userId]);
   const row = result.rows[0];
   return row
     ? {
@@ -216,6 +219,7 @@ async function accountById(userId: string): Promise<Account | null> {
         username: row.username,
         email: row.email ?? undefined,
         emailVerified: row.email_verified,
+        tokens: Number(row.tokens),
       }
     : null;
 }
@@ -232,8 +236,9 @@ export async function login(
     password: string;
     email: string | null;
     email_verified: boolean;
+    tokens: string;
   }>(
-    'SELECT id, username, password, email, email_verified FROM users WHERE username_key = $1',
+    'SELECT id, username, password, email, email_verified, tokens FROM users WHERE username_key = $1',
     [normalise(username)],
   );
 
@@ -246,6 +251,7 @@ export async function login(
     username: row.username,
     email: row.email ?? undefined,
     emailVerified: row.email_verified,
+    tokens: Number(row.tokens),
   };
   return { account, token: await openSession(account.id) };
 }
@@ -268,8 +274,9 @@ export async function accountForToken(token: string): Promise<Account | null> {
     username: string;
     email: string | null;
     email_verified: boolean;
+    tokens: string;
   }>(
-    `SELECT u.id, u.username, u.email, u.email_verified FROM sessions s
+    `SELECT u.id, u.username, u.email, u.email_verified, u.tokens FROM sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token = $1 AND s.expires_at > now()`,
     [token],
@@ -281,6 +288,7 @@ export async function accountForToken(token: string): Promise<Account | null> {
         username: row.username,
         email: row.email ?? undefined,
         emailVerified: row.email_verified,
+        tokens: Number(row.tokens),
       }
     : null;
 }

@@ -13,7 +13,8 @@
     "bots": "node --import tsx src/bots.ts",
     "reports": "node --env-file-if-exists=.env --import tsx src/show-reports.ts",
     "db:init": "node --env-file-if-exists=.env --import tsx src/db-init.ts",
-    "email:test": "node --env-file-if-exists=.env --import tsx src/email-test.ts"
+    "email:test": "node --env-file-if-exists=.env --import tsx src/email-test.ts",
+    "tokens": "node --env-file-if-exists=.env --import tsx src/tokens-cli.ts"
   },
   "dependencies": {
     "pg": "^8.22.0",

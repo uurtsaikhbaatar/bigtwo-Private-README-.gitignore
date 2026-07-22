@@ -70,6 +70,7 @@ export function useBigTwo(serverUrl: string) {
   const [error, setError] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatLine[]>([]);
   const [lastReportId, setLastReportId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [profile, setProfile] = useState<{ stats: PlayerStats; matches: MatchSummary[] } | null>(
     null,
@@ -122,6 +123,9 @@ export function useBigTwo(serverUrl: string) {
         break;
       case 'profile':
         setProfile({ stats: msg.stats, matches: msg.matches });
+        break;
+      case 'notice':
+        setNotice(msg.message);
         break;
       case 'reported':
         setLastReportId(msg.id);
@@ -220,6 +224,8 @@ export function useBigTwo(serverUrl: string) {
     error,
     chat,
     lastReportId,
+    notice,
+    clearNotice: () => setNotice(null),
     account,
     profile,
     clearError: useCallback(() => setError(null), []),
@@ -246,6 +252,8 @@ export function useBigTwo(serverUrl: string) {
     /** Имэйл рүү ирсэн кодыг шалгуулах. */
     verifyEmail: useCallback((code: string) => send({ t: 'verifyEmail', code }), [send]),
     resendCode: useCallback(() => send({ t: 'resendCode' }), [send]),
+    /** Токен дуусахад админаас хүсэх. */
+    requestTokens: useCallback(() => send({ t: 'requestTokens' }), [send]),
 
     createRoom: useCallback((name: string) => send({ t: 'create', name }), [send]),
     joinRoom: useCallback(

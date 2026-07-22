@@ -13,6 +13,7 @@
     "setup": "npm --prefix server install && npm --prefix app install",
     "reports": "npm --prefix server run reports --",
     "db:init": "npm --prefix server run db:init",
-    "email:test": "npm --prefix server run email:test --"
+    "email:test": "npm --prefix server run email:test --",
+    "tokens": "npm --prefix server run tokens --"
   }
 }

@@ -111,6 +111,13 @@ function Root() {
     if (ready && serverUrl) void saveServer(serverUrl);
   }, [ready, serverUrl]);
 
+  // Мэдээллийн мессежийг ч мөн адил түр харуулна.
+  useEffect(() => {
+    if (!game.notice) return;
+    const timer = setTimeout(game.clearNotice, 5000);
+    return () => clearTimeout(timer);
+  }, [game.notice, game.clearNotice]);
+
   // Алдааны мэдэгдлийг хэсэг хугацааны дараа автоматаар нуух.
   useEffect(() => {
     if (!error) return;
@@ -146,6 +153,7 @@ function Root() {
             onLoadProfile: game.loadProfile,
             onVerifyEmail: game.verifyEmail,
             onResendCode: game.resendCode,
+            onRequestTokens: game.requestTokens,
           }}
         />
       ) : view.phase === 'lobby' ? (
@@ -188,6 +196,11 @@ function Root() {
           <Text style={styles.bannerText}>{error}</Text>
         </View>
       )}
+      {game.notice && !error && (
+        <View style={[styles.banner, styles.noticeBanner]}>
+          <Text style={styles.bannerText}>{game.notice}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -205,5 +218,6 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   errorBanner: { backgroundColor: theme.danger },
+  noticeBanner: { backgroundColor: '#1d7a52' },
   bannerText: { color: theme.text, fontSize: 14, textAlign: 'center', fontWeight: '600' },
 });

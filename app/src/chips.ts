@@ -1,13 +1,18 @@
 /**
- * Виртуал чипийн форматлалт.
+ * Виртуал токены форматлалт.
  *
- * Чип нь зөвхөн тоглоомын оноо — бодит мөнгө биш, апп ямар ч төлбөр
- * тооцоо хийдэггүй.
+ * Токен нь зөвхөн тоглоомын оноо — бодит мөнгө биш, ямар ч ханшаар
+ * солигддоггүй, апп төлбөр тооцоо хийдэггүй.
  */
 
-/** 100 → "100 чип" */
+/** 1000000 → "1 000 000" */
+export function groupDigits(value: number): string {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+/** 50000 → "50 000 токен" */
 export function formatChips(amount: number): string {
-  return `${Math.abs(Math.round(amount))} чип`;
+  return `${groupDigits(Math.abs(amount))} токен`;
 }
 
 /** Тооцоонд эерэг дүнг "+" тэмдэгтэй харуулна. */
@@ -16,7 +21,8 @@ export function formatSignedChips(amount: number): string {
   return `${sign}${formatChips(amount)}`;
 }
 
-/** Сонголтын товч дээр богино харуулах. */
+/** Сонголтын товч дээр богино харуулах: 50000 → "50мянга". */
 export function shortChips(amount: number): string {
-  return amount === 0 ? 'Чипгүй' : String(amount);
+  if (amount === 0) return 'Токенгүй';
+  return amount >= 1000 ? `${amount / 1000}мянга` : String(amount);
 }

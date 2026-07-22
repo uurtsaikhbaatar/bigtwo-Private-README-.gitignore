@@ -11,9 +11,13 @@ import {
   View,
 } from 'react-native';
 
+import { groupDigits } from '../chips';
 import { Button } from '../components/Button';
 import type { Account, MatchSummary, PlayerStats } from '../shared/protocol';
 import { theme } from '../theme';
+
+/** Энэ хэмжээнээс доош унавал "токен хүсэх" товчийг харуулна. */
+const LOW_TOKENS = 50_000;
 
 interface Props {
   account: Account | null;
@@ -24,6 +28,7 @@ interface Props {
   onLoadProfile: () => void;
   onVerifyEmail: (code: string) => void;
   onResendCode: () => void;
+  onRequestTokens: () => void;
 }
 
 /**
@@ -39,6 +44,7 @@ export function AuthPanel({
   onLoadProfile,
   onVerifyEmail,
   onResendCode,
+  onRequestTokens,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -49,14 +55,14 @@ export function AuthPanel({
 
   // Нэвтэрсний дараа (эсвэл цонх нээгдэхэд) профайлыг автоматаар татна.
   const verifying = Boolean(account && account.email && !account.emailVerified);
-  const needsProfile = open && Boolean(account) && !verifying && profile === null;
+  const needsProfile = open && Boolean(account) && profile === null;
   useEffect(() => {
     if (needsProfile) onLoadProfile();
   }, [needsProfile, onLoadProfile]);
 
   const openPanel = () => {
     setOpen(true);
-    if (account && !verifying) onLoadProfile();
+    if (account) onLoadProfile();
   };
 
   const submit = () => {
@@ -84,46 +90,59 @@ export function AuthPanel({
           <View style={styles.sheet}>
             <View style={styles.header}>
               <Text style={styles.title}>
-                {verifying ? 'Баталгаажуулалт' : account ? 'Профайл' : 'Бүртгэл'}
+                {account ? 'Профайл' : 'Бүртгэл'}
               </Text>
               <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
                 <Text style={styles.close}>Хаах</Text>
               </Pressable>
             </View>
 
-            {account && !account.emailVerified && account.email ? (
-              /* Имэйл баталгаажаагүй бол эхлээд кодыг асууна. Гэхдээ тоглоомд
-                 саад болохгүй — цонхыг хааж тоглож болно. */
-              <View style={styles.formBody}>
-                <Text style={styles.verifyTitle}>Имэйлээ баталгаажуулна уу</Text>
-                <Text style={styles.hint}>
-                  <Text style={styles.verifyEmail}>{account.email}</Text> хаяг руу 6 оронтой код
-                  илгээлээ. Хүрээгүй бол спам хавтсаа шалгаарай.
-                </Text>
-                <TextInput
-                  value={code}
-                  onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  placeholderTextColor={theme.textMuted}
-                  style={[styles.input, styles.codeInput]}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  onSubmitEditing={() => code.length === 6 && onVerifyEmail(code)}
-                />
-                <Button
-                  title="Баталгаажуулах"
-                  onPress={() => onVerifyEmail(code)}
-                  disabled={code.length !== 6}
-                />
-                <Button title="Кодыг дахин илгээх" variant="ghost" onPress={onResendCode} />
-                <Text style={styles.hint}>
-                  Дараа нь баталгаажуулж болно — одоо ч тоглох боломжтой.
-                </Text>
-                <Button title="Гарах" variant="ghost" onPress={onLogout} />
-              </View>
-            ) : account ? (
+            {account ? (
               <ScrollView contentContainerStyle={styles.profileBody}>
                 <Text style={styles.who}>{account.username}</Text>
+
+                {/* Баталгаажуулалт нь профайлыг ХААХГҮЙ — дээд талд сануулга
+                    болж гарна. Имэйл ирээгүй ч токен, түүхээ харж, тоглож
+                    болно. */}
+                {verifying && (
+                  <View style={styles.verifyBox}>
+                    <Text style={styles.verifyTitle}>Имэйлээ баталгаажуулна уу</Text>
+                    <Text style={styles.hint}>
+                      <Text style={styles.verifyEmail}>{account.email}</Text> хаяг руу 6 оронтой
+                      код илгээлээ. Спам хавтсаа ч шалгаарай.
+                    </Text>
+                    <TextInput
+                      value={code}
+                      onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      placeholderTextColor={theme.textMuted}
+                      style={[styles.input, styles.codeInput]}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      onSubmitEditing={() => code.length === 6 && onVerifyEmail(code)}
+                    />
+                    <Button
+                      title="Баталгаажуулах"
+                      onPress={() => onVerifyEmail(code)}
+                      disabled={code.length !== 6}
+                    />
+                    <Button title="Кодыг дахин илгээх" variant="ghost" onPress={onResendCode} />
+                  </View>
+                )}
+
+                <View style={styles.tokenBox}>
+                  <Text style={styles.tokenLabel}>Токены үлдэгдэл</Text>
+                  <Text style={styles.tokenValue}>{groupDigits(account.tokens)}</Text>
+                  {account.tokens < LOW_TOKENS && (
+                    <>
+                      <Text style={styles.tokenLow}>Токен дуусах дөхлөө.</Text>
+                      <Button title="Токен хүсэх" variant="secondary" onPress={onRequestTokens} />
+                    </>
+                  )}
+                  <Text style={styles.tokenNote}>
+                    Токен нь виртуал тоглоомын оноо — бодит мөнгө биш.
+                  </Text>
+                </View>
 
                 {profile ? (
                   <>
@@ -154,7 +173,7 @@ export function AuthPanel({
                           </Text>
                           {match.stake > 0 && (
                             <Text style={[styles.matchChips, match.chips >= 0 ? styles.won : styles.lost]}>
-                              {match.chips > 0 ? `+${match.chips}` : match.chips} чип
+                              {match.chips > 0 ? '+' : ''}{groupDigits(match.chips)}
                             </Text>
                           )}
                         </View>
@@ -312,7 +331,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   hint: { color: theme.textMuted, fontSize: 12, lineHeight: 17 },
-  verifyTitle: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  verifyBox: {
+    backgroundColor: 'rgba(242,183,5,0.10)',
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.accent,
+    padding: 12,
+    gap: 8,
+  },
+  verifyTitle: { color: theme.text, fontSize: 15, fontWeight: '700' },
   verifyEmail: { color: theme.accent, fontWeight: '700' },
   codeInput: {
     fontSize: 26,
@@ -323,6 +350,16 @@ const styles = StyleSheet.create({
 
   profileBody: { paddingHorizontal: 16, gap: 12, paddingBottom: 8 },
   who: { color: theme.accent, fontSize: 20, fontWeight: '800' },
+  tokenBox: {
+    backgroundColor: theme.surfaceRaised,
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+  },
+  tokenLabel: { color: theme.textMuted, fontSize: 12 },
+  tokenValue: { color: theme.text, fontSize: 24, fontWeight: '800' },
+  tokenLow: { color: theme.danger, fontSize: 12, fontWeight: '700' },
+  tokenNote: { color: theme.textMuted, fontSize: 10, fontStyle: 'italic' },
   statRow: { flexDirection: 'row', gap: 8 },
   stat: {
     flex: 1,

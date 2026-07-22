@@ -26,6 +26,16 @@ import {
 } from './auth';
 import { closePool, dbEnabled, getPool, initSchema } from './db';
 import { recentMatches, recordMatch, statsForUser } from './history';
+import {
+  STARTING_TOKENS,
+  TokenError,
+  applySettlement,
+  balanceOf,
+  balancesOf,
+  grantTokens,
+  pendingRequests,
+  requestTokens,
+} from './tokens';
 
 const skip = dbEnabled() ? false : 'DATABASE_URL тохируулаагүй';
 
@@ -34,12 +44,15 @@ const uniqueName = () => `тест_${randomUUID().slice(0, 8)}`;
 /** Тест бүрд давхцахгүй имэйл. */
 const uniqueEmail = () => `${randomUUID().slice(0, 8)}@жишээ.тест`;
 
+/** Тестийн тоглолтод ашиглах бооцоо. */
+const MATCH_STAKE = 5_000;
+
 /** Дууссан тоглолтын төлөв гараар угсарна. */
 function finishedMatch(winner: string, others: string[]): GameState {
   const state = createGame();
   addPlayer(state, 'w', winner);
   others.forEach((n, i) => addPlayer(state, `l${i}`, n));
-  startMatch(state, 30, 30, 25);
+  startMatch(state, 30, 30, MATCH_STAKE);
 
   state.phase = 'matchEnd';
   state.matchWinnerId = 'w';
@@ -50,7 +63,7 @@ function finishedMatch(winner: string, others: string[]): GameState {
   });
   state.settlement = state.players.map((p) => ({
     playerId: p.id,
-    amount: p.id === 'w' ? 25 * others.length : -25,
+    amount: p.id === 'w' ? MATCH_STAKE * others.length : -MATCH_STAKE,
   }));
   return state;
 }
@@ -194,6 +207,73 @@ test('код дахин илгээхийг хязгаарлана', { skip }, as
   await assert.rejects(() => resendCode(account.id), /секундын дараа/, 'дараалан илгээхгүй');
 });
 
+// ── Виртуал токен ──────────────────────────────────────────────────────────
+
+test('шинэ бүртгэлд 1 сая токен өгнө', { skip }, async () => {
+  const { account } = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  assert.equal(account.tokens, STARTING_TOKENS);
+  assert.equal(await balanceOf(account.id), STARTING_TOKENS, 'санд ч мөн адил');
+});
+
+test('тоглолтын тооцоо үлдэгдэлд тусна, нийлбэр нь тэг', { skip }, async () => {
+  const winner = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  const loser = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+
+  await applySettlement(
+    new Map([
+      [winner.account.id, 50_000],
+      [loser.account.id, -50_000],
+    ]),
+  );
+
+  assert.equal(await balanceOf(winner.account.id), STARTING_TOKENS + 50_000);
+  assert.equal(await balanceOf(loser.account.id), STARTING_TOKENS - 50_000);
+});
+
+test('үлдэгдэл 0-ээс доош унахгүй', { skip }, async () => {
+  const { account } = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  await applySettlement(new Map([[account.id, -STARTING_TOKENS * 2]]));
+  assert.equal(await balanceOf(account.id), 0, 'сөрөг үлдэгдэл үүсэхгүй');
+});
+
+test('олон үлдэгдлийг нэг дуудлагаар авна', { skip }, async () => {
+  const a = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  const b = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  const balances = await balancesOf([a.account.id, b.account.id]);
+  assert.equal(balances.get(a.account.id), STARTING_TOKENS);
+  assert.equal(balances.get(b.account.id), STARTING_TOKENS);
+});
+
+test('токен хүсэх, админ олгох урсгал', { skip }, async () => {
+  const name = uniqueName();
+  const { account } = await register(name, 'нууц-үг-123', uniqueEmail());
+  await applySettlement(new Map([[account.id, -STARTING_TOKENS]]));
+
+  await requestTokens(account.id);
+  const pending = await pendingRequests();
+  assert.ok(
+    pending.some((r) => r.username === name),
+    'хүсэлт жагсаалтад орсон байх',
+  );
+
+  // Дараалан хүсэхийг хязгаарлана.
+  await assert.rejects(() => requestTokens(account.id), /минутын дараа/);
+
+  const balance = await grantTokens(name, 500_000);
+  assert.equal(balance, 500_000, 'олгосон хэмжээ нэмэгдсэн');
+
+  const after = await pendingRequests();
+  assert.ok(
+    !after.some((r) => r.username === name),
+    'олгосны дараа хүсэлт хаагдана',
+  );
+});
+
+test('байхгүй хэрэглэгчид токен олгохгүй', { skip }, async () => {
+  await assert.rejects(() => grantTokens('байхгүй_хэрэглэгч_xyz', 1000), TokenError);
+  await assert.rejects(() => grantTokens(uniqueName(), -5), TokenError, 'сөрөг хэмжээ');
+});
+
 test('тоглолтын түүх ба статистик бүртгэгдэнэ', { skip }, async () => {
   const name = uniqueName();
   const { account } = await register(name, 'нууц-үг-123', uniqueEmail());
@@ -205,14 +285,14 @@ test('тоглолтын түүх ба статистик бүртгэгдэнэ
   const after = await statsForUser(account.id);
   assert.equal(after.matches, before.matches + 1, 'тоглолт нэмэгдсэн');
   assert.equal(after.wins, before.wins + 1, 'ялалт нэмэгдсэн');
-  assert.equal(after.chips, before.chips + 50, '25 чип × 2 хожигдогч');
+  assert.equal(after.chips, before.chips + MATCH_STAKE * 2, 'бооцоо × 2 хожигдогч');
 
   const matches = await recentMatches(account.id, 5);
   assert.ok(matches.length >= 1);
   const latest = matches[0];
   assert.equal(latest.roomCode, 'TEST01');
   assert.equal(latest.won, true);
-  assert.equal(latest.chips, 50);
+  assert.equal(latest.chips, MATCH_STAKE * 2);
   assert.equal(latest.players.length, 3, 'бүх оролцогч хадгалагдана');
   assert.equal(latest.players[0].won, true, 'ялагч эхэнд');
 });

@@ -45,6 +45,7 @@ import {
 import { dbEnabled, getPool } from './db';
 import { recentMatches, recordMatch, statsForUser } from './history';
 import { readReports, saveReport } from './reports';
+import { applySettlement, balanceOf, balancesOf, requestTokens } from './tokens';
 import { Room, RoomStore, metaOf, newSeat } from './rooms';
 import { serveStatic } from './static';
 
@@ -289,14 +290,41 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
   switch (msg.t) {
     case 'start': {
       if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн эхлүүлж чадна.');
-      startMatch(
-        room.state,
-        Number(msg.targetScore ?? DEFAULT_TARGET_SCORE),
-        Number(msg.turnSeconds ?? DEFAULT_TURN_SECONDS),
-        Number(msg.stake ?? DEFAULT_STAKE),
-      );
-      room.matchRecorded = false;
-      return broadcast(room);
+      const stake = Number(msg.stake ?? DEFAULT_STAKE);
+      const begin = () => {
+        startMatch(
+          room.state,
+          Number(msg.targetScore ?? DEFAULT_TARGET_SCORE),
+          Number(msg.turnSeconds ?? DEFAULT_TURN_SECONDS),
+          stake,
+        );
+        room.matchRecorded = false;
+        broadcast(room);
+      };
+
+      // Бооцоотой тоглолтод бүртгэлтэй тоглогчид хүрэлцэхүйц токентой байх ёстой.
+      if (stake > 0 && dbEnabled()) {
+        void ensureTokens(room, stake)
+          .then(begin)
+          .catch((err) => sendAuthError(socket, err));
+        return;
+      }
+      return begin();
+    }
+
+    case 'requestTokens': {
+      requireDb();
+      const account = accounts.get(socket);
+      if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
+      void requestTokens(account.id)
+        .then(() =>
+          send(socket, {
+            t: 'notice',
+            message: 'Хүсэлт илгээгдлээ. Админ токен нэмэхэд танд мэдэгдэнэ.',
+          }),
+        )
+        .catch((err) => sendAuthError(socket, err));
+      return;
     }
     case 'next': {
       if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн үргэлжлүүлж чадна.');
@@ -438,6 +466,51 @@ function saveFinishedMatch(room: Room): void {
   void recordMatch(room.state, room.code, players).catch((err) =>
     console.error('тоглолтыг түүхэд хадгалж чадсангүй:', err),
   );
+
+  // Бооцооны үр дүнг токены үлдэгдэлд тусгана. Зочид (бүртгэлгүй) хамаарахгүй.
+  const changes = new Map<string, number>();
+  for (const entry of room.state.settlement ?? []) {
+    const userId = players.get(entry.playerId);
+    if (userId) changes.set(userId, entry.amount);
+  }
+  if (changes.size > 0) {
+    void applySettlement(changes)
+      .then(() => refreshAccounts(room))
+      .catch((err) => console.error('токены тооцоо хийж чадсангүй:', err));
+  }
+}
+
+/**
+ * Тоглолт эхлэхийн өмнө бүртгэлтэй тоглогчдын токен хүрэлцэхийг шалгана.
+ * Хүрэлцэхгүй бол хэн болохыг нэрлэж хэлнэ.
+ */
+async function ensureTokens(room: Room, stake: number): Promise<void> {
+  const seats = [...room.seats.values()].filter((s) => s.userId);
+  const balances = await balancesOf(seats.map((s) => s.userId!));
+
+  const short = seats
+    .filter((s) => (balances.get(s.userId!) ?? 0) < stake)
+    .map((s) => room.state.players.find((p) => p.id === s.playerId)?.name ?? '?');
+
+  if (short.length > 0) {
+    throw new RuleError(
+      `${short.join(', ')}-д ${stake} токен хүрэлцэхгүй байна. ` +
+        'Бага бооцоо сонгох эсвэл токен хүсэх шаардлагатай.',
+    );
+  }
+}
+
+/** Тоглолтын дараа шинэ үлдэгдлийг холбогдсон клиентүүдэд мэдэгдэнэ. */
+async function refreshAccounts(room: Room): Promise<void> {
+  for (const seat of room.seats.values()) {
+    if (!seat.userId || !seat.socket) continue;
+    const account = accounts.get(seat.socket);
+    if (!account) continue;
+    const tokens = await balanceOf(seat.userId);
+    const updated = { ...account, tokens };
+    accounts.set(seat.socket, updated);
+    send(seat.socket, { t: 'auth', account: updated });
+  }
 }
 
 function broadcastRaw(room: Room, msg: ServerMessage): void {

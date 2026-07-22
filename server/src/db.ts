@@ -76,6 +76,20 @@ export async function initSchema(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS users_email_key_idx
       ON users(email_key) WHERE email_key IS NOT NULL;
 
+    -- Виртуал токен: бүртгүүлэхэд бэлэглэгддэг, бооцоотой тоглолтод хэлбэлзэнэ.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens BIGINT NOT NULL DEFAULT 1000000;
+
+    -- Токен дуусахад хэрэглэгч нэмэлт хүсэх бөгөөд админ гараар олгоно.
+    CREATE TABLE IF NOT EXISTS token_requests (
+      id           BIGSERIAL PRIMARY KEY,
+      user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      granted_at   TIMESTAMPTZ,
+      granted      BIGINT
+    );
+    CREATE INDEX IF NOT EXISTS token_requests_pending_idx
+      ON token_requests(user_id) WHERE granted_at IS NULL;
+
     -- Баталгаажуулах код. Хэрэглэгч тутамд нэг л идэвхтэй код байна.
     CREATE TABLE IF NOT EXISTS email_codes (
       user_id    BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
