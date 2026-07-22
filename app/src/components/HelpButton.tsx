@@ -64,14 +64,23 @@ export function HelpButton({ wins }: Props) {
             </Pressable>
           </View>
 
+          {/* Хамгийн чухал нөхцөл — эхэнд нь тодруулж хэлнэ. Тоглогч бусдыг
+              уншихгүй ч энэ хайрцгийг харна. */}
+          <View style={styles.ruleBox}>
+            <Text style={styles.ruleText}>
+              <Text style={styles.ruleStrong}>Бүртгэлтэй</Text> тоглогч{' '}
+              <Text style={styles.ruleStrong}>токентой</Text> тоглож{' '}
+              <Text style={styles.ruleStrong}>хожсон</Text> тохиолдолд л цол авна.
+            </Text>
+          </View>
+
           <Text style={styles.lead}>
-            ЧИПТЭЙ тоглолтыг бүхэлд нь хожих бүрд цол ойртоно. Тойрог хожих,
-            эсвэл чипгүй тоглох нь тоологдохгүй — сүүлчийн үлдсэн хүн байж
-            хожсон байх ёстой.
+            Гурвуулаа биелэх ёстой. Зочноор тоглосон, токенгүй тоглосон, эсвэл
+            зөвхөн тойрог хожсон бол цолд тоологдохгүй — тоглолтыг бүхэлд нь,
+            сүүлчийн үлдсэн хүн байж хожих ёстой.
           </Text>
           <Text style={styles.lead}>
-            Цол ахих бүрд токен шагнал автоматаар нэмэгдэнэ. Цол нь зөвхөн
-            бүртгэлтэй тоглогчид олгогдоно — зочны түүх хадгалагддаггүй.
+            Цол ахих бүрд токен шагнал автоматаар нэмэгдэнэ.
           </Text>
 
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
@@ -137,6 +146,15 @@ const styles = StyleSheet.create({
   title: { color: theme.text, fontSize: 17, fontWeight: '700' },
   close: { color: theme.textMuted, fontSize: 14 },
   lead: { color: theme.textMuted, fontSize: 13, lineHeight: 19 },
+  ruleBox: {
+    backgroundColor: 'rgba(242,183,5,0.12)',
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.accent,
+    padding: 12,
+  },
+  ruleText: { color: theme.text, fontSize: 14, lineHeight: 21 },
+  ruleStrong: { color: theme.accent, fontWeight: '800' },
 
   list: { flexGrow: 0 },
   listContent: { gap: 2, paddingBottom: 4 },

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { joinUrl } from '../deeplink';
@@ -8,6 +8,8 @@ import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   SEATS_PER_ROUND,
+  MAX_STAKE,
+  MIN_STAKE,
   STAKE_CHOICES,
   TARGET_SCORE_CHOICES,
   TURN_SECONDS_CHOICES,
@@ -27,9 +29,15 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
   const [target, setTarget] = useState<number>(TARGET_SCORE_CHOICES[0]);
   const [turnSeconds, setTurnSeconds] = useState<number>(TURN_SECONDS_CHOICES[0]);
   const [stake, setStake] = useState<number>(STAKE_CHOICES[0]);
+  // Тоглогчид хоорондоо тохирч дурын дүн тавих боломж. Бэлэн сонголтод
+  // байхгүй дүн сонгосон бол энэ горим асна.
+  const [customOn, setCustomOn] = useState(false);
+  const [customText, setCustomText] = useState('');
   const you = view.players.find((p) => p.id === view.youId);
   const isHost = you?.isHost ?? false;
   const enough = view.players.length >= MIN_PLAYERS;
+  // Өөрөө оруулах горимд буруу тоо бичсэн эсэх — эхлүүлэх товчийг хаана.
+  const customInvalid = customOn && stake === 0 && customText.length > 0;
   const rotating = view.players.length > SEATS_PER_ROUND;
 
   const link = joinUrl(view.code);
@@ -141,7 +149,10 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
             return (
               <Pressable
                 key={choice}
-                onPress={() => setStake(choice)}
+                onPress={() => {
+                  setStake(choice);
+                  setCustomOn(false);
+                }}
                 disabled={!isHost}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
@@ -157,11 +168,53 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
               </Pressable>
             );
           })}
+
+          <Pressable
+            onPress={() => {
+              setCustomOn(true);
+              setCustomText('');
+            }}
+            disabled={!isHost}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: customOn }}
+            style={[
+              styles.stakeChoice,
+              customOn && styles.choiceActive,
+              !isHost && styles.choiceLocked,
+            ]}
+          >
+            <Text style={[styles.stakeText, customOn && styles.choiceTextActive]}>Өөрөө</Text>
+          </Pressable>
         </View>
-        <Text style={styles.hint}>
-          {stake === 0
-            ? 'Чипгүй тоглоно.'
-            : `Хожигч бусад тоглогч бүрээс ${formatChips(stake)} авна. Тоглолт дуусахад хэн хэдийг хожсон, алдсаныг харуулна.`}
+
+        {customOn && (
+          <View style={styles.customRow}>
+            <TextInput
+              value={customText}
+              onChangeText={(text) => {
+                const digits = text.replace(/[^0-9]/g, '').slice(0, 6);
+                setCustomText(digits);
+                const value = Number(digits);
+                // Хязгаарт багтсан үед л хүчинтэй болгоно; эс бөгөөс 0 болгож
+                // эхлүүлэх товчийг хаана.
+                setStake(value >= MIN_STAKE && value <= MAX_STAKE ? value : 0);
+              }}
+              editable={isHost}
+              placeholder={`${MIN_STAKE}–${MAX_STAKE}`}
+              placeholderTextColor={theme.textMuted}
+              style={[styles.customInput, !isHost && styles.choiceLocked]}
+              keyboardType="number-pad"
+              inputMode="numeric"
+            />
+            <Text style={styles.customUnit}>токен</Text>
+          </View>
+        )}
+        <Text style={[styles.hint, customInvalid && styles.warn]}>
+          {customInvalid
+            ? `${MIN_STAKE}-аас ${MAX_STAKE} хооронд тоо оруулна уу.`
+            : stake === 0
+              ? 'Чипгүй тоглоно.'
+              : `Хожигч бусад тоглогч бүрээс ${formatChips(stake)} авна. Тоглолт дуусахад хэн хэдийг хожсон, алдсаныг харуулна.`}
         </Text>
         {stake > 0 && (
           <Text style={styles.note}>
@@ -177,7 +230,7 @@ export function LobbyScreen({ view, onStart, onLeave }: Props) {
               stake ? ` · ${shortChips(stake)}` : ''
             }`}
             onPress={() => onStart(target, turnSeconds, stake)}
-            disabled={!enough}
+            disabled={!enough || (customOn && stake === 0)}
           />
         ) : (
           <Text style={styles.hint}>Өрөөний эзэн эхлүүлэхийг хүлээж байна…</Text>
@@ -250,6 +303,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surfaceRaised,
     alignItems: 'center',
   },
+  customRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  customInput: {
+    flex: 1,
+    backgroundColor: theme.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.accent,
+    color: theme.text,
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  customUnit: { color: theme.textMuted, fontSize: 14 },
+  warn: { color: theme.danger },
   stakeText: { color: theme.textMuted, fontSize: 15, fontWeight: '700' },
   note: { color: theme.textMuted, fontSize: 11, fontStyle: 'italic' },
   actions: { gap: 8, marginTop: 4 },
