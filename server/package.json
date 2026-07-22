@@ -14,6 +14,7 @@
     "reports": "node --env-file-if-exists=.env --import tsx src/show-reports.ts",
     "db:init": "node --env-file-if-exists=.env --import tsx src/db-init.ts",
     "email:test": "node --env-file-if-exists=.env --import tsx src/email-test.ts",
+    "games": "node --env-file-if-exists=.env --import tsx src/games-cli.ts",
     "live": "node --env-file-if-exists=.env --import tsx src/live-cli.ts",
     "tokens": "node --env-file-if-exists=.env --import tsx src/tokens-cli.ts"
   },

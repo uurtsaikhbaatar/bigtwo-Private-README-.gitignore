@@ -68,8 +68,21 @@ function finishedMatch(winner: string, others: string[]): GameState {
   return state;
 }
 
+/**
+ * Тест бүр дуусахад өөрийн хогоо цэвэрлэнэ.
+ *
+ * Өмнө нь TEST01/TEST02 өрөөний тоглолтууд санд үлдэж, жинхэнэ тоглогчдын
+ * түүхийг бөглөрүүлж байв — `npm test` ажиллуулах бүрд хоёр тоглолт
+ * нэмэгддэг байсан.
+ */
 after(async () => {
-  if (dbEnabled()) await closePool();
+  if (!dbEnabled()) return;
+  try {
+    await getPool().query("DELETE FROM matches WHERE room_code IN ('TEST01', 'TEST02')");
+  } catch (err) {
+    console.error('туршилтын өгөгдөл цэвэрлэж чадсангүй:', err);
+  }
+  await closePool();
 });
 
 test('схем үүсгэх нь давтахад аюулгүй', { skip }, async () => {
@@ -280,7 +293,7 @@ test('тоглолтын түүх ба статистик бүртгэгдэнэ
 
   const before = await statsForUser(account.id);
   const state = finishedMatch(name, ['Бат', 'Цэцэг']);
-  await recordMatch(state, 'TEST01', new Map([['w', account.id]]));
+  await recordMatch(state, 'TEST01', new Map([['w', account.id]]), true);
 
   const after = await statsForUser(account.id);
   assert.equal(after.matches, before.matches + 1, 'тоглолт нэмэгдсэн');
@@ -299,7 +312,7 @@ test('тоглолтын түүх ба статистик бүртгэгдэнэ
 
 test('зочин тоглогч user_id-гүй бүртгэгдэнэ', { skip }, async () => {
   const state = finishedMatch(uniqueName(), ['Зочин1', 'Зочин2']);
-  await recordMatch(state, 'TEST02', new Map());
+  await recordMatch(state, 'TEST02', new Map(), true);
 
   const rows = await getPool().query<{ user_id: string | null }>(
     `SELECT mp.user_id FROM match_players mp

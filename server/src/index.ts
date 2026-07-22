@@ -822,7 +822,9 @@ function saveFinishedMatch(room: Room): void {
   // Цол нь түүхээс тоологддог тул хожлыг бичиж ДУУССАНЫ ДАРАА л уншина.
   // Зэрэг явуулбал энэ тоглолт нь тоологдоогүй байхад уншиж, цол ахисан
   // мөчийг алдана.
-  void recordMatch(room.state, room.code, players)
+  // TEST_MODE-той ажиллаж байвал туршилтын тоглолт гэж тэмдэглэнэ —
+  // өгөгдөл нь үлдэнэ, зүгээр л хүний жагсаалтад гарахгүй.
+  void recordMatch(room.state, room.code, players, Boolean(process.env.TEST_MODE))
     .then(() => refreshWins(room, true))
     .catch((err) => console.error('тоглолтыг түүхэд хадгалж чадсангүй:', err));
 

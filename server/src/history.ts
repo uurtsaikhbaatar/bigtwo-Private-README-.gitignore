@@ -17,6 +17,8 @@ export async function recordMatch(
   state: GameState,
   roomCode: string,
   accounts: Map<string, string>,
+  /** Туршилтаас үүссэн эсэх — хүний жагсаалтад гарахгүй. */
+  isTest = false,
 ): Promise<void> {
   if (state.phase !== 'matchEnd') return;
 
@@ -26,9 +28,9 @@ export async function recordMatch(
     await client.query('BEGIN');
     const dragon = state.history.some((r) => r.dragonPlayerId);
     const match = await client.query<{ id: string }>(
-      `INSERT INTO matches (room_code, rounds, target_score, stake, dragon)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [roomCode, state.round, state.targetScore, state.stake, dragon],
+      `INSERT INTO matches (room_code, rounds, target_score, stake, dragon, test)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [roomCode, state.round, state.targetScore, state.stake, dragon, isTest],
     );
     const matchId = match.rows[0].id;
 

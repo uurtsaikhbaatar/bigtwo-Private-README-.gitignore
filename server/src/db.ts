@@ -143,6 +143,10 @@ export async function initSchema(): Promise<void> {
       finished_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Туршилтын тоглолтыг тэмдэглэнэ. Устгахгүй — алдаа засахад хэрэгтэй —
+    -- гэхдээ хүний харах жагсаалтад гаргахгүй.
+    ALTER TABLE matches ADD COLUMN IF NOT EXISTS test BOOLEAN NOT NULL DEFAULT false;
+
     CREATE TABLE IF NOT EXISTS match_players (
       match_id  BIGINT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
       user_id   BIGINT REFERENCES users(id) ON DELETE SET NULL,
