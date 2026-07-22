@@ -42,6 +42,18 @@ async function call(path: string): Promise<unknown> {
   if (KEY) url.searchParams.set('key', KEY);
   const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   const body = await res.text();
+
+  if (res.status === 403) {
+    throw new Error('REPORT_KEY таарахгүй байна. server/.env доторхыг Render дээрхтэй тулгана уу.');
+  }
+  // Сервер вэб аппаа буцаасан бол энэ зам түүн дээр байхгүй гэсэн үг —
+  // өөрөөр хэлбэл шинэ кодыг хараахан байршуулаагүй.
+  if (body.trimStart().startsWith('<')) {
+    throw new Error(
+      'Сервер дээр энэ боломж хараахан байхгүй байна.\n' +
+        '  Шинэ кодыг байршуулсны дараа ажиллана: git push origin main',
+    );
+  }
   if (!res.ok) throw new Error(`${res.status}: ${body.slice(0, 200)}`);
   return JSON.parse(body);
 }
