@@ -127,6 +127,19 @@ export async function initSchema(): Promise<void> {
       PRIMARY KEY (match_id, name)
     );
     CREATE INDEX IF NOT EXISTS match_players_user_idx ON match_players(user_id);
+
+    -- Тоглогчдоос ирсэн алдааны мэдэгдэл. Файлд биш энд хадгална — Render-ийн
+    -- диск deploy бүрд цэвэрлэгддэг тул файл дээр хадгалбал мэдэгдэл алга болно.
+    CREATE TABLE IF NOT EXISTS reports (
+      id          TEXT PRIMARY KEY,
+      at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+      kind        TEXT NOT NULL,
+      code        TEXT,
+      player_name TEXT,
+      text        TEXT NOT NULL,
+      context     JSONB NOT NULL DEFAULT '{}'::jsonb
+    );
+    CREATE INDEX IF NOT EXISTS reports_at_idx ON reports(at DESC);
   `;
   await getPool().query(sql);
 }

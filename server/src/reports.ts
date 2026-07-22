@@ -1,12 +1,12 @@
 /**
  * Тоглогчдоос ирсэн алдааны мэдэгдлийг хадгалах.
  *
- * Мэдэгдэл бүр `data/reports.jsonl` файлд нэг мөр болж бичигдэнэ (JSON Lines) —
- * ингэснээр `npm run reports` эсвэл ямар ч хэрэгслээр амархан уншина.
+ * Мэдээллийн сан тохируулсан бол `reports` хүснэгтэд бичнэ. Render-ийн диск
+ * deploy бүрд цэвэрлэгддэг тул файл дээр хадгалбал мэдэгдэл алга болдог —
+ * үүнийг тоглогчийн мэдэгдэл нэг deploy-гийн дараа алдагдсанаар мэдсэн.
  *
- * ЧУХАЛ: Render-ийн үнэгүй багц дээр диск түр зуурынх — сервер дахин ачаалахад
- * файл цэвэрлэгдэнэ. Тогтвортой авахын тулд `REPORT_WEBHOOK` орчны хувьсагчид
- * Discord/Slack/Telegram-ийн webhook хаягийг өгвөл мэдэгдэл тэр даруй тийш очно.
+ * Сангүй үед (локал хөгжүүлэлт) `data/reports.jsonl` файлд JSON Lines
+ * хэлбэрээр унана. `REPORT_WEBHOOK` өгвөл Discord/Slack руу мөн шууд очно.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { ReportKind } from '../../app/src/shared/protocol';
+import { dbEnabled, getPool } from './db';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.resolve(here, '..', 'data');
@@ -54,6 +55,29 @@ export async function saveReport(input: NewReport): Promise<StoredReport> {
     context: input.context,
   };
 
+  if (dbEnabled()) {
+    try {
+      await getPool().query(
+        `INSERT INTO reports (id, at, kind, code, player_name, text, context)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          report.id,
+          report.at,
+          report.kind,
+          report.code,
+          report.playerName,
+          report.text,
+          JSON.stringify(report.context),
+        ],
+      );
+      void notifyWebhook(report);
+      return report;
+    } catch (err) {
+      // Сан унасан ч мэдэгдлийг алдахгүй — файл руу унана.
+      console.error('Мэдэгдлийг санд бичиж чадсангүй:', err instanceof Error ? err.message : err);
+    }
+  }
+
   await mkdir(DATA_DIR, { recursive: true });
   await rotateIfLarge();
   await appendFile(REPORTS_FILE, `${JSON.stringify(report)}\n`, 'utf8');
@@ -63,6 +87,31 @@ export async function saveReport(input: NewReport): Promise<StoredReport> {
 
 /** Хадгалсан мэдэгдлүүдийг шинэхнээс нь эрэмбэлж уншина. */
 export async function readReports(limit = 100): Promise<StoredReport[]> {
+  if (dbEnabled()) {
+    try {
+      const result = await getPool().query<{
+        id: string;
+        at: Date;
+        kind: ReportKind;
+        code: string | null;
+        player_name: string | null;
+        text: string;
+        context: Record<string, unknown>;
+      }>('SELECT * FROM reports ORDER BY at DESC LIMIT $1', [limit]);
+      return result.rows.map((r) => ({
+        id: r.id,
+        at: r.at.toISOString(),
+        kind: r.kind,
+        code: r.code,
+        playerName: r.player_name,
+        text: r.text,
+        context: r.context ?? {},
+      }));
+    } catch (err) {
+      console.error('Мэдэгдлийг сангаас уншиж чадсангүй:', err instanceof Error ? err.message : err);
+    }
+  }
+
   try {
     const raw = await readFile(REPORTS_FILE, 'utf8');
     const lines = raw.split('\n').filter(Boolean);
