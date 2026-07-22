@@ -12,15 +12,18 @@
     "smoke": "node --import tsx src/smoke.ts",
     "bots": "node --import tsx src/bots.ts",
     "reports": "node --env-file-if-exists=.env --import tsx src/show-reports.ts",
-    "db:init": "node --env-file-if-exists=.env --import tsx src/db-init.ts"
+    "db:init": "node --env-file-if-exists=.env --import tsx src/db-init.ts",
+    "email:test": "node --env-file-if-exists=.env --import tsx src/email-test.ts"
   },
   "dependencies": {
+    "nodemailer": "^9.0.3",
     "pg": "^8.22.0",
     "tsx": "^4.19.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
     "@types/ws": "^8.5.13",
     "typescript": "^5.7.2"
