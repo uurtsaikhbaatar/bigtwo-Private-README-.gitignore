@@ -52,7 +52,7 @@ export function HomeScreen({
         <View style={styles.hero}>
           <Text style={styles.title}>Дай Ди</Text>
           <Text style={styles.subtitle}>Найзуудтайгаа хятад покер тоглох</Text>
-          <AuthPanel {...auth} />
+          {auth.account && <AuthPanel {...auth} />}
         </View>
 
         {invited && (
@@ -115,6 +115,16 @@ export function HomeScreen({
             style={styles.spaced}
           />
         </View>
+
+        {!auth.account && (
+          <View style={styles.optional}>
+            <AuthPanel {...auth} />
+            <Text style={styles.optionalHint}>
+              Бүртгэлгүйгээр шууд тоглож болно. Бүртгүүлбэл тоглолтын түүх, статистик
+              хадгалагдана.
+            </Text>
+          </View>
+        )}
 
         <Button
           title={showSettings ? 'Тохиргоог хаах' : 'Сервер тохиргоо'}
@@ -179,6 +189,14 @@ const styles = StyleSheet.create({
   line: { flex: 1, height: 1, backgroundColor: theme.surfaceRaised },
   dividerText: { color: theme.textMuted, fontSize: 12 },
   hint: { color: theme.textMuted, fontSize: 12, lineHeight: 18 },
+  optional: { alignItems: 'center', gap: 2 },
+  optionalHint: {
+    color: theme.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
   invite: {
     backgroundColor: theme.surfaceRaised,
     borderRadius: theme.radius,

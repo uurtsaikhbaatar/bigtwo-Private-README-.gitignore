@@ -64,7 +64,7 @@ export function AuthPanel({
     <>
       <Pressable onPress={openPanel} accessibilityRole="button" style={styles.trigger}>
         <Text style={styles.triggerText}>
-          {account ? `👤 ${account.username}` : 'Нэвтрэх / Бүртгүүлэх'}
+          {account ? `👤 ${account.username}` : 'Бүртгүүлэх / Нэвтрэх'}
         </Text>
       </Pressable>
 
