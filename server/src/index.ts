@@ -6,7 +6,7 @@
  * болгож, хариуд нь өөрийн харагдацыг авна.
  */
 
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 
 import {
@@ -24,6 +24,7 @@ import {
   timeoutTurn,
 } from '../../app/src/shared/game';
 import {
+  MAX_REPORT_CHARS,
   MAX_VOICE_CHARS,
   MAX_VOICE_MS,
   PROTOCOL_VERSION,
@@ -31,6 +32,7 @@ import {
   type ServerMessage,
   viewFor,
 } from '../../app/src/shared/protocol';
+import { readReports, saveReport } from './reports';
 import { Room, RoomStore, metaOf, newSeat } from './rooms';
 import { serveStatic } from './static';
 
@@ -53,6 +55,10 @@ const httpServer = createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, rooms: rooms.size, uptime: process.uptime() }));
+    return;
+  }
+  if (req.url?.startsWith('/reports')) {
+    void serveReports(req, res);
     return;
   }
   // Вэб хувилбар бүтээгдсэн бол түүнийг дамжуулна (`npm run build:web`).
@@ -188,6 +194,27 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       // Дуут мессеж хэмжээгээр том тул түүхэд хадгалахгүй — зөвхөн шууд дамжуулна.
       return broadcastRaw(room, { t: 'voice', from, data, ms, at: Date.now() });
     }
+    case 'report': {
+      const text = String(msg.text ?? '').trim().slice(0, MAX_REPORT_CHARS);
+      if (!text) throw new RuleError('Мэдэгдэл хоосон байна.');
+      const player = room.state.players.find((p) => p.id === playerId);
+      void saveReport({
+        kind: msg.kind === 'crash' ? 'crash' : 'bug',
+        text,
+        code: room.code,
+        playerName: player?.name ?? null,
+        context: {
+          ...(typeof msg.context === 'object' && msg.context ? msg.context : {}),
+          phase: room.state.phase,
+          round: room.state.round,
+          players: room.state.players.length,
+          serverLog: room.state.log.slice(-6),
+        },
+      })
+        .then((saved) => send(socket, { t: 'reported', id: saved.id }))
+        .catch((err) => console.error('мэдэгдэл хадгалж чадсангүй:', err));
+      return;
+    }
     case 'leave': {
       releaseSeat(room, playerId);
       sessions.delete(socket);
@@ -208,6 +235,31 @@ function seat(socket: WebSocket, room: Room, name: string): void {
   room.lastActivity = Date.now();
   send(socket, { t: 'joined', code: room.code, playerId: s.playerId, token: s.token });
   sendChatHistory(socket, room);
+}
+
+/**
+ * Алдааны мэдэгдлүүдийг JSON-оор өгнө.
+ *
+ * `REPORT_KEY` орчны хувьсагч тохируулсан бол `?key=…` таарах ёстой.
+ * Тохируулаагүй бол зөвхөн локал хандалт зөвшөөрөгдөнө — интернэтэд гарсан
+ * сервер дээр мэдэгдэл санамсаргүй нээлттэй болохоос сэргийлнэ.
+ */
+async function serveReports(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const expected = process.env.REPORT_KEY;
+  const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+  const allowed = expected ? url.searchParams.get('key') === expected : local;
+
+  if (!allowed) {
+    res.writeHead(403, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'REPORT_KEY шаардлагатай.' }));
+    return;
+  }
+
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 100, 500);
+  const reports = await readReports(limit);
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ count: reports.length, reports }, null, 2));
 }
 
 /** Шинээр холбогдсон хүнд сүүлийн яриаг үзүүлнэ. */

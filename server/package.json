@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test src/game.test.ts src/match.test.ts",
     "smoke": "node --import tsx src/smoke.ts",
-    "bots": "node --import tsx src/bots.ts"
+    "bots": "node --import tsx src/bots.ts",
+    "reports": "node --import tsx src/show-reports.ts"
   },
   "dependencies": {
     "tsx": "^4.19.2",

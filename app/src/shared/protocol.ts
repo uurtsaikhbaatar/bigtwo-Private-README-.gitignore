@@ -13,6 +13,11 @@ import { GameState, Phase, RoundRecord, Settlement } from './game';
 
 export const PROTOCOL_VERSION = 3;
 
+/** Алдааны мэдэгдлийн төрөл: хэрэглэгч бичсэн эсвэл апп өөрөө барьсан. */
+export type ReportKind = 'bug' | 'crash';
+/** Мэдэгдлийн бичвэрийн дээд урт. */
+export const MAX_REPORT_CHARS = 2000;
+
 /** Дуут мессежийн дээд хэмжээ (base64 тэмдэгт). ~40 секунд Opus багтана. */
 export const MAX_VOICE_CHARS = 400_000;
 /** Дуут мессежийн дээд урт. */
@@ -34,6 +39,8 @@ export type ClientMessage =
   | { t: 'chat'; text: string }
   /** Дуут мессеж — base64 data URL. */
   | { t: 'voice'; data: string; ms: number }
+  /** Алдааны мэдэгдэл — гараар бичсэн эсвэл автоматаар баригдсан. */
+  | { t: 'report'; kind: ReportKind; text: string; context?: Record<string, unknown> }
   | { t: 'leave' }
   | { t: 'ping' };
 
@@ -46,6 +53,7 @@ export type ServerMessage =
   | { t: 'error'; message: string }
   | { t: 'chat'; from: string; text: string; at: number }
   | { t: 'voice'; from: string; data: string; ms: number; at: number }
+  | { t: 'reported'; id: string }
   | { t: 'pong' };
 
 // ── Харагдац ───────────────────────────────────────────────────────────────

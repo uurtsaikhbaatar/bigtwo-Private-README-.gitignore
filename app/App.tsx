@@ -4,13 +4,30 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChatButton } from './src/components/ChatPanel';
+import { ReportButton } from './src/components/ReportButton';
 import { clearRoomCodeFromUrl, pendingRoomCode } from './src/deeplink';
+import { installErrorReporter } from './src/errors';
 import { defaultServerUrl, useBigTwo } from './src/net';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LobbyScreen } from './src/screens/LobbyScreen';
 import { TableScreen } from './src/screens/TableScreen';
 import { loadName, loadServer, loadSession, saveName, saveServer } from './src/storage';
+import type { GameView } from './src/shared/protocol';
 import { theme } from './src/theme';
+
+/** Мэдэгдэлд хавсаргах товч төлөв — бүтэн харагдац хэт том тул. */
+function summarise(view: GameView) {
+  return {
+    code: view.code,
+    phase: view.phase,
+    round: view.round,
+    turnIsYou: view.turnId === view.youId,
+    seated: view.youAreSeated,
+    handCount: view.yourHand.length,
+    players: view.players.map((p) => `${p.name}:${p.score}`),
+    log: view.log.slice(-5),
+  };
+}
 
 export default function App() {
   return (
@@ -61,6 +78,10 @@ function Root() {
       cancelled = true;
     };
   }, [resumeSession, joinRoom]);
+
+  // Аппад гарсан алдааг автоматаар мэдэгдэнэ.
+  const { sendReport } = game;
+  useEffect(() => installErrorReporter(sendReport), [sendReport]);
 
   // Өрөөнд орсны дараа хаягийг цэвэрлэнэ.
   useEffect(() => {
@@ -116,12 +137,18 @@ function Root() {
       )}
 
       {view && (
-        <ChatButton
-          lines={game.chat}
-          youName={view.players.find((p) => p.id === view.youId)?.name ?? ''}
-          onSend={game.sendChat}
-          onSendVoice={game.sendVoice}
-        />
+        <>
+          <ChatButton
+            lines={game.chat}
+            youName={view.players.find((p) => p.id === view.youId)?.name ?? ''}
+            onSend={game.sendChat}
+            onSendVoice={game.sendVoice}
+          />
+          <ReportButton
+            lastReportId={game.lastReportId}
+            onSend={(text) => game.sendReport('bug', text, { view: summarise(view) })}
+          />
+        </>
       )}
 
       {game.status !== 'online' && view && (

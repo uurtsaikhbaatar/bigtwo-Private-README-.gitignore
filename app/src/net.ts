@@ -10,7 +10,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
 import type { Card } from './shared/cards';
-import type { ClientMessage, GameView, ServerMessage } from './shared/protocol';
+import { deviceContext } from './errors';
+import type { ClientMessage, GameView, ReportKind, ServerMessage } from './shared/protocol';
 import { SavedSession, clearSession, saveSession } from './storage';
 
 export const SERVER_PORT = 8787;
@@ -54,6 +55,7 @@ export function useBigTwo(serverUrl: string) {
   const [view, setView] = useState<GameView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatLine[]>([]);
+  const [lastReportId, setLastReportId] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
   const sessionRef = useRef<SavedSession | null>(null);
@@ -86,6 +88,9 @@ export function useBigTwo(serverUrl: string) {
           ...prev.slice(-49),
           { from: msg.from, audio: msg.data, ms: msg.ms, at: msg.at },
         ]);
+        break;
+      case 'reported':
+        setLastReportId(msg.id);
         break;
       case 'error':
         setError(msg.message);
@@ -174,6 +179,7 @@ export function useBigTwo(serverUrl: string) {
     view,
     error,
     chat,
+    lastReportId,
     clearError: useCallback(() => setError(null), []),
 
     createRoom: useCallback((name: string) => send({ t: 'create', name }), [send]),
@@ -200,6 +206,12 @@ export function useBigTwo(serverUrl: string) {
     playCards: useCallback((cards: Card[]) => send({ t: 'play', cards }), [send]),
     passTurn: useCallback(() => send({ t: 'pass' }), [send]),
     sendChat: useCallback((text: string) => send({ t: 'chat', text }), [send]),
+    /** Алдааны мэдэгдэл илгээх. Орчны мэдээллийг өөрөө хавсаргана. */
+    sendReport: useCallback(
+      (kind: ReportKind, text: string, context: Record<string, unknown> = {}) =>
+        send({ t: 'report', kind, text, context: { ...deviceContext(), ...context } }),
+      [send],
+    ),
     sendVoice: useCallback(
       (data: string, ms: number) => send({ t: 'voice', data, ms }),
       [send],
