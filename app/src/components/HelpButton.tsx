@@ -83,6 +83,14 @@ export function HelpButton({ wins }: Props) {
             Цол ахих бүрд токен шагнал автоматаар нэмэгдэнэ.
           </Text>
 
+          {/* Баганын толгой — доорх тоонууд юу болохыг хэлнэ. */}
+          <View style={styles.head}>
+            <Text style={styles.headBadge} />
+            <Text style={styles.headName}>Цол</Text>
+            <Text style={styles.headWins}>Хожлын тоо</Text>
+            <Text style={styles.headReward}>Шагнал</Text>
+          </View>
+
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
             {RANKS.map((rank, i) => {
               const isMine = mine?.name === rank.name;
@@ -97,7 +105,7 @@ export function HelpButton({ wins }: Props) {
                       {isMine ? ' — та' : ''}
                     </Text>
                     <Text style={styles.wins}>
-                      {rank.wins === 0 ? 'эхлэл' : `${rank.wins} хожил`}
+                      {rank.wins} хожил
                     </Text>
                     <Text style={styles.reward}>
                       {rank.reward > 0 ? `+${groupDigits(rank.reward)}` : ''}
@@ -109,8 +117,8 @@ export function HelpButton({ wins }: Props) {
           </ScrollView>
 
           <Text style={styles.footer}>
-            Баруун талын тоо нь цол ахихад шагнагдах токен. Цол ахих бүрд чатад
-            зарлагдана. Дэлгэц дээр хүрвэл энэ цонх дахин 30 секунд нээлттэй байна.
+            Цол ахих бүрд чатад зарлагдана. Дэлгэц дээр хүрвэл энэ цонх дахин 30
+            секунд нээлттэй байна.
           </Text>
         </Pressable>
       </Overlay>
@@ -155,6 +163,20 @@ const styles = StyleSheet.create({
   },
   ruleText: { color: theme.text, fontSize: 14, lineHeight: 21 },
   ruleStrong: { color: theme.accent, fontWeight: '800' },
+
+  head: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.10)',
+  },
+  headBadge: { width: 34 },
+  headName: { color: theme.textMuted, fontSize: 11, fontWeight: '700', flex: 1 },
+  headWins: { color: theme.textMuted, fontSize: 11, fontWeight: '700', width: 74, textAlign: 'right' },
+  headReward: { color: theme.textMuted, fontSize: 11, fontWeight: '700', width: 78, textAlign: 'right' },
 
   list: { flexGrow: 0 },
   listContent: { gap: 2, paddingBottom: 4 },
