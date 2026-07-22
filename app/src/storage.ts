@@ -5,6 +5,7 @@ const KEY_NAME = 'bigtwo.name';
 const KEY_SERVER = 'bigtwo.server';
 const KEY_SESSION = 'bigtwo.session';
 const KEY_AUTH = 'bigtwo.auth';
+const KEY_MUTED = 'bigtwo.muted';
 
 /**
  * Вэб дээр суудлыг таб тус бүрээр тусад нь хадгална.
@@ -79,3 +80,10 @@ export async function clearSession(): Promise<void> {
 export const loadAuthToken = () => read(KEY_AUTH);
 export const saveAuthToken = (token: string) => write(KEY_AUTH, token);
 export const clearAuthToken = () => write(KEY_AUTH, null);
+
+/**
+ * Дуу унтраасан эсэх. Анхдагчаар АСААЛТТАЙ — унтраалттай бол хэн ч товчийг
+ * олохгүй, ёслолын дуу хэзээ ч сонсогдохгүй.
+ */
+export const loadMuted = async (): Promise<boolean> => (await read(KEY_MUTED)) === '1';
+export const saveMuted = (muted: boolean) => write(KEY_MUTED, muted ? '1' : null);

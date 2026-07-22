@@ -4,8 +4,10 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChatButton } from './src/components/ChatPanel';
+import { Celebration } from './src/components/Celebration';
 import { HelpButton } from './src/components/HelpButton';
 import { PlayerInfoPanel } from './src/components/PlayerInfoPanel';
+import { SoundToggle } from './src/components/SoundToggle';
 import { ReportButton } from './src/components/ReportButton';
 import { clearRoomCodeFromUrl, pendingRoomCode } from './src/deeplink';
 import { installErrorReporter } from './src/errors';
@@ -183,6 +185,14 @@ function Root() {
         />
       )}
 
+      {view && game.promotion && (
+        <Celebration
+          promotion={game.promotion}
+          mine={game.promotion.playerId === view.youId}
+          onDone={game.clearPromotion}
+        />
+      )}
+
       {view && (
         <>
           <ChatButton
@@ -191,6 +201,7 @@ function Root() {
             onSend={game.sendChat}
             onSendVoice={game.sendVoice}
           />
+          <SoundToggle />
           <HelpButton wins={view.players.find((p) => p.id === view.youId)?.rankedWins ?? null} />
           <PlayerInfoPanel
             pendingName={inspecting}

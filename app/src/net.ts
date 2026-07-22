@@ -18,6 +18,7 @@ import type {
   MatchSummary,
   PlayerInfo,
   PlayerStats,
+  Promotion,
   ReportKind,
   ServerMessage,
 } from './shared/protocol';
@@ -75,6 +76,8 @@ export function useBigTwo(serverUrl: string) {
   const [account, setAccount] = useState<Account | null>(null);
   // Нэр дээр дарж нээсэн тоглогчийн мэдээлэл.
   const [playerInfo, setPlayerInfo] = useState<PlayerInfo | null>(null);
+  // Цол ахисны ёслол — нэг дор нэг л ёслол харуулна.
+  const [promotion, setPromotion] = useState<Promotion | null>(null);
   const [profile, setProfile] = useState<{ stats: PlayerStats; matches: MatchSummary[] } | null>(
     null,
   );
@@ -129,6 +132,9 @@ export function useBigTwo(serverUrl: string) {
         break;
       case 'playerInfo':
         setPlayerInfo(msg.info);
+        break;
+      case 'celebrate':
+        setPromotion(msg.promotion);
         break;
       case 'notice':
         setNotice(msg.message);
@@ -235,6 +241,8 @@ export function useBigTwo(serverUrl: string) {
     account,
     profile,
     playerInfo,
+    promotion,
+    clearPromotion: useCallback(() => setPromotion(null), []),
     closePlayerInfo: useCallback(() => setPlayerInfo(null), []),
     clearError: useCallback(() => setError(null), []),
 

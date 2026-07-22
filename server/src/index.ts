@@ -612,6 +612,19 @@ async function refreshWins(room: Room, announce = false): Promise<void> {
     if (!rank) continue;
 
     const reward = rewardBetween(before, stats.rankedWins);
+
+    // Ёслолын дэлгэц — чатын мөрөөс тусдаа.
+    broadcastRaw(room, {
+      t: 'celebrate',
+      promotion: {
+        playerId: player.id,
+        name: player.name,
+        rank: rank.name,
+        badge: rank.badge,
+        reward,
+      },
+    });
+
     broadcastRaw(room, {
       t: 'chat',
       from: 'Дай Ди',

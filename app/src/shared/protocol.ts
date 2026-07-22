@@ -11,7 +11,7 @@ import { Card } from './cards';
 import { comboLabel } from './combos';
 import { GameState, Phase, RoundRecord, Settlement } from './game';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Алдааны мэдэгдлийн төрөл: хэрэглэгч бичсэн эсвэл апп өөрөө барьсан. */
 export type ReportKind = 'bug' | 'crash';
@@ -76,6 +76,11 @@ export type ServerMessage =
   | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[] }
   /** Өөр тоглогчийн ил мэдээлэл. Бүртгэлгүй бол stats нь null. */
   | { t: 'playerInfo'; info: PlayerInfo }
+  /**
+   * Цол ахисан — ёслол хийнэ. Чатын мөрөөс ТУСДАА мессеж: текстийг задлан
+   * шинжиж эффект асаах нь эмзэг, үг өөрчлөгдөхөд эвдэрнэ.
+   */
+  | { t: 'celebrate'; promotion: Promotion }
   /** Мэдээллийн мессеж (жишээ нь токен хүсэлт хүлээн авсан). */
   | { t: 'notice'; message: string }
   | { t: 'pong' };
@@ -110,6 +115,17 @@ export interface PlayerInfo {
   score: number;
   eliminated: boolean;
   avatar: string | null;
+}
+
+/** Цол ахисан тухай мэдээлэл — ёслолын дэлгэцэд хэрэглэнэ. */
+export interface Promotion {
+  playerId: string;
+  name: string;
+  /** Шинэ цолны нэр. */
+  rank: string;
+  badge: string;
+  /** Олгогдсон токен. 0 байж болно. */
+  reward: number;
 }
 
 export interface PlayerStats {
