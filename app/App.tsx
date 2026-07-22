@@ -166,6 +166,8 @@ function Root() {
             onResendCode: game.resendCode,
             onRequestTokens: game.requestTokens,
             onSetAvatar: game.setAvatar,
+            onForgotPassword: game.forgotPassword,
+            onResetPassword: game.resetPassword,
           }}
         />
       ) : view.phase === 'lobby' ? (

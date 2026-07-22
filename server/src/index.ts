@@ -41,7 +41,9 @@ import {
   login,
   logout,
   register,
+  requestPasswordReset,
   resendCode,
+  resetPassword,
   saveAvatar,
   verifyEmail,
 } from './auth';
@@ -211,6 +213,40 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         .then(({ account, token }) => {
           accounts.set(socket, account);
           send(socket, { t: 'auth', account, token });
+        })
+        .catch((err) => sendAuthError(socket, err));
+      return;
+    }
+
+    /**
+     * Нууц үг мартсан. Хаяг бүртгэлтэй эсэхээс үл хамааран ИЖИЛ хариу
+     * буцаана — эс бөгөөс хэн нэгэн хаягуудыг туршиж, аль нь бүртгэлтэйг
+     * олж мэдэх боломжтой болно.
+     */
+    case 'forgotPassword': {
+      requireDb();
+      void requestPasswordReset(String(msg.email ?? ''))
+        .catch((err) => console.error('нууц үг сэргээх:', err))
+        .finally(() =>
+          send(socket, {
+            t: 'notice',
+            message: 'Хэрэв тэр хаяг бүртгэлтэй бол сэргээх код илгээгдлээ.',
+          }),
+        );
+      return;
+    }
+
+    case 'resetPassword': {
+      requireDb();
+      void resetPassword(
+        String(msg.email ?? ''),
+        String(msg.code ?? ''),
+        String(msg.password ?? ''),
+      )
+        .then(({ account, token }) => {
+          accounts.set(socket, account);
+          send(socket, { t: 'auth', account, token });
+          send(socket, { t: 'notice', message: 'Нууц үг солигдлоо. Нэвтэрлээ.' });
         })
         .catch((err) => sendAuthError(socket, err));
       return;

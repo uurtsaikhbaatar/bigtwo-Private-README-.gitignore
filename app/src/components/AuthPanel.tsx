@@ -31,6 +31,8 @@ interface Props {
   onResendCode: () => void;
   onRequestTokens: () => void;
   onSetAvatar: (avatar: string | null) => void;
+  onForgotPassword: (email: string) => void;
+  onResetPassword: (email: string, code: string, password: string) => void;
 }
 
 /**
@@ -48,9 +50,13 @@ export function AuthPanel({
   onResendCode,
   onRequestTokens,
   onSetAvatar,
+  onForgotPassword,
+  onResetPassword,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
+  // Сэргээх хоёр шат: код хүсэх → код + шинэ нууц үг оруулах.
+  const [resetSent, setResetSent] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
@@ -213,6 +219,29 @@ export function AuthPanel({
                   ))}
                 </View>
 
+                {mode === 'forgot' ? (
+                  <ForgotForm
+                    email={email}
+                    onEmailChange={setEmail}
+                    code={code}
+                    onCodeChange={setCode}
+                    password={password}
+                    onPasswordChange={setPassword}
+                    sent={resetSent}
+                    onSend={() => {
+                      onForgotPassword(email.trim());
+                      setResetSent(true);
+                    }}
+                    onReset={() => onResetPassword(email.trim(), code, password)}
+                    onBack={() => {
+                      setMode('login');
+                      setResetSent(false);
+                      setCode('');
+                      setPassword('');
+                    }}
+                  />
+                ) : (
+                <>
                 <TextInput
                   value={username}
                   onChangeText={setUsername}
@@ -251,14 +280,106 @@ export function AuthPanel({
                   onPress={submit}
                   disabled={!username.trim() || !password || (mode === 'register' && !email.trim())}
                 />
+                {mode === 'login' && (
+                  <Pressable onPress={() => setMode('forgot')} accessibilityRole="button">
+                    <Text style={styles.forgotLink}>Нууц үгээ мартсан уу?</Text>
+                  </Pressable>
+                )}
                 <Text style={styles.hint}>
                   Бүртгүүлэхгүйгээр зочноор тоглож болно. Бүртгэлтэй бол тоглолтын түүх,
                   статистик хадгалагдана.
                 </Text>
+                </>
+                )}
               </View>
             )}
           </View>
       </Overlay>
+    </>
+  );
+}
+
+/**
+ * Нууц үг сэргээх маягт.
+ *
+ * Хоёр шаттай: эхлээд имэйл рүү код илгээнэ, дараа нь код + шинэ нууц үг.
+ * Хэрэглэгчийн НЭРИЙГ ч имэйлээр илгээдэг тул нэрээ мартсан хүн ч сэргээнэ.
+ */
+function ForgotForm({
+  email,
+  onEmailChange,
+  code,
+  onCodeChange,
+  password,
+  onPasswordChange,
+  sent,
+  onSend,
+  onReset,
+  onBack,
+}: {
+  email: string;
+  onEmailChange: (value: string) => void;
+  code: string;
+  onCodeChange: (value: string) => void;
+  password: string;
+  onPasswordChange: (value: string) => void;
+  sent: boolean;
+  onSend: () => void;
+  onReset: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <>
+      <Text style={styles.forgotTitle}>Нууц үг сэргээх</Text>
+      <Text style={styles.hint}>
+        Бүртгүүлэхдээ оруулсан имэйл хаягаа бичнэ үү. Сэргээх код болон
+        хэрэглэгчийн нэрийг тань тийш илгээнэ.
+      </Text>
+
+      <TextInput
+        value={email}
+        onChangeText={onEmailChange}
+        placeholder="Имэйл хаяг"
+        placeholderTextColor={theme.textMuted}
+        style={styles.input}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        editable={!sent}
+      />
+
+      {!sent ? (
+        <Button title="Код илгээх" onPress={onSend} disabled={!email.trim()} />
+      ) : (
+        <>
+          <TextInput
+            value={code}
+            onChangeText={(t) => onCodeChange(t.replace(/[^0-9]/g, '').slice(0, 6))}
+            placeholder="000000"
+            placeholderTextColor={theme.textMuted}
+            style={[styles.input, styles.codeInput]}
+            keyboardType="number-pad"
+            maxLength={6}
+          />
+          <TextInput
+            value={password}
+            onChangeText={onPasswordChange}
+            placeholder="Шинэ нууц үг"
+            placeholderTextColor={theme.textMuted}
+            style={styles.input}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+          <Button
+            title="Нууц үг солих"
+            onPress={onReset}
+            disabled={code.length !== 6 || password.length < 6}
+          />
+          <Button title="Кодыг дахин илгээх" variant="ghost" onPress={onSend} />
+        </>
+      )}
+
+      <Button title="Буцах" variant="ghost" onPress={onBack} />
     </>
   );
 }
@@ -394,6 +515,9 @@ const styles = StyleSheet.create({
   tokenValue: { color: theme.text, fontSize: 24, fontWeight: '800' },
   tokenLow: { color: theme.danger, fontSize: 12, fontWeight: '700' },
   tokenNote: { color: theme.textMuted, fontSize: 10, fontStyle: 'italic' },
+  forgotTitle: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  forgotLink: { color: theme.accent, fontSize: 13, textAlign: 'center', paddingVertical: 6 },
+
   rankBox: {
     backgroundColor: theme.surfaceRaised,
     borderRadius: 12,

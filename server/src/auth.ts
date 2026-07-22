@@ -11,7 +11,7 @@ import { promisify } from 'node:util';
 
 import type { Account } from '../../app/src/shared/protocol';
 import { getPool } from './db';
-import { sendEmail, verificationEmail } from './email';
+import { passwordResetEmail, sendEmail, verificationEmail } from './email';
 import { STARTING_TOKENS } from './tokens';
 
 const scryptAsync = promisify(scrypt) as (
@@ -307,4 +307,105 @@ export async function logout(token: string): Promise<void> {
 /** Профайлын зургийг хадгална. null бол авч хаяна. */
 export async function saveAvatar(userId: string, avatar: string | null): Promise<void> {
   await getPool().query('UPDATE users SET avatar = $2 WHERE id = $1', [userId, avatar]);
+}
+
+// ── Нууц үг сэргээх ────────────────────────────────────────────────────────
+
+/**
+ * Нууц үг сэргээх код илгээнэ.
+ *
+ * АЮУЛГҮЙ БАЙДАЛ: имэйл бүртгэлтэй эсэхийг ХЭЗЭЭ Ч хэлэхгүй. Эс бөгөөс хэн
+ * нэгэн хаягуудыг дараалан оруулж, аль нь бүртгэлтэйг олж мэдэх боломжтой
+ * болно. Тиймээс олдсон ч, олдоогүй ч ижил хариу буцаана.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const key = email.trim().toLowerCase();
+  if (!isEmail(key)) return;
+
+  const found = await getPool().query<{ id: string; username: string; email: string }>(
+    'SELECT id, username, email FROM users WHERE email_key = $1',
+    [key],
+  );
+  const user = found.rows[0];
+  if (!user) return;
+
+  // Дараалан илгээхээс сэргийлнэ.
+  const last = await getPool().query<{ wait: number }>(
+    `SELECT GREATEST(0, $2 - EXTRACT(EPOCH FROM (now() - sent_at)))::int AS wait
+       FROM password_resets WHERE user_id = $1`,
+    [user.id, RESEND_COOLDOWN_SECONDS],
+  );
+  if ((last.rows[0]?.wait ?? 0) > 0) return;
+
+  const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  const expires = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000);
+  await getPool().query(
+    `INSERT INTO password_resets (user_id, code_hash, expires_at, attempts, sent_at)
+     VALUES ($1, $2, $3, 0, now())
+     ON CONFLICT (user_id) DO UPDATE
+       SET code_hash = $2, expires_at = $3, attempts = 0, sent_at = now()`,
+    [user.id, await hashPassword(code), expires],
+  );
+
+  try {
+    await sendEmail({ to: user.email, ...passwordResetEmail(user.username, code) });
+  } catch (err) {
+    console.error('Сэргээх имэйл илгээж чадсангүй:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * Кодоор баталгаажуулж, нууц үгийг солино.
+ *
+ * Амжилттай болбол БҮХ session-ыг хүчингүй болгоно — хэрэв хэн нэгэн
+ * бүртгэлд нэвтэрсэн байсан бол шууд хөөгдөнө.
+ */
+export async function resetPassword(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<{ account: Account; token: string }> {
+  if (newPassword.length < MIN_PASSWORD) {
+    throw new AuthError(`Нууц үг дор хаяж ${MIN_PASSWORD} тэмдэгт байх ёстой.`);
+  }
+
+  const pool = getPool();
+  const found = await pool.query<{
+    id: string;
+    code_hash: string;
+    attempts: number;
+    expired: boolean;
+  }>(
+    `SELECT u.id, r.code_hash, r.attempts, r.expires_at < now() AS expired
+       FROM users u JOIN password_resets r ON r.user_id = u.id
+      WHERE u.email_key = $1`,
+    [email.trim().toLowerCase()],
+  );
+  const row = found.rows[0];
+  // Код олдоогүй ч гэсэн ижил мессеж — хаяг бүртгэлтэй эсэхийг илчлэхгүй.
+  if (!row) throw new AuthError('Код буруу эсвэл хугацаа нь дууссан байна.');
+  if (row.expired) throw new AuthError('Кодын хугацаа дууссан. Дахин илгээнэ үү.');
+  if (row.attempts >= MAX_CODE_ATTEMPTS) {
+    throw new AuthError('Хэт олон удаа буруу оруулсан. Дахин илгээнэ үү.');
+  }
+
+  if (!(await verifyPassword(code.trim(), row.code_hash))) {
+    await pool.query('UPDATE password_resets SET attempts = attempts + 1 WHERE user_id = $1', [
+      row.id,
+    ]);
+    const left = MAX_CODE_ATTEMPTS - row.attempts - 1;
+    throw new AuthError(`Код буруу байна. ${left > 0 ? `${left} оролдлого үлдлээ.` : ''}`.trim());
+  }
+
+  await pool.query('UPDATE users SET password = $2 WHERE id = $1', [
+    row.id,
+    await hashPassword(newPassword),
+  ]);
+  await pool.query('DELETE FROM password_resets WHERE user_id = $1', [row.id]);
+  // Хуучин бүх нэвтрэлтийг таслана.
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [row.id]);
+
+  const account = await accountById(row.id);
+  if (!account) throw new AuthError('Хэрэглэгч олдсонгүй.');
+  return { account, token: await openSession(row.id) };
 }

@@ -101,6 +101,16 @@ export async function initSchema(): Promise<void> {
       sent_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+    -- Нууц үг сэргээх код. Баталгаажуулах кодоос ТУСДАА хүснэгт: хэрэглэгч
+    -- имэйлээ баталгаажуулж байхдаа зэрэг нууц үгээ сэргээж болно.
+    CREATE TABLE IF NOT EXISTS password_resets (
+      user_id    BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      code_hash  TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      attempts   INTEGER NOT NULL DEFAULT 0,
+      sent_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       token      TEXT PRIMARY KEY,
       user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

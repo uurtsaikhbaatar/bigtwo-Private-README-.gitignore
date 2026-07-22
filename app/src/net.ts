@@ -255,6 +255,13 @@ export function useBigTwo(serverUrl: string) {
       (username: string, password: string) => send({ t: 'login', username, password }),
       [send],
     ),
+    /** Нууц үг мартсан — имэйл рүү код илгээнэ. */
+    forgotPassword: useCallback((email: string) => send({ t: 'forgotPassword', email }), [send]),
+    resetPassword: useCallback(
+      (email: string, code: string, password: string) =>
+        send({ t: 'resetPassword', email, code, password }),
+      [send],
+    ),
     /** Хадгалсан token-оор нэвтрэлтээ сэргээх. */
     resumeAuth: useCallback(
       (token: string) => {

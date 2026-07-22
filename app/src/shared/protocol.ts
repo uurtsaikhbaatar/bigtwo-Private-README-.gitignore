@@ -11,7 +11,7 @@ import { Card } from './cards';
 import { comboLabel } from './combos';
 import { GameState, Phase, RoundRecord, Settlement } from './game';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Алдааны мэдэгдлийн төрөл: хэрэглэгч бичсэн эсвэл апп өөрөө барьсан. */
 export type ReportKind = 'bug' | 'crash';
@@ -49,6 +49,10 @@ export type ClientMessage =
   /** Токен дуусахад админаас нэмж хүсэх. */
   | { t: 'requestTokens' }
   | { t: 'login'; username: string; password: string }
+  /** Нууц үг мартсан — имэйл рүү сэргээх код илгээнэ. */
+  | { t: 'forgotPassword'; email: string }
+  /** Кодоор баталгаажуулж шинэ нууц үг тавина. */
+  | { t: 'resetPassword'; email: string; code: string; password: string }
   /** Хадгалсан token-оор нэвтрэлтээ сэргээх. */
   | { t: 'authResume'; token: string }
   | { t: 'logout'; token: string }

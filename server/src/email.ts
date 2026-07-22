@@ -178,3 +178,41 @@ function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+/**
+ * Нууц үг сэргээх захидал.
+ *
+ * Хэрэглэгчийн НЭРИЙГ ч бичнэ — хүн нэрээ ч мартсан байж болно. Имэйл нь
+ * зөвхөн эзэндээ хүрдэг тул нэрийг харуулах нь аюулгүй.
+ */
+export function passwordResetEmail(username: string, code: string): Omit<EmailMessage, 'to'> {
+  const text = [
+    'Дай Ди тоглоомын нууц үг сэргээх хүсэлт хүлээн авлаа.',
+    '',
+    `Таны хэрэглэгчийн нэр:  ${username}`,
+    '',
+    'Сэргээх код:',
+    '',
+    `    ${code}`,
+    '',
+    'Код 15 минутын дараа хүчингүй болно.',
+    'Хэрэв та хүсэлт илгээгээгүй бол энэ захидлыг үл тоомсорлоно уу —',
+    'нууц үг чинь өөрчлөгдөхгүй.',
+  ].join('\n');
+
+  const html = `
+    <div style="font-family:system-ui,sans-serif;max-width:420px">
+      <h2 style="margin:0 0 8px">Дай Ди</h2>
+      <p>Нууц үг сэргээх хүсэлт хүлээн авлаа.</p>
+      <p>Таны хэрэглэгчийн нэр: <strong>${escapeHtml(username)}</strong></p>
+      <p>Сэргээх код:</p>
+      <p style="font-size:30px;font-weight:800;letter-spacing:6px;margin:16px 0">${code}</p>
+      <p style="color:#666;font-size:13px">
+        Код 15 минутын дараа хүчингүй болно.<br>
+        Хэрэв та хүсэлт илгээгээгүй бол энэ захидлыг үл тоомсорлоно уу —
+        нууц үг чинь өөрчлөгдөхгүй.
+      </p>
+    </div>`;
+
+  return { subject: `Дай Ди — нууц үг сэргээх код ${code}`, text, html };
+}
