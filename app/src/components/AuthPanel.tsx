@@ -181,11 +181,12 @@ export function AuthPanel({
                   <Text style={styles.tokenLabel}>Токены үлдэгдэл</Text>
                   <Text style={styles.tokenValue}>{groupDigits(account.tokens)}</Text>
                   {account.tokens < LOW_TOKENS && (
-                    <>
-                      <Text style={styles.tokenLow}>Токен дуусах дөхлөө.</Text>
-                      <Button title="Токен хүсэх" variant="secondary" onPress={onRequestTokens} />
-                    </>
+                    <Text style={styles.tokenLow}>Токен дуусах дөхлөө.</Text>
                   )}
+                  {/* Товч үргэлж харагдана — үлдэгдэл дуусахыг хүлээхгүй.
+                      Дахин дахин дархад сервер тодорхой хугацаанд нэг л
+                      хүсэлт хүлээж авна. */}
+                  <Button title="Токен хүсэх" variant="secondary" onPress={onRequestTokens} />
                   <Text style={styles.tokenNote}>
                     Токен нь виртуал тоглоомын оноо — бодит мөнгө биш.
                   </Text>
