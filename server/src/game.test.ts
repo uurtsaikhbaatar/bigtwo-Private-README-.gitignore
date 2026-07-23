@@ -71,9 +71,10 @@ test('5 хөзрийн ангиллууд', () => {
   assert.equal(detectCombo(hand('5♦', '5♣', '5♥', '9♠', 'J♦')), null, '3+1+1 хүчингүй');
 });
 
-test('шулуун нь K-A-2 хүртэл үргэлжилнэ', () => {
+test('шулуун 10-J-Q-K-A хүртэл — 2 дараалалд дээд карт болохгүй', () => {
   assert.equal(detectCombo(hand('10♦', 'J♣', 'Q♥', 'K♠', 'A♦'))?.category, 'straight');
-  assert.equal(detectCombo(hand('J♦', 'Q♣', 'K♥', 'A♠', '2♦'))?.category, 'straight');
+  // J-Q-K-A-2-г ХАСсан: 2 нь дараалалд зөвхөн доод карт (тоглогчийн хүсэлт).
+  assert.equal(detectCombo(hand('J♦', 'Q♣', 'K♥', 'A♠', '2♦')), null, 'J-Q-K-A-2 straight биш');
 });
 
 test('2-3-4-5-6 шулуун — тоглогч uuree мэдэгдсэн', () => {
@@ -90,8 +91,8 @@ test('2-3-4-5-6 шулуун — тоглогч uuree мэдэгдсэн', () =>
   assert.ok(beats(nextUp, six!), '3-4-5-6-7 нь 2-3-4-5-6-г дарна');
   assert.ok(!beats(six!, nextUp));
 
-  // Хамгийн хүчтэй шулуун хэвээр J-Q-K-A-2.
-  const highest = detectCombo(hand('J♦', 'Q♣', 'K♥', 'A♠', '2♦'))!;
+  // Хамгийн хүчтэй шулуун одоо 10-J-Q-K-A.
+  const highest = detectCombo(hand('10♦', 'J♣', 'Q♥', 'K♠', 'A♦'))!;
   assert.ok(!beats(six!, highest));
 
   // Хоёр 2-3-4-5-6-г 6-ынх нь өнгөөр жишнэ.
@@ -118,7 +119,7 @@ test('A-2-3-4-5 (wheel) нь хүчинтэй бөгөөд хамгийн сул
   assert.ok(beats(lowest, wheel), 'хамгийн сул ердийн шулуун wheel-ийг дарна');
   assert.ok(!beats(wheel, lowest));
 
-  const highest = detectCombo(hand('J♦', 'Q♣', 'K♥', 'A♠', '2♦'))!;
+  const highest = detectCombo(hand('10♦', 'J♣', 'Q♥', 'K♠', 'A♦'))!;
   assert.ok(!beats(wheel, highest));
 
   // Хоёр wheel-ийг 5-ынх нь багаар харьцуулна.
