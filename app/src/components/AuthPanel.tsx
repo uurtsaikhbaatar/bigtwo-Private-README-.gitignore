@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -33,6 +33,13 @@ interface Props {
   onSetAvatar: (avatar: string | null) => void;
   onForgotPassword: (email: string) => void;
   onResetPassword: (email: string, code: string, password: string) => void;
+  /** Гаднаас нээх/хаах (гейтийн Нэвтрэх/Бүртгүүлэх товч). Өгөхгүй бол дотооддоо. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Нээгдэхэд аль таб идэвхтэй байх (зөвхөн нэвтрээгүй үед). */
+  initialMode?: 'login' | 'register';
+  /** Өөрийн товчийг харуулах эсэх. Гейтээс дуудахад нуудаг. */
+  showTrigger?: boolean;
 }
 
 /**
@@ -52,9 +59,26 @@ export function AuthPanel({
   onSetAvatar,
   onForgotPassword,
   onResetPassword,
+  open: controlledOpen,
+  onOpenChange,
+  initialMode,
+  showTrigger = true,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
+  // Нээлттэй төлөвийг гаднаас удирдаж болно (гейт), эс бөгөөс дотооддоо.
+  const [openState, setOpenState] = useState(false);
+  const open = controlledOpen ?? openState;
+  const setOpen = (value: boolean) => {
+    if (onOpenChange) onOpenChange(value);
+    else setOpenState(value);
+  };
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(initialMode ?? 'login');
+
+  // Гаднаас нээхэд хүссэн таб (нэвтрэх эсвэл бүртгүүлэх) идэвхжүүлнэ.
+  const prevOpen = useRef(false);
+  useEffect(() => {
+    if (open && !prevOpen.current && !account && initialMode) setMode(initialMode);
+    prevOpen.current = open;
+  }, [open, account, initialMode]);
   // Сэргээх хоёр шат: код хүсэх → код + шинэ нууц үг оруулах.
   const [resetSent, setResetSent] = useState(false);
   const [username, setUsername] = useState('');
@@ -84,11 +108,13 @@ export function AuthPanel({
 
   return (
     <>
-      <Pressable onPress={openPanel} accessibilityRole="button" style={styles.trigger}>
-        <Text style={styles.triggerText}>
-          {account ? `👤 ${account.username}` : 'Бүртгүүлэх / Нэвтрэх'}
-        </Text>
-      </Pressable>
+      {showTrigger && (
+        <Pressable onPress={openPanel} accessibilityRole="button" style={styles.trigger}>
+          <Text style={styles.triggerText}>
+            {account ? `👤 ${account.username}` : 'Бүртгүүлэх / Нэвтрэх'}
+          </Text>
+        </Pressable>
+      )}
 
       <Overlay visible={open} onClose={() => setOpen(false)}>
           <View style={styles.sheet}>

@@ -7,3 +7,6 @@ web-build/
 .env
 .env.local
 server/data/
+
+# Локал preview хэрэгсэл
+.claude/

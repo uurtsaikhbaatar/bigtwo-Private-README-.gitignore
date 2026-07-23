@@ -53,6 +53,12 @@ function Root() {
   const [name, setName] = useState('');
   const [serverUrl, setServerUrl] = useState(defaultServerUrl());
   const [invitedCode, setInvitedCode] = useState('');
+  // Зочноор тоглохыг сонгосон эсэх. Апп нээлттэй байх хугацаанд хадгалагдана
+  // (өрөө орж гарахад дахин гейт харагдахгүй), гэхдээ хадгалалтад бичихгүй —
+  // дахин нээхэд эхлэх сонголтоо дахин харна.
+  const [guestChosen, setGuestChosen] = useState(false);
+  // Хадгалсан токеноор нэвтрэлт сэргээж байх зуур гейт анивчихаас сэргийлнэ.
+  const [authPending, setAuthPending] = useState(false);
   const game = useBigTwo(serverUrl);
   const { resumeSession, joinRoom, resumeAuth, clearError, error } = game;
   const startedRef = useRef(false);
@@ -70,7 +76,10 @@ function Root() {
       if (cancelled || startedRef.current) return;
       startedRef.current = true;
 
-      if (authToken) resumeAuth(authToken);
+      if (authToken) {
+        setAuthPending(true);
+        resumeAuth(authToken);
+      }
       if (savedName) setName(savedName);
       if (savedServer) setServerUrl(savedServer);
 
@@ -101,6 +110,18 @@ function Root() {
   useEffect(() => {
     if (accountName) setName(accountName);
   }, [accountName]);
+
+  // Нэвтрэлт сэргээж дуусмагц (эсвэл токен хүчингүй бол хамгаалалтын хугацааны
+  // дараа) гейтийг нээнэ. Ингэснээр нэвтэрсэн хэрэглэгч гейт харалгүй шууд орно.
+  useEffect(() => {
+    if (game.account) {
+      setAuthPending(false);
+      return;
+    }
+    if (!authPending) return;
+    const timer = setTimeout(() => setAuthPending(false), 4000);
+    return () => clearTimeout(timer);
+  }, [game.account, authPending]);
 
   // Нэвтэрмэгц урилгуудаа татна. Сервер шинэ урилга ирэхэд өөрөө илгээх ч
   // апп дахин нээгдэхэд нэг удаа асуух хэрэгтэй.
@@ -150,7 +171,11 @@ function Root() {
     profile: game.profile,
     onRegister: game.register,
     onLogin: game.logIn,
-    onLogout: game.logOut,
+    onLogout: () => {
+      game.logOut();
+      // Гарсны дараа эхлэх сонголт руу буцаана — зочин байдлыг ч цэвэрлэнэ.
+      setGuestChosen(false);
+    },
     onLoadProfile: game.loadProfile,
     onVerifyEmail: game.verifyEmail,
     onResendCode: game.resendCode,
@@ -165,7 +190,7 @@ function Root() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <StatusBar style="light" />
-      {!ready ? (
+      {!ready || (authPending && !view) ? (
         <View style={styles.center}>
           <ActivityIndicator color={theme.accent} size="large" />
         </View>
@@ -183,6 +208,8 @@ function Root() {
           onAcceptInvite={(roomCode) => game.joinRoom(name, roomCode)}
           onDeclineInvite={game.declineInvite}
           auth={authProps}
+          guestReady={guestChosen}
+          onEnterGuest={() => setGuestChosen(true)}
         />
       ) : view.phase === 'lobby' ? (
         <LobbyScreen
