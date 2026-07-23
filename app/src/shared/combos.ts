@@ -87,12 +87,18 @@ function detectFive(cards: Card[]): Combo | null {
   const sorted = ranks.slice().sort((a, b) => a - b);
   const run = sorted.every((r, i) => i === 0 || r === sorted[i - 1] + 1);
   const wheel = sorted.every((r, i) => r === WHEEL_RANKS[i]);
-  const straight = run || wheel;
+  const sixHigh = sorted.every((r, i) => r === SIX_HIGH_RANKS[i]);
+  const straight = run || wheel || sixHigh;
 
-  // Ердийн шулууны хүчийг хамгийн өндөр хөзрөөр нь хэмжинэ. Wheel-ийн хувьд
-  // 5-ыг нь ашиглана — ингэснээр аливаа ердийн шулуунаас автоматаар сул болно
-  // (хамгийн сул ердийн шулуун 3-4-5-6-7 нь 7-гоор хэмжигдэнэ).
-  const top = wheel ? cards.find((c) => rankOf(c) === WHEEL_TOP_RANK)! : cards[cards.length - 1];
+  // Шулууны хүчийг хамгийн өндөр хөзрөөр нь хэмжинэ. Гэхдээ 2 доод карт болдог
+  // хоёр тусгай шулуунд өөр хөзрийг ашиглана:
+  //   • Wheel (A-2-3-4-5) → 5-аар. Хамгийн сул шулуун.
+  //   • 2-3-4-5-6         → 6-аар. Ингэснээр A2345 < 23456 < 34567 болно
+  //     (тоглогч мэдэгдсэн: 2-3-4-5-6 straight ажиллахгүй байв).
+  let top: Card;
+  if (wheel) top = cards.find((c) => rankOf(c) === WHEEL_TOP_RANK)!;
+  else if (sixHigh) top = cards.find((c) => rankOf(c) === SIX_HIGH_TOP_RANK)!;
+  else top = cards[cards.length - 1];
 
   if (flush && straight) return five(cards, 'straightflush', top);
   if (flush) return five(cards, 'flush', flushPower(cards, sorted));
@@ -117,6 +123,11 @@ function flushPower(cards: Card[], ranksAsc: number[]): number {
 const WHEEL_RANKS = [0, 1, 2, 11, 12];
 /** Wheel-ийн хүчийг тодорхойлох хөзөр: 5. */
 const WHEEL_TOP_RANK = 2;
+
+/** 2-3-4-5-6 — зэрэглэлийн индексээр эрэмбэлбэл: 3,4,5,6,2 → 0,1,2,3,12. */
+const SIX_HIGH_RANKS = [0, 1, 2, 3, 12];
+/** 2-3-4-5-6-ийн хүчийг тодорхойлох хөзөр: 6. */
+const SIX_HIGH_TOP_RANK = 3;
 
 /**
  * Ангилал нь ямагт эрэмбийг тодорхойлно — доторх жиших утга хэчнээн том байсан

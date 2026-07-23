@@ -76,6 +76,40 @@ test('шулуун нь K-A-2 хүртэл үргэлжилнэ', () => {
   assert.equal(detectCombo(hand('J♦', 'Q♣', 'K♥', 'A♠', '2♦'))?.category, 'straight');
 });
 
+test('2-3-4-5-6 шулуун — тоглогч uuree мэдэгдсэн', () => {
+  // uuree: "2,3,4,5,6 гэсэн стрийт ажиллахгүй байна". 2 нь ганцаараа хамгийн
+  // хүчтэй хөзөр ч энэ дараалалд доод карт болно.
+  const six = detectCombo(hand('2♦', '3♣', '4♥', '5♠', '6♦'));
+  assert.equal(six?.category, 'straight', '2-3-4-5-6 straight гэж танигдах ёстой');
+
+  // Эрэмбэ: A2345 < 23456 < 34567 (хэрэглэгчийн сонгосон).
+  const wheel = detectCombo(hand('A♦', '2♣', '3♥', '4♠', '5♦'))!;
+  const nextUp = detectCombo(hand('3♦', '4♣', '5♥', '6♠', '7♦'))!;
+  assert.ok(beats(six!, wheel), '2-3-4-5-6 нь A-2-3-4-5-ыг дарна');
+  assert.ok(!beats(wheel, six!));
+  assert.ok(beats(nextUp, six!), '3-4-5-6-7 нь 2-3-4-5-6-г дарна');
+  assert.ok(!beats(six!, nextUp));
+
+  // Хамгийн хүчтэй шулуун хэвээр J-Q-K-A-2.
+  const highest = detectCombo(hand('J♦', 'Q♣', 'K♥', 'A♠', '2♦'))!;
+  assert.ok(!beats(six!, highest));
+
+  // Хоёр 2-3-4-5-6-г 6-ынх нь өнгөөр жишнэ.
+  const sixSpade = detectCombo(hand('2♦', '3♣', '4♥', '5♠', '6♠'))!;
+  assert.ok(beats(sixSpade, six!), '6♠-тэй нь 6♦-тэйгээ дарна');
+});
+
+test('2-3-4-5-6 нэг өнгөөр — straight flush, энгийн flush-ийг дарна', () => {
+  // uuree: "2,3,4,5,6 нэг өнгийн страйт флаш энгийн флаш дийлэхгүй байна".
+  const straightFlush = detectCombo(hand('2♠', '3♠', '4♠', '5♠', '6♠'))!;
+  assert.equal(straightFlush.category, 'straightflush', 'нэг өнгө бол straight flush');
+
+  const plainFlush = detectCombo(hand('3♥', '5♥', '7♥', '9♥', 'K♥'))!;
+  assert.equal(plainFlush.category, 'flush');
+  assert.ok(beats(straightFlush, plainFlush), 'straight flush нь энгийн flush-ийг дарна');
+  assert.ok(!beats(plainFlush, straightFlush));
+});
+
 test('A-2-3-4-5 (wheel) нь хүчинтэй бөгөөд хамгийн сул шулуун', () => {
   const wheel = detectCombo(hand('A♦', '2♣', '3♥', '4♠', '5♦'))!;
   assert.equal(wheel.category, 'straight');
@@ -130,10 +164,6 @@ test('wheel нь шулуун өнгө ч байж болно', () => {
 
   const lowestSF = detectCombo(hand('3♣', '4♣', '5♣', '6♣', '7♣'))!;
   assert.ok(beats(lowestSF, wheelFlush), 'wheel нь хамгийн сул шулуун өнгө');
-});
-
-test('2-3-4-5-6 нь шулуун биш (зөвхөн A-2-3-4-5 зөвшөөрөгдсөн)', () => {
-  assert.equal(detectCombo(hand('2♦', '3♣', '4♥', '5♠', '6♦')), null);
 });
 
 test('5 хөзрийн ангиллын эрэмбэ', () => {
