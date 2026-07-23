@@ -129,7 +129,18 @@ export function AuthPanel({
 
             {account ? (
               <ScrollView contentContainerStyle={styles.profileBody}>
-                <Text style={styles.who}>{account.username}</Text>
+                {/* Нэр ба гарах товч нэг мөрөнд — өөр хүн нэвтрэхийн тулд
+                    эхлээд гарахад амархан олдоно. */}
+                <View style={styles.whoRow}>
+                  <Text style={styles.who}>{account.username}</Text>
+                  <Pressable
+                    onPress={onLogout}
+                    accessibilityRole="button"
+                    style={styles.logoutBtn}
+                  >
+                    <Text style={styles.logoutText}>🚪 Гарах</Text>
+                  </Pressable>
+                </View>
 
                 <AvatarPicker
                   name={account.username}
@@ -224,8 +235,6 @@ export function AuthPanel({
                 ) : (
                   <Text style={styles.empty}>Ачаалж байна…</Text>
                 )}
-
-                <Button title="Гарах" variant="ghost" onPress={onLogout} />
               </ScrollView>
             ) : (
               <View style={styles.formBody}>
@@ -530,7 +539,16 @@ const styles = StyleSheet.create({
   },
 
   profileBody: { paddingHorizontal: 16, gap: 12, paddingBottom: 8 },
-  who: { color: theme.accent, fontSize: 20, fontWeight: '800' },
+  whoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  who: { color: theme.accent, fontSize: 20, fontWeight: '800', flex: 1 },
+  logoutBtn: {
+    borderWidth: 1,
+    borderColor: theme.danger,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  logoutText: { color: theme.danger, fontSize: 14, fontWeight: '700' },
   tokenBox: {
     backgroundColor: theme.surfaceRaised,
     borderRadius: 10,
