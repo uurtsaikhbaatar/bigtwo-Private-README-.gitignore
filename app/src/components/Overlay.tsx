@@ -1,12 +1,20 @@
 /**
  * Доороос гарч ирэх цонхны давхарга.
  *
- * React Native-ийн `Modal`-ыг вэб дээр ашиглахад цонх нь үндсэн агуулгын ДООР,
- * дэлгэцээс гадуур байрлаж байсан (`body { overflow: hidden }` тул гүйлгэж ч
- * очих аргагүй). Тоглогч чат нээгээд буцаж чадахгүй болсон нь үүнээс.
+ * React Native-ийн `Modal`-ыг вэб дээр ашиглахад цонх үндсэн агуулгын ДООР,
+ * дэлгэцээс гадуур байрлаж байсан тул өөрсдөө байрлуулна: вэб дээр
+ * `position: fixed` нь дэлгэцийн хүрээнд наалддаг.
  *
- * Тиймээс Modal-ын оронд өөрсдөө байрлуулна: вэб дээр `position: fixed` нь
- * дэлгэцийн хүрээнд наалддаг тул эцэг элемент нь хаана ч байсан зөв гарна.
+ * ЧУХАЛ #1: бүрхэвч (backdrop) нь ХАРАНГ АБСОЛЮТААР дэлгэцийг бүрэн халхална.
+ * Өмнө нь flex-ийн зайгаар түлхдэг байсан тул агуулга дэлгэцээс өндөр үед
+ * (жишээ нь цол, түүхтэй профайл) бүрхэвч 0 өндөртэй болж, ард талын нүүр
+ * хуудас харагдаж товчнууд давхцдаг байв. Мөн хуудсыг дэлгэцэд багтааж
+ * дотор нь гүйлгэнэ — эс бөгөөс дээд тал нь дэлгэцээс гарч тасарна.
+ *
+ * ЧУХАЛ #2: вэб дээр цонхыг `document.body` руу PORTAL-аар гаргана. AuthPanel
+ * нь HomeScreen-ий ScrollView ДОТОР байрладаг тул түүний `zIndex: 1000` зөвхөн
+ * тэр дэд модны дотор өрсөлддөг байсан — хожуу дүрслэгддэг сул хуудасны товч
+ * дээр нь гардаг байв. Portal нь бүх эцэг стек контекстээс мултарна.
  */
 
 import React, { useEffect } from 'react';
@@ -19,6 +27,13 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+/** Вэб дээр л portal хийнэ. Төрөлхийн платформд react-dom байхгүй. */
+const createPortal: ((node: React.ReactNode, container: Element) => React.ReactPortal) | null =
+  Platform.OS === 'web' && typeof document !== 'undefined'
+    ? // eslint-disable-next-line @typescript-eslint/no-var-requires
+      (require('react-dom').createPortal as never)
+    : null;
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -26,7 +41,7 @@ interface Props {
 }
 
 export function Overlay({ visible, onClose, children }: Props) {
-  // Вэб дээр Esch дарж хаана — Modal-ын оронд өөрсдөө хийх ёстой болсон.
+  // Вэб дээр Esc дарж хаана.
   useEffect(() => {
     if (!visible || Platform.OS !== 'web') return;
     const onKey = (e: KeyboardEvent) => {
@@ -38,28 +53,52 @@ export function Overlay({ visible, onClose, children }: Props) {
 
   if (!visible) return null;
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Pressable style={styles.fill} onPress={onClose} accessibilityLabel="Хаах" />
-      <View style={styles.sheetWrap}>{children}</View>
-    </KeyboardAvoidingView>
+  const content = (
+    <View style={styles.root}>
+      {/* Бүтэн дэлгэцийг халхлах бүрхэвч — гадна дарахад хаагдана. */}
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Хаах" />
+
+      <KeyboardAvoidingView
+        style={styles.holder}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        pointerEvents="box-none"
+      >
+        <View style={styles.sheet}>{children}</View>
+      </KeyboardAvoidingView>
+    </View>
   );
+
+  // Вэб дээр body руу гаргаж бүх эцэг стек контекстээс мултарна.
+  return createPortal ? createPortal(content, document.body) : content;
 }
+
+const fixed = (Platform.OS === 'web' ? 'fixed' : 'absolute') as ViewStyle['position'];
 
 const styles = StyleSheet.create({
   root: {
-    // Вэб дээр дэлгэцэд наана; төрөлхийн платформд эцэг элементэд наана.
-    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as ViewStyle['position'],
+    position: fixed,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: 'flex-end',
     zIndex: 1000,
   },
-  fill: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheetWrap: { width: '100%' },
+  backdrop: {
+    // Абсолют бүрхэвч — хуудасны өндрөөс үл хамааран ҮРГЭЛЖ бүтэн халхална.
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  holder: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    // Хуудас дэлгэцээс өндөр бол дотроо гүйлгэнэ (AuthPanel-ийн ScrollView).
+    width: '100%',
+    maxHeight: '100%',
+  },
 });
