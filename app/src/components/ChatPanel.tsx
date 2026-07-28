@@ -32,7 +32,7 @@ interface Props {
  * Чат — товч дарахад нээгддэг цонх. Бичвэр, emoji, дуут мессеж дэмжинэ.
  * Уншаагүй мессежийн тоог товчин дээр харуулна.
  */
-export function ChatButton({ lines, youName, onSend, onSendVoice }: Props) {
+function ChatButtonInner({ lines, youName, onSend, onSendVoice }: Props) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [seen, setSeen] = useState(0);
@@ -225,6 +225,15 @@ export function ChatButton({ lines, youName, onSend, onSendVoice }: Props) {
     </>
   );
 }
+
+/**
+ * React.memo — тоглоом байнга шинэчлэгдэхэд (жишээ нь хасагдсан үзэгч бусдын
+ * тавилтыг харж байхад) ChatButton дэмий дахин render болж, нээлттэй чатын
+ * portal тогтворгүй болж "Хаах" дарагдахгүй байдгийг зогсооно. Пропууд
+ * (lines, youName, onSend, onSendVoice) тогтвортой тул чат өөрчлөгдөх үед л
+ * шинэчилнэ.
+ */
+export const ChatButton = React.memo(ChatButtonInner);
 
 const styles = StyleSheet.create({
   fab: {
