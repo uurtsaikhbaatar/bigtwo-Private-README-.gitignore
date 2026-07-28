@@ -57,7 +57,7 @@ import {
 import { adImage, adsFor, countAdEvent } from './ads';
 import { dbEnabled, getPool } from './db';
 import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
-import { recentMatches, recordMatch, statsForUser } from './history';
+import { recentMatches, recordMatch, statsForUser, topCombosForUser } from './history';
 import { readReports, saveReport } from './reports';
 import { applySettlement, awardTokens, balanceOf, balancesOf, requestTokens } from './tokens';
 import { Room, RoomStore, metaOf, newSeat } from './rooms';
@@ -398,8 +398,14 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       requireDb();
       const account = accounts.get(socket);
       if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
-      void Promise.all([statsForUser(account.id), recentMatches(account.id, 50)])
-        .then(([stats, matches]) => send(socket, { t: 'profile', stats, matches }))
+      void Promise.all([
+        statsForUser(account.id),
+        recentMatches(account.id, 50),
+        topCombosForUser(account.id, 10),
+      ])
+        .then(([stats, matches, topCombos]) =>
+          send(socket, { t: 'profile', stats, matches, topCombos }),
+        )
         .catch((err) => {
           console.error('profile error:', err);
           send(socket, { t: 'error', message: 'Профайл уншиж чадсангүй.' });

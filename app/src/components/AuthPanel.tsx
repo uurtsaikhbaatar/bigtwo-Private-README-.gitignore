@@ -12,7 +12,8 @@ import { groupDigits } from '../chips';
 import { AvatarPicker } from './AvatarPicker';
 import { RankBadge } from './RankBadge';
 import { Button } from '../components/Button';
-import type { Account, MatchSummary, PlayerStats } from '../shared/protocol';
+import type { Account, MatchSummary, PlayerStats, TopCombo } from '../shared/protocol';
+import { PlayingCard } from './PlayingCard';
 import { nextRank, rankFor } from '../shared/ranks';
 import { Overlay } from './Overlay';
 import { theme } from '../theme';
@@ -22,7 +23,7 @@ const LOW_TOKENS = 50_000;
 
 interface Props {
   account: Account | null;
-  profile: { stats: PlayerStats; matches: MatchSummary[] } | null;
+  profile: { stats: PlayerStats; matches: MatchSummary[]; topCombos: TopCombo[] } | null;
   onRegister: (username: string, password: string, email: string) => void;
   onLogin: (username: string, password: string) => void;
   onLogout: () => void;
@@ -206,6 +207,30 @@ export function AuthPanel({
                       />
                       <Stat label="🐉 Луу" value={profile.stats.dragons} />
                     </View>
+
+                    {profile.topCombos.length > 0 && (
+                      <>
+                        <Text style={styles.sectionTitle}>Хамгийн том хослолууд</Text>
+                        {profile.topCombos.map((combo, i) => (
+                          <View key={i} style={styles.combo}>
+                            <View style={styles.comboCards}>
+                              {combo.cards.map((c, j) => (
+                                <View key={c} style={j === 0 ? undefined : styles.comboOverlap}>
+                                  <PlayingCard card={c} size="sm" />
+                                </View>
+                              ))}
+                            </View>
+                            <View style={styles.comboInfo}>
+                              <Text style={styles.comboLabel}>{combo.label}</Text>
+                              <Text style={styles.comboMeta} numberOfLines={1}>
+                                {combo.opponents.length ? `${combo.opponents.join(', ')} · ` : ''}
+                                {formatDate(combo.at)}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </>
+                    )}
 
                     <Text style={styles.sectionTitle}>Сүүлийн тоглолтууд</Text>
                     {profile.matches.length === 0 && (
@@ -478,7 +503,8 @@ function Stat({
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const styles = StyleSheet.create({
@@ -590,6 +616,19 @@ const styles = StyleSheet.create({
   statValue: { color: theme.text, fontSize: 20, fontWeight: '800' },
   statLabel: { color: theme.textMuted, fontSize: 11 },
   sectionTitle: { color: theme.textMuted, fontSize: 13, fontWeight: '700', marginTop: 4 },
+  combo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.surfaceRaised,
+    borderRadius: 10,
+    padding: 8,
+  },
+  comboCards: { flexDirection: 'row' },
+  comboOverlap: { marginLeft: -20 },
+  comboInfo: { flex: 1, gap: 2 },
+  comboLabel: { color: theme.text, fontSize: 13, fontWeight: '700' },
+  comboMeta: { color: theme.textMuted, fontSize: 11 },
   empty: { color: theme.textMuted, fontSize: 13, textAlign: 'center', paddingVertical: 12 },
   match: {
     backgroundColor: theme.surfaceRaised,

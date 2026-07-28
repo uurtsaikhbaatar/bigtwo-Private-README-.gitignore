@@ -100,7 +100,7 @@ export type ServerMessage =
   | { t: 'reported'; id: string }
   /** Нэвтрэлтийн төлөв. account null бол нэвтрээгүй. */
   | { t: 'auth'; account: Account | null; token?: string }
-  | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[] }
+  | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[]; topCombos: TopCombo[] }
   /** Өөр тоглогчийн ил мэдээлэл. Бүртгэлгүй бол stats нь null. */
   | { t: 'playerInfo'; info: PlayerInfo }
   /**
@@ -192,6 +192,16 @@ export interface PlayerStats {
   /** Хожсон/алдсан чипийн нийлбэр. */
   chips: number;
   dragons: number;
+}
+
+/** Тоглогчийн тавьсан том хослол — профайлд харуулах (хэнтэй, хэзээ). */
+export interface TopCombo {
+  cards: Card[];
+  label: string;
+  /** Тэр тоглолтын бусад тоглогчид. */
+  opponents: string[];
+  /** Тоглолт дууссан цаг (ISO). */
+  at: string;
 }
 
 export interface MatchSummary {

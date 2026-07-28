@@ -158,6 +158,19 @@ export async function initSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS match_players_user_idx ON match_players(user_id);
 
+    -- Тоглогчийн тавьсан том хослолууд (хос ба түүнээс дээш). Профайлд "хамгийн
+    -- том 10 хослол"-оо хэнтэй, хэзээ тавьсныг харуулахад ашиглана.
+    CREATE TABLE IF NOT EXISTS player_combos (
+      id       BIGSERIAL PRIMARY KEY,
+      match_id BIGINT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+      user_id  BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      cards    INTEGER[] NOT NULL,
+      size     SMALLINT NOT NULL,
+      power    BIGINT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS player_combos_top_idx
+      ON player_combos(user_id, size DESC, power DESC);
+
     -- Тоглогчдоос ирсэн алдааны мэдэгдэл. Файлд биш энд хадгална — Render-ийн
     -- диск deploy бүрд цэвэрлэгддэг тул файл дээр хадгалбал мэдэгдэл алга болно.
     CREATE TABLE IF NOT EXISTS reports (

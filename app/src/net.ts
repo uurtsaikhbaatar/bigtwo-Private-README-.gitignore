@@ -24,6 +24,7 @@ import type {
   Promotion,
   ReportKind,
   ServerMessage,
+  TopCombo,
 } from './shared/protocol';
 import {
   SavedSession,
@@ -89,9 +90,11 @@ export function useBigTwo(serverUrl: string) {
   // Найзаас ирсэн урилгууд — нүүр хуудсан дээр харагдана.
   const [invites, setInvites] = useState<Invite[]>([]);
   const [ads, setAds] = useState<AdView[]>([]);
-  const [profile, setProfile] = useState<{ stats: PlayerStats; matches: MatchSummary[] } | null>(
-    null,
-  );
+  const [profile, setProfile] = useState<{
+    stats: PlayerStats;
+    matches: MatchSummary[];
+    topCombos: TopCombo[];
+  } | null>(null);
   const authTokenRef = useRef<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -147,7 +150,7 @@ export function useBigTwo(serverUrl: string) {
         }
         break;
       case 'profile':
-        setProfile({ stats: msg.stats, matches: msg.matches });
+        setProfile({ stats: msg.stats, matches: msg.matches, topCombos: msg.topCombos });
         break;
       case 'playerInfo':
         setPlayerInfo(msg.info);
