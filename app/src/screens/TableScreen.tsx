@@ -22,6 +22,12 @@ import { theme } from '../theme';
 const CONTENT_MAX_WIDTH = 780;
 
 /**
+ * Баруун доод хөвөгч товчнуудын (?, 🐞, дуу, чат) эзлэх өргөн. Нарийн
+ * дэлгэц дээр гар, товч, цол эдгээртэй давхцахгүйн тулд энэ зайг үлдээнэ.
+ */
+const FAB_COLUMN = 64;
+
+/**
  * Энэ өндрөөс нам бол хөндлөн барьсан утас гэж үзээд зайг нягтруулна.
  * Ингэснээр гар, товчнууд дэлгэцээс гарахгүй.
  */
@@ -35,13 +41,19 @@ const LAST_CARD_WARNING = 1;
  * Зай хүрэлцвэл огт давхарлахгүй; хүрэлцэхгүй бол булангийн тэмдэглэгээ
  * (зэрэглэл + баг) үргэлж харагдахуйц хэмжээгээр л давхарлана.
  */
-function handOverlap(cardCount: number, screenWidth: number): number {
+function handOverlap(
+  cardCount: number,
+  screenWidth: number,
+  minCorner: number = CARD_CORNER_WIDTH,
+): number {
   if (cardCount < 2) return 0;
   const available = Math.min(screenWidth, CONTENT_MAX_WIDTH) - 32;
   const cardWidth = CARD_SIZES.md.width;
   const needed = cardCount * cardWidth;
   if (needed <= available) return 0;
-  return Math.min(cardWidth - CARD_CORNER_WIDTH, (needed - available) / (cardCount - 1));
+  // `minCorner` — хөзөр бүрийн хамгийн багадаа харагдах өргөн (зэрэглэл+баг).
+  // Нарийн дэлгэц дээр илүү нягт давхарлахын тулд үүнийг багасгана.
+  return Math.min(cardWidth - minCorner, (needed - available) / (cardCount - 1));
 }
 
 interface Props {
@@ -83,7 +95,13 @@ export function TableScreen({
   const compact = height < COMPACT_HEIGHT;
   const you = view.players.find((p) => p.id === view.youId);
   const yourTurn = view.turnId === view.youId;
-  const overlap = handOverlap(view.yourHand.length, width);
+  // Нарийн (утас) дэлгэц дээр баруун доод хөвөгч товчнуудын баганад зай
+  // үлдээхийн тулд хөзрийг арай илүү давхарлана (буланг 16px хүртэл нягтруулж)
+  // — ингэснээр бүх хөзөр харагдсаар үлдэж, гүйлгэх шаардлагагүй болно.
+  const overlap =
+    width < 800
+      ? handOverlap(view.yourHand.length, width - FAB_COLUMN, 16)
+      : handOverlap(view.yourHand.length, width);
   const secondsLeft = useTurnCountdown(view.turnRemainingMs, view.turnSeq);
 
   // Гар өөрчлөгдөх бүрд сонголтыг цэвэрлэнэ.
@@ -727,7 +745,7 @@ const styles = StyleSheet.create({
   handArea: { gap: 8 },
   handAreaCompact: { gap: 4 },
   // Баруун доод хөвөгч товчнуудын баганаас зайлсхийх (утас дээр).
-  handAreaFabClear: { paddingRight: 52 },
+  handAreaFabClear: { paddingRight: FAB_COLUMN },
   sortRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sortLabel: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
   sortBtn: {
