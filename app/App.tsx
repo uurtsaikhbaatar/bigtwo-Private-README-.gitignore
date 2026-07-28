@@ -5,6 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChatButton } from './src/components/ChatPanel';
 import { Celebration } from './src/components/Celebration';
+import { WinCelebration } from './src/components/WinCelebration';
 import { HelpButton } from './src/components/HelpButton';
 import { PlayerInfoPanel } from './src/components/PlayerInfoPanel';
 import { SoundToggle } from './src/components/SoundToggle';
@@ -59,6 +60,11 @@ function Root() {
   const [guestChosen, setGuestChosen] = useState(false);
   // Хадгалсан токеноор нэвтрэлт сэргээж байх зуур гейт анивчихаас сэргийлнэ.
   const [authPending, setAuthPending] = useState(false);
+  // Хожлын баяр — хожигч сүүлийн хөзрөө тавихад дэлгэц дүүрэн түүз, тамга.
+  const [winCeleb, setWinCeleb] = useState<{ name: string; mine: boolean; match: boolean } | null>(
+    null,
+  );
+  const celebratedRoundRef = useRef(-1);
   const game = useBigTwo(serverUrl);
   const { resumeSession, joinRoom, resumeAuth, clearError, error } = game;
   const startedRef = useRef(false);
@@ -193,6 +199,27 @@ function Root() {
 
   const view = game.view;
 
+  // Тойрог/тоглолт дуусч хожигч тодрох мөчид нэг л удаа хожлын баяр асаана.
+  useEffect(() => {
+    if (!view) {
+      celebratedRoundRef.current = -1;
+      return;
+    }
+    const ended = view.phase === 'roundEnd' || view.phase === 'matchEnd';
+    if (!ended || view.round === celebratedRoundRef.current) return;
+    celebratedRoundRef.current = view.round;
+    const winner =
+      view.players.find((p) => p.place === 1) ??
+      view.players.find((p) => p.id === view.matchWinnerId);
+    if (winner) {
+      setWinCeleb({
+        name: winner.name,
+        mine: winner.id === view.youId,
+        match: view.phase === 'matchEnd',
+      });
+    }
+  }, [view?.phase, view?.round, view?.matchWinnerId]);
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <StatusBar style="light" />
@@ -253,6 +280,15 @@ function Root() {
           promotion={game.promotion}
           mine={game.promotion.playerId === view.youId}
           onDone={game.clearPromotion}
+        />
+      )}
+
+      {winCeleb && (
+        <WinCelebration
+          name={winCeleb.name}
+          mine={winCeleb.mine}
+          match={winCeleb.match}
+          onDone={() => setWinCeleb(null)}
         />
       )}
 

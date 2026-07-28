@@ -279,7 +279,9 @@ const styles = StyleSheet.create({
   },
   title: { color: theme.text, fontSize: 17, fontWeight: '700' },
   close: { color: theme.textMuted, fontSize: 15 },
-  list: { paddingHorizontal: 12 },
+  // flex:1 + minHeight:0 — мессеж хичнээн олон байсан ч жагсаалт дотроо
+  // гүйж, толгой (Хаах товч) ба бичих хэсэг ҮРГЭЛЖ харагдана.
+  list: { flex: 1, minHeight: 0, paddingHorizontal: 12 },
   listContent: { gap: 6, paddingBottom: 8 },
   empty: { color: theme.textMuted, textAlign: 'center', paddingVertical: 24 },
   bubble: {
