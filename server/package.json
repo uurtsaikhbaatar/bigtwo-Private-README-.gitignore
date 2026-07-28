@@ -18,7 +18,8 @@
     "ads": "node --env-file-if-exists=.env --import tsx src/ads-cli.ts",
     "live": "node --env-file-if-exists=.env --import tsx src/live-cli.ts",
     "tokens": "node --env-file-if-exists=.env --import tsx src/tokens-cli.ts",
-    "deploy": "node --env-file-if-exists=.env --import tsx src/deploy.ts"
+    "deploy": "node --env-file-if-exists=.env --import tsx src/deploy.ts",
+    "thanks": "node --env-file-if-exists=.env --import tsx src/thanks.ts"
   },
   "dependencies": {
     "pg": "^8.22.0",
