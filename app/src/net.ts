@@ -7,7 +7,7 @@
 
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import type { BotLevel } from './shared/bot';
 import type { Card } from './shared/cards';
@@ -96,12 +96,20 @@ export function useBigTwo(serverUrl: string) {
   const attemptsRef = useRef(0);
   const wantOnlineRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Утас апп сольж ороход WebSocket "хөлддөг" — амьд эсэхийг ping-ээр шалгах
+  // хугацааны хязгаар. Хариу ирэхгүй бол холболтыг албадан сэргээнэ (A5).
+  const livenessRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const urlRef = useRef(serverUrl);
   urlRef.current = serverUrl;
 
   const rawSend = (ws: WebSocket, msg: ClientMessage) => ws.send(JSON.stringify(msg));
 
   const handleMessage = useCallback((msg: ServerMessage) => {
+    // Ямар ч мессеж ирэх нь холболт амьд байгаагийн шинж — амьд шалгалтыг цуцална.
+    if (livenessRef.current) {
+      clearTimeout(livenessRef.current);
+      livenessRef.current = null;
+    }
     switch (msg.t) {
       case 'joined':
         sessionRef.current = { code: msg.code, playerId: msg.playerId, token: msg.token };
@@ -220,6 +228,49 @@ export function useBigTwo(serverUrl: string) {
     timerRef.current = setTimeout(() => openSocket(), delay);
   }, [openSocket]);
 
+  /** Одоогийн сокетыг хааж, шинээр холбогдоно (backoff-ыг тэглэнэ). */
+  const forceReconnect = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (livenessRef.current) clearTimeout(livenessRef.current);
+    livenessRef.current = null;
+    const old = socketRef.current;
+    socketRef.current = null;
+    if (old) {
+      old.onclose = null;
+      try {
+        old.close();
+      } catch {
+        // хаах үед гарсан алдааг үл тоомсорлоно
+      }
+    }
+    attemptsRef.current = 0;
+    openSocket();
+  }, [openSocket]);
+
+  /**
+   * Апп дэлгэц рүү буцаж ирэхэд холболт амьд эсэхийг шалгана (A5).
+   *
+   * Утасны хөтөч background-д сокетыг хөлдөөдөг: readyState=OPEN хэвээр ч
+   * үхсэн байж болно. Тиймээс ping илгээж, богино хугацаанд ямар нэг хариу
+   * ирэхгүй бол албадан дахин холбогдоно. Сокет хаалттай бол шууд сэргээнэ.
+   */
+  const checkAlive = useCallback(() => {
+    if (!wantOnlineRef.current || !sessionRef.current) return;
+    const ws = socketRef.current;
+    if (!ws || ws.readyState !== 1) {
+      forceReconnect();
+      return;
+    }
+    try {
+      rawSend(ws, { t: 'ping' });
+    } catch {
+      forceReconnect();
+      return;
+    }
+    if (livenessRef.current) clearTimeout(livenessRef.current);
+    livenessRef.current = setTimeout(forceReconnect, 3000);
+  }, [forceReconnect]);
+
   const send = useCallback(
     (msg: ClientMessage) => {
       const ws = socketRef.current;
@@ -235,12 +286,37 @@ export function useBigTwo(serverUrl: string) {
   const disconnect = useCallback(() => {
     wantOnlineRef.current = false;
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (livenessRef.current) clearTimeout(livenessRef.current);
+    livenessRef.current = null;
     socketRef.current?.close();
     socketRef.current = null;
     setStatus('offline');
   }, []);
 
   useEffect(() => disconnect, [disconnect]);
+
+  // A5: апп дэлгэц рүү буцах / сүлжээ сэргэх бүрд холболтоо шалгана. Утас өөр
+  // апп руу ороод буцахад тоглоом тасалдахыг зогсооно.
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (typeof document === 'undefined' || typeof window === 'undefined') return;
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') checkAlive();
+      };
+      window.addEventListener('focus', checkAlive);
+      window.addEventListener('online', checkAlive);
+      document.addEventListener('visibilitychange', onVisible);
+      return () => {
+        window.removeEventListener('focus', checkAlive);
+        window.removeEventListener('online', checkAlive);
+        document.removeEventListener('visibilitychange', onVisible);
+      };
+    }
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') checkAlive();
+    });
+    return () => sub.remove();
+  }, [checkAlive]);
 
   return {
     status,

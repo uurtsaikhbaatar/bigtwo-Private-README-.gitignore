@@ -235,7 +235,15 @@ export function TableScreen({
       )}
 
       {view.youAreSeated ? (
-        <View style={[styles.handArea, compact && styles.handAreaCompact]}>
+        <View
+          style={[
+            styles.handArea,
+            compact && styles.handAreaCompact,
+            // Нарийн (утас) дэлгэц дээр баруун доод хөвөгч товчнууд (?, 🐞, дуу,
+            // чат) гартай давхцахаас сэргийлж баруун талд зай үлдээнэ.
+            width < 800 && styles.handAreaFabClear,
+          ]}
+        >
           <View style={styles.statusRow}>
             {/* Өөрийн зураг, цол — дарахад токен, тоглолтын түүх нь гарна.
                 Өмнө нь зөвхөн бусдын мэдээлэл харагддаг байв. */}
@@ -718,6 +726,8 @@ const styles = StyleSheet.create({
 
   handArea: { gap: 8 },
   handAreaCompact: { gap: 4 },
+  // Баруун доод хөвөгч товчнуудын баганаас зайлсхийх (утас дээр).
+  handAreaFabClear: { paddingRight: 52 },
   sortRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sortLabel: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
   sortBtn: {
