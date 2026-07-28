@@ -407,6 +407,15 @@ function Opponent({
         <Text style={styles.lastCardBadge} numberOfLines={1}>
           ⚠ СҮҮЛИЙН ХӨЗӨР
         </Text>
+      ) : player.lastPlay ? (
+        // A1: тоглогч сүүлд юу тавьсныг ил харуулна (давхарласан жижиг хөзөр).
+        <View style={styles.oppLastPlay}>
+          {player.lastPlay.cards.map((c, i) => (
+            <View key={c} style={i === 0 ? undefined : styles.oppLastOverlap}>
+              <PlayingCard card={c} size="sm" />
+            </View>
+          ))}
+        </View>
       ) : (
         <View style={styles.miniStack}>
           {Array.from({ length: Math.min(player.handCount, 5) }).map((_, i) => (
@@ -514,6 +523,35 @@ function Results({
         />
       </View>
 
+      {/* A2 + M2: хожигч юугаар хожсон, хэнд ямар хөзөр үлдсэн нь ил гарна. */}
+      <View style={styles.revealPanel}>
+        <Text style={styles.revealTitle}>Хөзрүүд ил боллоо</Text>
+        {view.players
+          .filter((p) => p.seated && (p.place === 1 ? p.lastPlay : (p.revealHand?.length ?? 0) > 0))
+          .sort((a, b) => (a.place ?? 99) - (b.place ?? 99))
+          .map((p) => {
+            const won = p.place === 1;
+            const cards = won ? (p.lastPlay?.cards ?? []) : (p.revealHand ?? []);
+            return (
+              <View key={p.id} style={styles.revealRow}>
+                <Text style={styles.revealName} numberOfLines={1}>
+                  {won ? '🏆 ' : ''}
+                  {p.name}
+                  {p.id === view.youId ? ' (та)' : ''}
+                  {won ? ' — хожсон хөзөр' : ` — ${cards.length} үлдсэн`}
+                </Text>
+                <View style={styles.revealCards}>
+                  {cards.map((c, i) => (
+                    <View key={c} style={i === 0 ? undefined : styles.revealOverlap}>
+                      <PlayingCard card={c} size="sm" />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+      </View>
+
       {!matchOver && justOut.length > 0 && (
         <Text style={styles.hint}>
           Хасагдсан: {justOut.map((p) => `${p.name} (${p.score})`).join(', ')}
@@ -604,6 +642,9 @@ const styles = StyleSheet.create({
   opponentMeta: { color: theme.textMuted, fontSize: 11 },
   miniStack: { flexDirection: 'row' },
   miniOverlap: { marginLeft: -14 },
+  // A1: opponent-ийн сүүлийн тавилт — жижиг хөзрүүд ихээр давхарлаж багтаана.
+  oppLastPlay: { flexDirection: 'row', alignSelf: 'center' },
+  oppLastOverlap: { marginLeft: -26 },
   miniCard: {
     width: 20,
     height: 28,
@@ -726,6 +767,12 @@ const styles = StyleSheet.create({
   dragonTitle: { color: theme.accent, fontSize: 26, fontWeight: '900', textAlign: 'center' },
   dragonText: { color: theme.text, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   resultPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12 },
+  revealPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12, gap: 10 },
+  revealTitle: { color: theme.textMuted, fontSize: 13, fontWeight: '700' },
+  revealRow: { gap: 4 },
+  revealName: { color: theme.text, fontSize: 13, fontWeight: '600' },
+  revealCards: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 4 },
+  revealOverlap: { marginLeft: -18 },
   moneyPanel: {
     backgroundColor: theme.surface,
     borderRadius: theme.radius,

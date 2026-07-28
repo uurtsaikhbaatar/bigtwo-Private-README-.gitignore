@@ -69,6 +69,8 @@ export interface Player {
   rankedWins: number | null;
   /** Бот бол түвшин. Хүн бол null. */
   bot: BotLevel | null;
+  /** Энэ тойрогт хамгийн сүүлд тавьсан хослол. Тойрог бүрд цэвэрлэгдэнэ. */
+  lastPlay: Combo | null;
 }
 
 export interface TablePlay {
@@ -187,6 +189,7 @@ export function addPlayer(state: GameState, id: string, name: string): void {
     avatar: null,
     rankedWins: null,
     bot: null,
+    lastPlay: null,
   });
 }
 
@@ -269,6 +272,7 @@ export function startRound(state: GameState, rng: () => number = Math.random): v
     p.passed = false;
     p.place = null;
     p.hand = [];
+    p.lastPlay = null;
     p.seated = state.seats.includes(p.id);
   });
   state.seats.forEach((id, i) => {
@@ -487,6 +491,7 @@ export function play(state: GameState, playerId: string, cards: Card[]): void {
 
   player.hand = player.hand.filter((c) => !cards.includes(c));
   player.passed = false;
+  player.lastPlay = combo;
   state.current = { playerId, combo };
   state.lastPlay = state.current;
   state.log.push(`${player.name}: ${cards.length} хөзөр тавилаа.`);

@@ -9,7 +9,7 @@
 
 import type { BotLevel } from './bot';
 import { Card } from './cards';
-import { comboLabel } from './combos';
+import { Combo, comboLabel } from './combos';
 import { GameState, Phase, RoundRecord, Settlement } from './game';
 
 export const PROTOCOL_VERSION = 6;
@@ -231,6 +231,13 @@ export interface PlayerView {
   rankedWins: number | null;
   /** Бот бол түвшин, хүн бол null. */
   bot: BotLevel | null;
+  /** Энэ тоглогчийн энэ тойрогт хамгийн сүүлд тавьсан хослол (байвал). */
+  lastPlay: PlayView | null;
+  /**
+   * Гарт үлдсэн хөзөр — ЗӨВХӨН тойрог/тоглолт дуусахад ил гарна. Тоглох
+   * явцад бусдын хөзөр нууц хэвээр (null). Хожигч дуусгасан тул хоосон.
+   */
+  revealHand: Card[] | null;
 }
 
 export interface PlayView {
@@ -283,6 +290,8 @@ export interface RoomMeta {
 /** Сервер дээрх бүрэн төлвөөс нэг тоглогчид зориулсан харагдац үүсгэнэ. */
 export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameView {
   const you = state.players.find((p) => p.id === youId);
+  // Тойрог/тоглолт дуусахад л бусдын гарыг ил гаргана.
+  const revealing = state.phase === 'roundEnd' || state.phase === 'matchEnd';
   return {
     code: meta.code,
     youId,
@@ -301,6 +310,8 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       avatar: p.avatar,
       rankedWins: p.rankedWins,
       bot: p.bot,
+      lastPlay: comboPlayView(p.id, p.lastPlay),
+      revealHand: revealing && p.seated ? p.hand.slice() : null,
     })),
     seats: state.seats.slice(),
     yourHand: you ? you.hand.slice() : [],
@@ -326,4 +337,10 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
 function toPlayView(play: GameState['current']): PlayView | null {
   if (!play) return null;
   return { playerId: play.playerId, cards: play.combo.cards, label: comboLabel(play.combo) };
+}
+
+/** Тоглогчийн сүүлийн хослолыг харагдац болгоно. */
+function comboPlayView(playerId: string, combo: Combo | null): PlayView | null {
+  if (!combo) return null;
+  return { playerId, cards: combo.cards, label: comboLabel(combo) };
 }
