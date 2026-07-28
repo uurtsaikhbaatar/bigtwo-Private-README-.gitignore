@@ -396,7 +396,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       requireDb();
       const account = accounts.get(socket);
       if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
-      void Promise.all([statsForUser(account.id), recentMatches(account.id, 10)])
+      void Promise.all([statsForUser(account.id), recentMatches(account.id, 50)])
         .then(([stats, matches]) => send(socket, { t: 'profile', stats, matches }))
         .catch((err) => {
           console.error('profile error:', err);

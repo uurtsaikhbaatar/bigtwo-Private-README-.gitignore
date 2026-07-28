@@ -238,6 +238,11 @@ export interface PlayerView {
    * явцад бусдын хөзөр нууц хэвээр (null). Хожигч дуусгасан тул хоосон.
    */
   revealHand: Card[] | null;
+  /**
+   * Энэ тоглолтод тавьсан хамгийн том 5 хослол (A3). ЗӨВХӨН тоглолт
+   * дуусахад дүүрнэ — эс бөгөөс хоосон.
+   */
+  topCombos: PlayView[];
 }
 
 export interface PlayView {
@@ -312,6 +317,7 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       bot: p.bot,
       lastPlay: comboPlayView(p.id, p.lastPlay),
       revealHand: revealing && p.seated ? p.hand.slice() : null,
+      topCombos: state.phase === 'matchEnd' ? topCombosOf(p.id, p.matchCombos) : [],
     })),
     seats: state.seats.slice(),
     yourHand: you ? you.hand.slice() : [],
@@ -343,4 +349,18 @@ function toPlayView(play: GameState['current']): PlayView | null {
 function comboPlayView(playerId: string, combo: Combo | null): PlayView | null {
   if (!combo) return null;
   return { playerId, cards: combo.cards, label: comboLabel(combo) };
+}
+
+/**
+ * Тоглолтын хамгийн том 5 хослол (A3).
+ *
+ * "Том" гэдгийг эхлээд хөзрийн тоогоор (5 > 3 > 2 > 1), дараа нь хүчээр
+ * жагсаана — ингэснээр шулуун өнгө, дөрвөл зэрэг гоё хослолууд түрүүлнэ.
+ */
+function topCombosOf(playerId: string, combos: Combo[]): PlayView[] {
+  return combos
+    .slice()
+    .sort((a, b) => b.size - a.size || b.power - a.power)
+    .slice(0, 5)
+    .map((c) => ({ playerId, cards: c.cards, label: comboLabel(c) }));
 }

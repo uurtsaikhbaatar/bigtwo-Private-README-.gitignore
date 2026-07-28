@@ -71,6 +71,8 @@ export interface Player {
   bot: BotLevel | null;
   /** Энэ тойрогт хамгийн сүүлд тавьсан хослол. Тойрог бүрд цэвэрлэгдэнэ. */
   lastPlay: Combo | null;
+  /** Энэ ТОГЛОЛТЫН турш тавьсан бүх хослол. Тоглолт бүрд цэвэрлэгдэнэ (A3). */
+  matchCombos: Combo[];
 }
 
 export interface TablePlay {
@@ -190,6 +192,7 @@ export function addPlayer(state: GameState, id: string, name: string): void {
     rankedWins: null,
     bot: null,
     lastPlay: null,
+    matchCombos: [],
   });
 }
 
@@ -247,6 +250,7 @@ export function startMatch(
     p.eliminated = false;
     p.seated = false;
     p.draw = null;
+    p.matchCombos = [];
   });
   // Төлөвийг ЗААВАЛ цэвэрлэнэ: дууссан тоглолтын дараа шинийг эхлүүлэхэд
   // `startRound` нь `matchEnd`-ыг хараад татгалздаг байв. Үүнээс болж
@@ -492,6 +496,7 @@ export function play(state: GameState, playerId: string, cards: Card[]): void {
   player.hand = player.hand.filter((c) => !cards.includes(c));
   player.passed = false;
   player.lastPlay = combo;
+  player.matchCombos.push(combo);
   state.current = { playerId, combo };
   state.lastPlay = state.current;
   state.log.push(`${player.name}: ${cards.length} хөзөр тавилаа.`);

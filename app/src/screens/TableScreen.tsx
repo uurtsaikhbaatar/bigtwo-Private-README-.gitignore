@@ -552,6 +552,35 @@ function Results({
           })}
       </View>
 
+      {/* A3: тоглолт дуусахад тоглогч бүрийн тавьсан шилдэг 5 хослол. */}
+      {matchOver && (
+        <View style={styles.revealPanel}>
+          <Text style={styles.revealTitle}>Тоглолтын шилдэг хослолууд</Text>
+          {view.players
+            .filter((p) => p.topCombos.length > 0)
+            .map((p) => (
+              <View key={p.id} style={styles.revealRow}>
+                <Text style={styles.revealName} numberOfLines={1}>
+                  {p.name}
+                  {p.id === view.youId ? ' (та)' : ''}
+                </Text>
+                {p.topCombos.map((combo, idx) => (
+                  <View key={idx} style={styles.comboRow}>
+                    <Text style={styles.comboLabel}>{combo.label}</Text>
+                    <View style={styles.revealCards}>
+                      {combo.cards.map((c, i) => (
+                        <View key={c} style={i === 0 ? undefined : styles.revealOverlap}>
+                          <PlayingCard card={c} size="sm" />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ))}
+        </View>
+      )}
+
       {!matchOver && justOut.length > 0 && (
         <Text style={styles.hint}>
           Хасагдсан: {justOut.map((p) => `${p.name} (${p.score})`).join(', ')}
@@ -773,6 +802,8 @@ const styles = StyleSheet.create({
   revealName: { color: theme.text, fontSize: 13, fontWeight: '600' },
   revealCards: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 4 },
   revealOverlap: { marginLeft: -18 },
+  comboRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 8 },
+  comboLabel: { color: theme.textMuted, fontSize: 11, width: 88 },
   moneyPanel: {
     backgroundColor: theme.surface,
     borderRadius: theme.radius,
