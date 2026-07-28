@@ -75,9 +75,10 @@ export function TableScreen({
 }: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
   // Хөзрийг хэрхэн эрэмбэлж харуулах: 'rank' = дараалалаар (3→2), 'suit' =
-  // өнгөөр бүлэглэж. Зөвхөн харагдац — сонголт нь хөзрийн утгаар хадгалагдах
-  // тул эрэмбэ өөрчлөгдөхөд сонгосон хөзөр алдагдахгүй.
-  const [sortMode, setSortMode] = useState<'rank' | 'suit'>('rank');
+  // өнгөөр бүлэглэж, 'pair' = ижил зэрэглэлүүдийг (хос/гурвал/дөрвөл) урд нь
+  // бүлэглэж. Зөвхөн харагдац — сонголт нь хөзрийн утгаар хадгалагдах тул
+  // эрэмбэ өөрчлөгдөхөд сонгосон хөзөр алдагдахгүй.
+  const [sortMode, setSortMode] = useState<'rank' | 'suit' | 'pair'>('rank');
   const { width, height } = useWindowDimensions();
   const compact = height < COMPACT_HEIGHT;
   const you = view.players.find((p) => p.id === view.youId);
@@ -94,11 +95,22 @@ export function TableScreen({
   const problem = useMemo(() => validate(selected, view), [selected, view]);
 
   // Сонгосон эрэмбээр гарыг харуулна. 'suit' үед өнгөөр бүлэглэж, дотор нь
-  // зэрэглэлээр; 'rank' үед индексээр (зэрэглэл→өнгө), энэ нь анхны дараалал.
+  // зэрэглэлээр; 'pair' үед олон хувьтай зэрэглэлийг (дөрвөл→гурвал→хос) урд
+  // талд бүлэглэж; 'rank' үед индексээр (зэрэглэл→өнгө), энэ нь анхны дараалал.
   const displayHand = useMemo(() => {
     const hand = view.yourHand.slice();
     if (sortMode === 'suit') {
       hand.sort((a, b) => suitOf(a) - suitOf(b) || rankOf(a) - rankOf(b));
+    } else if (sortMode === 'pair') {
+      // Зэрэглэл тус бүрийн тоог бодоод, олонтойг нь урд, дараа нь зэрэглэлээр.
+      const count = new Map<number, number>();
+      for (const c of hand) count.set(rankOf(c), (count.get(rankOf(c)) ?? 0) + 1);
+      hand.sort(
+        (a, b) =>
+          (count.get(rankOf(b))! - count.get(rankOf(a))!) ||
+          rankOf(a) - rankOf(b) ||
+          suitOf(a) - suitOf(b),
+      );
     } else {
       hand.sort((a, b) => a - b);
     }
@@ -254,7 +266,7 @@ export function TableScreen({
           {/* Хөзрөө эрэмбэлэх — тоглогчид гараа хялбар уншина. */}
           <View style={styles.sortRow}>
             <Text style={styles.sortLabel}>Эрэмбэ:</Text>
-            {(['rank', 'suit'] as const).map((m) => (
+            {(['rank', 'suit', 'pair'] as const).map((m) => (
               <Pressable
                 key={m}
                 onPress={() => setSortMode(m)}
@@ -263,7 +275,7 @@ export function TableScreen({
                 style={[styles.sortBtn, sortMode === m && styles.sortBtnOn]}
               >
                 <Text style={[styles.sortText, sortMode === m && styles.sortTextOn]}>
-                  {m === 'rank' ? 'Дараалал' : 'Өнгө'}
+                  {m === 'rank' ? 'Дараалал' : m === 'suit' ? 'Өнгө' : 'Хос'}
                 </Text>
               </Pressable>
             ))}

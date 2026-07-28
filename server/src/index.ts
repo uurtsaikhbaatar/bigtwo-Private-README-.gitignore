@@ -933,12 +933,33 @@ function releaseSeat(room: Room, playerId: string): void {
   room.seats.delete(playerId);
   removePlayer(room.state, playerId);
   if (room.hostId === playerId) {
-    room.hostId = room.state.players[0]?.id ?? '';
+    // Хасагдаагүй хүн тоглогчийг эрхэмлэнэ (бот "дараагийн" дарж чадахгүй).
+    room.hostId =
+      (room.state.players.find((p) => !p.eliminated && !p.bot) ??
+        room.state.players.find((p) => !p.bot) ??
+        room.state.players[0])?.id ?? '';
   }
   if (room.seats.size === 0) rooms.delete(room.code);
 }
 
+/**
+ * Эзэн хасагдсан бол удирдлагыг идэвхтэй тоглогчид шилжүүлнэ.
+ *
+ * "Дараагийн тойрог"-ийг зөвхөн эзэн эхлүүлдэг тул эзэн түрүүлж хасагдвал
+ * үлдсэн тоглогчид гацна. Бот "дараагийн" дарж чаддаггүй тул хасагдаагүй
+ * ХҮН тоглогчийг эрхэмлэн сонгоно (боломжгүй бол дурын хасагдаагүйг).
+ */
+function ensureActiveHost(room: Room): void {
+  const host = room.state.players.find((p) => p.id === room.hostId);
+  if (host && !host.eliminated) return; // эзэн идэвхтэй хэвээр — юу ч хийхгүй
+  const next =
+    room.state.players.find((p) => !p.eliminated && !p.bot) ??
+    room.state.players.find((p) => !p.eliminated);
+  if (next && next.id !== room.hostId) room.hostId = next.id;
+}
+
 function broadcast(room: Room): void {
+  ensureActiveHost(room);
   saveFinishedMatch(room);
   const meta = metaOf(room);
   for (const s of room.seats.values()) {
