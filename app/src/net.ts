@@ -35,6 +35,11 @@ import {
 
 export const SERVER_PORT = 8787;
 const MAX_RECONNECT_ATTEMPTS = 6;
+/**
+ * Тогтмол "амьд уу?" шалгалтын давтамж (ms). Утасны хөтөч сокетыг чимээгүй
+ * үхүүлж болно (onclose гарахгүй) — периодик ping-ээр илрүүлж дахин холбогдоно.
+ */
+const HEARTBEAT_MS = 15_000;
 
 /**
  * Expo dev сервер ажиллаж буй машины IP-г ашиглан анхдагч хаягийг таана.
@@ -268,7 +273,8 @@ export function useBigTwo(serverUrl: string) {
       return;
     }
     if (livenessRef.current) clearTimeout(livenessRef.current);
-    livenessRef.current = setTimeout(forceReconnect, 3000);
+    // Удаан утасны сүлжээнд хариу удаж болно — 5 сек хүлээнэ.
+    livenessRef.current = setTimeout(forceReconnect, 5000);
   }, [forceReconnect]);
 
   const send = useCallback(
@@ -316,6 +322,14 @@ export function useBigTwo(serverUrl: string) {
       if (s === 'active') checkAlive();
     });
     return () => sub.remove();
+  }, [checkAlive]);
+
+  // A5: тогтмол heartbeat — сокет чимээгүй үхсэнийг илрүүлж дахин холбогдоно.
+  // Зөвхөн foreground/фокус үед л шалгах нь хангалтгүй: тоглогч ижил дэлгэц
+  // дээр байхад ч холболт тасарч болно.
+  useEffect(() => {
+    const timer = setInterval(checkAlive, HEARTBEAT_MS);
+    return () => clearInterval(timer);
   }, [checkAlive]);
 
   return {

@@ -107,12 +107,14 @@ function linkSeat(socket: WebSocket, account: Account): void {
   const session = sessions.get(socket);
   if (!session) return;
   const seat = session.room.seats.get(session.playerId);
-  if (!seat || seat.userId === account.id) return;
+  if (!seat) return;
 
   seat.userId = account.id;
   const player = session.room.state.players.find((p) => p.id === session.playerId);
   if (player && account.avatar) player.avatar = account.avatar;
 
+  // Цол/токеныг ҮРГЭЛЖ шинэчилнэ (аль хэдийн холбогдсон ч) — дахин холбогдоход
+  // цол алга болохоос сэргийлнэ.
   if (dbEnabled()) {
     void refreshWins(session.room).catch(() => undefined);
   }
@@ -415,6 +417,10 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       existing.socket?.close();
       existing.socket = socket;
       sessions.set(socket, { room, playerId: existing.playerId });
+      // Нэвтрэлт (authResume) resume-ээс өмнө ирсэн бол линк тухайн үед session
+      // байгаагүй тул амжаагүй — одоо session бэлэн болсон тул дахин холбоно.
+      const acct = accounts.get(socket);
+      if (acct) linkSeat(socket, acct);
       send(socket, { t: 'joined', code: room.code, playerId: existing.playerId, token: existing.token });
       sendChatHistory(socket, room);
       return broadcast(room);
@@ -943,22 +949,28 @@ function releaseSeat(room: Room, playerId: string): void {
 }
 
 /**
- * Эзэн хасагдсан бол удирдлагыг идэвхтэй тоглогчид шилжүүлнэ.
+ * Удирдлагыг ХОЛБОГДСОН, хасагдаагүй ХҮН тоглогчид байлгана.
  *
- * "Дараагийн тойрог"-ийг зөвхөн эзэн эхлүүлдэг тул эзэн түрүүлж хасагдвал
- * үлдсэн тоглогчид гацна. Сонгох эрэмбэ: холбогдсон хүн → дурын хүн → дурын
- * хасагдаагүй. Бот "дараагийн" дарж чаддаггүй, offline хүн ч дарж чадахгүй
- * тул холбогдсон ХҮН тоглогчийг хамгийн түрүүнд сонгоно.
+ * "Дараагийн тойрог", "Бот нэмэх" зэргийг зөвхөн эзэн хийдэг тул эзэн
+ * хасагдах ЭСВЭЛ тасрахад үлдсэн тоглогчид гацдаг байв. Одоо эзэн хасагдсан
+ * эсвэл холболтоо тасалсан бол удирдлагыг холбогдсон хүнд шилжүүлнэ. Эзэн
+ * зөвхөн disconnected/хасагдсанаас л шилждэг тул холболт сайтай хоёр хүний
+ * хооронд эргэлддэггүй.
  */
 function ensureActiveHost(room: Room): void {
+  const connected = (id: string) => {
+    const s = room.seats.get(id)?.socket;
+    return s != null && s.readyState === 1; // 1 = OPEN
+  };
   const host = room.state.players.find((p) => p.id === room.hostId);
-  if (host && !host.eliminated) return; // эзэн идэвхтэй хэвээр — юу ч хийхгүй
-  const connected = (id: string) => room.seats.get(id)?.socket != null;
+  // Эзэн идэвхтэй БА холбогдсон хэвээр бол юу ч хийхгүй.
+  if (host && !host.eliminated && connected(host.id)) return;
   const humans = room.state.players.filter((p) => !p.eliminated && !p.bot);
   const next =
     humans.find((p) => connected(p.id)) ?? // холбогдсон хүн — шууд дарж чадна
-    humans[0] ?? // холболтоо сэргээх магадлалтай хүн
-    room.state.players.find((p) => !p.eliminated); // эцэст нь дурын идэвхтэй
+    (host && !host.eliminated ? host : undefined) ?? // хэн ч холбогдоогүй бол одоогийн эзэн хэвээр
+    humans[0] ??
+    room.state.players.find((p) => !p.eliminated);
   if (next && next.id !== room.hostId) room.hostId = next.id;
 }
 
