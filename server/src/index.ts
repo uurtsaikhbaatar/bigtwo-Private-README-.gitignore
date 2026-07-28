@@ -946,15 +946,19 @@ function releaseSeat(room: Room, playerId: string): void {
  * Эзэн хасагдсан бол удирдлагыг идэвхтэй тоглогчид шилжүүлнэ.
  *
  * "Дараагийн тойрог"-ийг зөвхөн эзэн эхлүүлдэг тул эзэн түрүүлж хасагдвал
- * үлдсэн тоглогчид гацна. Бот "дараагийн" дарж чаддаггүй тул хасагдаагүй
- * ХҮН тоглогчийг эрхэмлэн сонгоно (боломжгүй бол дурын хасагдаагүйг).
+ * үлдсэн тоглогчид гацна. Сонгох эрэмбэ: холбогдсон хүн → дурын хүн → дурын
+ * хасагдаагүй. Бот "дараагийн" дарж чаддаггүй, offline хүн ч дарж чадахгүй
+ * тул холбогдсон ХҮН тоглогчийг хамгийн түрүүнд сонгоно.
  */
 function ensureActiveHost(room: Room): void {
   const host = room.state.players.find((p) => p.id === room.hostId);
   if (host && !host.eliminated) return; // эзэн идэвхтэй хэвээр — юу ч хийхгүй
+  const connected = (id: string) => room.seats.get(id)?.socket != null;
+  const humans = room.state.players.filter((p) => !p.eliminated && !p.bot);
   const next =
-    room.state.players.find((p) => !p.eliminated && !p.bot) ??
-    room.state.players.find((p) => !p.eliminated);
+    humans.find((p) => connected(p.id)) ?? // холбогдсон хүн — шууд дарж чадна
+    humans[0] ?? // холболтоо сэргээх магадлалтай хүн
+    room.state.players.find((p) => !p.eliminated); // эцэст нь дурын идэвхтэй
   if (next && next.id !== room.hostId) room.hostId = next.id;
 }
 
