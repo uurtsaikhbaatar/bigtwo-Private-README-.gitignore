@@ -63,10 +63,13 @@ export function LobbyScreen({
 
   const link = joinUrl(view.code);
   const share = () => {
-    void Share.share({
+    Share.share({
       message: link
         ? `Дай Ди тоглоом! Линк дарахад шууд орно:\n${link}`
         : `Дай Ди тоглоом! Өрөөний код: ${view.code}`,
+    }).catch(() => {
+      // Хэрэглэгч хуваалцахыг цуцалсан — алдаа биш, үл тоомсорлоно. (Өмнө нь
+      // энэ нь автомат "crash" мэдэгдэл болж жагсаалтыг дүүргэдэг байв.)
     });
   };
 

@@ -955,26 +955,30 @@ function releaseSeat(room: Room, playerId: string): void {
 }
 
 /**
- * Удирдлагыг ХОЛБОГДСОН, хасагдаагүй ХҮН тоглогчид байлгана.
+ * Эзэн ХАСАГДвал удирдлагыг өөр тоглогчид шилжүүлнэ.
  *
- * "Дараагийн тойрог", "Бот нэмэх" зэргийг зөвхөн эзэн хийдэг тул эзэн
- * хасагдах ЭСВЭЛ тасрахад үлдсэн тоглогчид гацдаг байв. Одоо эзэн хасагдсан
- * эсвэл холболтоо тасалсан бол удирдлагыг холбогдсон хүнд шилжүүлнэ. Эзэн
- * зөвхөн disconnected/хасагдсанаас л шилждэг тул холболт сайтай хоёр хүний
- * хооронд эргэлддэггүй.
+ * "Дараагийн тойрог"-ийг зөвхөн эзэн эхлүүлдэг тул эзэн түрүүлж хасагдвал
+ * үлдсэн тоглогчид гацна. Сонгох эрэмбэ (бот "дараагийн" дарж чадахгүй тул
+ * ХҮНийг эрхэмлэнэ, гацахаас сэргийлж хасагдсан хүн ч болно):
+ *   холбогдсон идэвхтэй хүн → дурын идэвхтэй хүн → холбогдсон хүн (хасагдсан ч
+ *   дарж чадна) → дурын хүн → эцэст нь дурын идэвхтэй (бот).
+ *
+ * Эзэн зөвхөн ТАСРАХАД шилжүүлэхгүй — түр тасарсан эзэн (утас) буцаж ирэхэд
+ * эзэн хэвээрээ байх ёстой (эргэлдэхээс сэргийлнэ). Лоббид бүрмөсөн гарвал
+ * `releaseSeat` эзнийг шилжүүлдэг.
  */
 function ensureActiveHost(room: Room): void {
+  const host = room.state.players.find((p) => p.id === room.hostId);
+  if (host && !host.eliminated) return; // эзэн хасагдаагүй бол хэвээр (түр тасарсан ч)
   const connected = (id: string) => {
     const s = room.seats.get(id)?.socket;
     return s != null && s.readyState === 1; // 1 = OPEN
   };
-  const host = room.state.players.find((p) => p.id === room.hostId);
-  // Эзэн идэвхтэй БА холбогдсон хэвээр бол юу ч хийхгүй.
-  if (host && !host.eliminated && connected(host.id)) return;
-  const humans = room.state.players.filter((p) => !p.eliminated && !p.bot);
+  const humans = room.state.players.filter((p) => !p.bot); // хасагдсан хүн ч дарж чадна
   const next =
-    humans.find((p) => connected(p.id)) ?? // холбогдсон хүн — шууд дарж чадна
-    (host && !host.eliminated ? host : undefined) ?? // хэн ч холбогдоогүй бол одоогийн эзэн хэвээр
+    humans.find((p) => !p.eliminated && connected(p.id)) ??
+    humans.find((p) => !p.eliminated) ??
+    humans.find((p) => connected(p.id)) ??
     humans[0] ??
     room.state.players.find((p) => !p.eliminated);
   if (next && next.id !== room.hostId) room.hostId = next.id;
