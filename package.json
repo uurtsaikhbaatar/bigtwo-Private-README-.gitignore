@@ -17,6 +17,7 @@
     "reports": "npm --prefix server run reports --",
     "db:init": "npm --prefix server run db:init",
     "email:test": "npm --prefix server run email:test --",
-    "tokens": "npm --prefix server run tokens --"
+    "tokens": "npm --prefix server run tokens --",
+    "deploy": "npm --prefix server run deploy --"
   }
 }
