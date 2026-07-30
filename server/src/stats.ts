@@ -22,13 +22,16 @@ if (!dbEnabled()) {
   const pool = getPool();
   const q = <T>(sql: string, params: unknown[] = []) =>
     pool.query(sql, params).then((r) => r.rows as T[]);
+  // Автомат тест/smoke бүртгэлийг хасах нөхцөл (жинхэнэ хэрэглэгч биш)
+  const NOT_TEST = `username NOT LIKE 'тест_%' AND username NOT LIKE 'test_%' AND username NOT LIKE 'smoke%'`;
   try {
     const users = (
-      await q<{ n: number; v: number; new7: number; new1: number }>(
-        `SELECT count(*)::int n,
-                count(*) FILTER (WHERE email_verified)::int v,
-                count(*) FILTER (WHERE created_at > now() - interval '7 days')::int new7,
-                count(*) FILTER (WHERE created_at > now() - interval '1 day')::int new1
+      await q<{ n: number; v: number; new7: number; new1: number; test: number }>(
+        `SELECT count(*) FILTER (WHERE ${NOT_TEST})::int n,
+                count(*) FILTER (WHERE email_verified AND ${NOT_TEST})::int v,
+                count(*) FILTER (WHERE created_at > now() - interval '7 days' AND ${NOT_TEST})::int new7,
+                count(*) FILTER (WHERE created_at > now() - interval '1 day' AND ${NOT_TEST})::int new1,
+                count(*) FILTER (WHERE NOT (${NOT_TEST}))::int test
            FROM users`,
       )
     )[0];
@@ -51,10 +54,11 @@ if (!dbEnabled()) {
     )[0];
 
     console.log('\n════════ ДАЙ ДИ — СТАТИСТИК ════════\n');
-    console.log('👥 БҮРТГЭЛ');
+    console.log('👥 БҮРТГЭЛ (жинхэнэ хэрэглэгч)');
     console.log(`   Нийт бүртгэл      : ${groupDigits(users.n)}`);
     console.log(`   Имэйл баталгаажсан: ${groupDigits(users.v)}`);
     console.log(`   Шинэ (7 хоног)    : ${groupDigits(users.new7)}   ·   өнөөдөр: ${users.new1}`);
+    console.log(`   (тест/smoke бүртгэл хасагдсан: ${groupDigits(users.test)})`);
     console.log('\n🎮 ТОГЛОЛТ');
     console.log(`   Нийт тоглолт      : ${groupDigits(matches.n)}   (${groupDigits(matches.r)} тойрог)`);
     console.log(`   Чиптэй тоглолт    : ${groupDigits(matches.chip)}`);
@@ -70,6 +74,7 @@ if (!dbEnabled()) {
               coalesce(sum(mp.chips), 0)::int chips
          FROM match_players mp JOIN users u ON u.id = mp.user_id JOIN matches m ON m.id = mp.match_id
         WHERE NOT m.test
+          AND u.username NOT LIKE 'тест_%' AND u.username NOT LIKE 'test_%' AND u.username NOT LIKE 'smoke%'
         GROUP BY u.username ORDER BY games DESC LIMIT 10`,
     );
     console.log('\n🏆 ХАМГИЙН ИДЭВХТЭЙ ТОГЛОГЧИД');
