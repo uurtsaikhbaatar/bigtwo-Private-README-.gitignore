@@ -3,8 +3,9 @@
  *
  *   npm run stats
  *
- * Энэ нь ТОГЛООМЫН тоо (сангаас). Вэб хандалт (хэдэн хүн сайт нээсэн) нь
- * Cloudflare → Web Analytics-аас харагдана — тэр нь өөр хэмжүүр.
+ * Энэ нь бүх тоог сангаас уншина — бүртгэл, тоглолт, идэвх, түүнчлэн
+ * сайтын хандалт (апп нээгдэх бүрд серверт тэмдэглэдэг, нэг өдөрт нэг
+ * төхөөрөмж = нэг зочин). Гадны хэрэгсэл (Cloudflare) шаардлагагүй.
  */
 
 export {}; // top-level await-д зориулж модуль болгоно
@@ -52,6 +53,15 @@ if (!dbEnabled()) {
           WHERE mp.user_id IS NOT NULL AND NOT m.test`,
       )
     )[0];
+    const visits = (
+      await q<{ total: number; today: number; v7: number; hits_today: number }>(
+        `SELECT count(DISTINCT visitor)::int total,
+                count(DISTINCT visitor) FILTER (WHERE day = current_date)::int today,
+                count(DISTINCT visitor) FILTER (WHERE day > current_date - 7)::int v7,
+                coalesce(sum(hits) FILTER (WHERE day = current_date), 0)::int hits_today
+           FROM visits`,
+      )
+    )[0];
 
     console.log('\n════════ ДАЙ ДИ — СТАТИСТИК ════════\n');
     console.log('👥 БҮРТГЭЛ (жинхэнэ хэрэглэгч)');
@@ -66,6 +76,10 @@ if (!dbEnabled()) {
     console.log('\n🔥 ИДЭВХ');
     console.log(`   7 хоногт тоглосон : ${groupDigits(active.a7)} хүн`);
     console.log(`   Өнөөдөр тоглосон  : ${groupDigits(active.a1)} хүн`);
+    console.log('\n🌐 САЙТЫН ХАНДАЛТ (бүртгэлгүй ч тоологдоно)');
+    console.log(`   Нийт зочин        : ${groupDigits(visits.total)} төхөөрөмж`);
+    console.log(`   7 хоногт          : ${groupDigits(visits.v7)} зочин`);
+    console.log(`   Өнөөдөр           : ${groupDigits(visits.today)} зочин   ·   ${groupDigits(visits.hits_today)} удаа нээсэн`);
 
     const top = await q<{ username: string; games: number; wins: number; chips: number }>(
       `SELECT u.username,
@@ -84,7 +98,7 @@ if (!dbEnabled()) {
         `   ${p.username.padEnd(16)} ${String(p.games).padStart(3)} тоглолт · ${String(p.wins).padStart(3)} хожил (${rate}%)`,
       );
     }
-    console.log('\n💡 Вэб хандалт (хэдэн хүн сайт нээсэн) → Cloudflare → Web Analytics');
+    console.log('\n💡 Хандалтын тоо энэ хувилбар deploy хийгдсэнээс хойш цугларна.');
     console.log();
   } catch (err) {
     console.error('✗', err instanceof Error ? err.message : err);

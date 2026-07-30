@@ -213,8 +213,40 @@ export async function initSchema(): Promise<void> {
     ALTER TABLE ads ALTER COLUMN mime  DROP NOT NULL;
     ALTER TABLE ads ADD COLUMN IF NOT EXISTS body TEXT;
     CREATE INDEX IF NOT EXISTS ads_active_idx ON ads(active) WHERE active;
+
+    -- Сайтын хандалт. Апп нээгдэх (WebSocket холбогдох) бүрд тэмдэглэнэ.
+    -- Нэг өдөрт нэг төхөөрөмж = нэг мөр (visitor нь IP-ийн hash — жинхэнэ IP
+    -- хадгалахгүй, нууцлал хамгаална). hits нь тухайн өдөр хэдэн удаа нээснийг.
+    CREATE TABLE IF NOT EXISTS visits (
+      day       DATE NOT NULL,
+      visitor   TEXT NOT NULL,
+      hits      INTEGER NOT NULL DEFAULT 1,
+      first_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (day, visitor)
+    );
+    CREATE INDEX IF NOT EXISTS visits_day_idx ON visits(day DESC);
   `;
   await getPool().query(sql);
+}
+
+/**
+ * Сайтын хандалтыг тэмдэглэнэ. visitor нь IP-ийн hash (нэг өдөрт нэг
+ * төхөөрөмжийг нэг зочин гэж үзнэ). Санд алдаа гарвал тоглоомд саад
+ * болохгүйгээр чимээгүй өнгөрнө.
+ */
+export async function recordVisit(visitor: string): Promise<void> {
+  if (!dbEnabled() || !visitor) return;
+  try {
+    await getPool().query(
+      `INSERT INTO visits (day, visitor) VALUES (current_date, $1)
+         ON CONFLICT (day, visitor) DO UPDATE
+         SET hits = visits.hits + 1, last_at = now()`,
+      [visitor],
+    );
+  } catch {
+    // хандалтын тоолол чухал биш — алдааг залгина
+  }
 }
 
 /** Хугацаа нь дууссан session-уудыг цэвэрлэнэ. */

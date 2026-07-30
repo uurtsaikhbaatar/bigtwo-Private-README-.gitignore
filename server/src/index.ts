@@ -7,6 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createHash } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 
 import {
@@ -55,7 +56,7 @@ import {
   verifyEmail,
 } from './auth';
 import { adImage, adsFor, countAdEvent } from './ads';
-import { dbEnabled, getPool } from './db';
+import { dbEnabled, getPool, recordVisit } from './db';
 import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
 import { recentMatches, recordMatch, statsForUser, topCombosForUser } from './history';
 import { readReports, saveReport } from './reports';
@@ -236,8 +237,18 @@ const httpServer = createServer((req, res) => {
 
 const wss = new WebSocketServer({ server: httpServer });
 
-wss.on('connection', (socket) => {
+wss.on('connection', (socket, req) => {
   send(socket, { t: 'welcome', version: PROTOCOL_VERSION });
+
+  // Сайтын хандалтыг тэмдэглэнэ (нэг өдөрт нэг төхөөрөмж = нэг зочин).
+  // IP-г шууд хадгалахгүй — hash хийж нууцлана. Render proxy-гийн ард тул
+  // жинхэнэ IP нь x-forwarded-for-д ирдэг.
+  const fwd = req.headers['x-forwarded-for'];
+  const rawIp = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0].trim() || req.socket.remoteAddress || '';
+  if (rawIp) {
+    const visitor = createHash('sha256').update(rawIp).digest('hex').slice(0, 16);
+    void recordVisit(visitor);
+  }
 
   socket.on('message', (raw) => {
     let msg: ClientMessage;
