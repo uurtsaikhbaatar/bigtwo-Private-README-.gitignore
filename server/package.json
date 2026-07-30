@@ -19,7 +19,8 @@
     "live": "node --env-file-if-exists=.env --import tsx src/live-cli.ts",
     "tokens": "node --env-file-if-exists=.env --import tsx src/tokens-cli.ts",
     "deploy": "node --env-file-if-exists=.env --import tsx src/deploy.ts",
-    "thanks": "node --env-file-if-exists=.env --import tsx src/thanks.ts"
+    "thanks": "node --env-file-if-exists=.env --import tsx src/thanks.ts",
+    "stats": "node --env-file-if-exists=.env --import tsx src/stats.ts"
   },
   "dependencies": {
     "pg": "^8.22.0",

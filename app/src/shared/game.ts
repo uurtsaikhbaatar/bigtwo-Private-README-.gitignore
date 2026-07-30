@@ -51,7 +51,11 @@ export interface Player {
   id: string;
   name: string;
   hand: Card[];
-  /** Энэ эргэлтэд пас хийсэн эсэх. Шинэ эргэлт эхлэхэд цэвэрлэгдэнэ. */
+  /**
+   * Сүүлийн үйлдэл нь пас байсан эсэх — ЗӨВХӨН харагдацад ("пас" тэмдэг).
+   * Уян хатан пасын дүрэмд эргэлтийн логикт нөлөөлдөггүй: пас хийсэн ч тухайн
+   * эргэлтэд дахин орж болно. Тавихад цэвэрлэгдэнэ, шинэ эргэлтэд ч цэвэрлэгдэнэ.
+   */
   passed: boolean;
   /** Хөзрөө дуусгасан бол хэддүгээрт орсон (1-ээс эхэлнэ), эс бөгөөс null. */
   place: number | null;
@@ -555,13 +559,19 @@ function advance(state: GameState, actorSeat: number): void {
   else state.turn = next;
 }
 
-/** actorSeat-ээс хойших, дуусаагүй ба пас хийгээгүй эхний суудал. */
+/**
+ * actorSeat-ээс хойших, хөзрөө дуусгаагүй эхний суудал.
+ *
+ * УЯН ХАТАН ПАС: пас хийсэн тоглогчийг АЛГАСАХГҮЙ — тэр эргэлт дуусаагүй л
+ * бол дахин ээлж авч тоглож болно. Эргэлт нь ээлж эзэн (сүүлд тавьсан хүн)
+ * рүү бүтэн эргэж ирэхэд дуусна (`advance`-ийн `next === ownerSeat`).
+ */
 function nextEligible(state: GameState, from: number): number | null {
   const n = state.seats.length;
   for (let i = 1; i <= n; i++) {
     const seat = (from + i) % n;
     const p = playerById(state, state.seats[seat]);
-    if (p.place === null && !p.passed) return seat;
+    if (p.place === null) return seat;
   }
   return null;
 }

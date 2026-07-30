@@ -231,6 +231,36 @@ test('бүгд пас хийвэл сүүлд тавьсан хүн шинэ э�
   assert.ok(state.players.every((p) => !p.passed), 'пас тэмдэглэгээ арилсан байх');
 });
 
+test('уян хатан пас — пас хийсэн тоглогч тэр эргэлтэд дахин ээлж авна', () => {
+  const state = createGame();
+  addPlayer(state, 'a', 'Ану');
+  addPlayer(state, 'b', 'Бат');
+  addPlayer(state, 'c', 'Цэцэг');
+  startRound(state, mulberry32(1));
+  // Хяналттай тавилтад зориулж суудал ба гарыг гараар тохируулна.
+  state.seats = ['a', 'b', 'c'];
+  state.turn = 0;
+  state.current = null;
+  const setHand = (id: string, cards: Card[]) => {
+    const p = state.players.find((x) => x.id === id)!;
+    p.hand = cards;
+    p.place = null;
+    p.passed = false;
+    p.seated = true;
+  };
+  setHand('a', [c('3♦'), c('5♦')]);
+  setHand('b', [c('7♦'), c('8♦')]);
+  setHand('c', [c('4♦'), c('6♦')]);
+
+  play(state, 'a', [c('3♦')]); // Ану: 3♦
+  pass(state, 'b'); // Бат пас — хосоо хадгална
+  play(state, 'c', [c('4♦')]); // Цэцэг: 4♦
+  pass(state, 'a'); // Ану пас
+  // Уян хатан пас: пас хийсэн Бат дахин ээлж авна. (Стики дүрмээр бол эргэлт
+  // эзэн Цэцэг рүү буцаж ДУУСАХ байсан.)
+  assert.equal(turnPlayer(state).id, 'b', 'пас хийсэн Бат дахин ээлж авах ёстой');
+});
+
 test('ээлжгүй тоглогч үйлдэл хийж чадахгүй', () => {
   const state = createGame();
   addPlayer(state, 'a', 'Ану');

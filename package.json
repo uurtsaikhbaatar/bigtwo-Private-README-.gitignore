@@ -19,6 +19,7 @@
     "email:test": "npm --prefix server run email:test --",
     "tokens": "npm --prefix server run tokens --",
     "deploy": "npm --prefix server run deploy --",
-    "thanks": "npm --prefix server run thanks --"
+    "thanks": "npm --prefix server run thanks --",
+    "stats": "npm --prefix server run stats --"
   }
 }
