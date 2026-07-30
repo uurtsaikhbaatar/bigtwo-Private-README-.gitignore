@@ -16,6 +16,7 @@ import type {
   Account,
   ClientMessage,
   GameView,
+  LeaderboardEntry,
   MatchSummary,
   Invite,
   AdView,
@@ -95,6 +96,7 @@ export function useBigTwo(serverUrl: string) {
     matches: MatchSummary[];
     topCombos: TopCombo[];
   } | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[] | null>(null);
   const authTokenRef = useRef<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -151,6 +153,9 @@ export function useBigTwo(serverUrl: string) {
         break;
       case 'profile':
         setProfile({ stats: msg.stats, matches: msg.matches, topCombos: msg.topCombos });
+        break;
+      case 'leaderboard':
+        setLeaderboard(msg.entries);
         break;
       case 'playerInfo':
         setPlayerInfo(msg.info);
@@ -345,6 +350,7 @@ export function useBigTwo(serverUrl: string) {
     clearNotice: () => setNotice(null),
     account,
     profile,
+    leaderboard,
     playerInfo,
     promotion,
     invites,
@@ -381,6 +387,7 @@ export function useBigTwo(serverUrl: string) {
     ),
     logOut: useCallback(() => send({ t: 'logout', token: authTokenRef.current ?? '' }), [send]),
     loadProfile: useCallback(() => send({ t: 'profile' }), [send]),
+    loadLeaderboard: useCallback(() => send({ t: 'leaderboard' }), [send]),
     /** Одоогийн өрөөний найзуудыг дараагийн тоглолтод урих. */
     invitePlayers: useCallback(() => send({ t: 'invite' }), [send]),
     loadInvites: useCallback(() => send({ t: 'invites' }), [send]),

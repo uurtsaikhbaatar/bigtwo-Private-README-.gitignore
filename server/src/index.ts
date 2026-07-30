@@ -58,7 +58,7 @@ import {
 import { adImage, adsFor, countAdEvent } from './ads';
 import { dbEnabled, getPool, recordVisit } from './db';
 import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
-import { recentMatches, recordMatch, statsForUser, topCombosForUser } from './history';
+import { leaderboard, recentMatches, recordMatch, statsForUser, topCombosForUser } from './history';
 import { readReports, saveReport } from './reports';
 import { applySettlement, awardTokens, balanceOf, balancesOf, requestTokens } from './tokens';
 import { Room, RoomStore, metaOf, newSeat } from './rooms';
@@ -420,6 +420,18 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         .catch((err) => {
           console.error('profile error:', err);
           send(socket, { t: 'error', message: 'Профайл уншиж чадсангүй.' });
+        });
+      return;
+    }
+
+    case 'leaderboard': {
+      requireDb();
+      // Нэвтрэх шаардлагагүй — бүх тоглогч топ 10-ыг харна.
+      void leaderboard(10)
+        .then((entries) => send(socket, { t: 'leaderboard', entries }))
+        .catch((err) => {
+          console.error('leaderboard error:', err);
+          send(socket, { t: 'error', message: 'Топ жагсаалт уншиж чадсангүй.' });
         });
       return;
     }

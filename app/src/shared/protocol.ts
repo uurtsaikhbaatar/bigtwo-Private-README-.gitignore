@@ -63,6 +63,8 @@ export type ClientMessage =
   | { t: 'logout'; token: string }
   /** Профайл: статистик ба сүүлийн тоглолтууд. */
   | { t: 'profile' }
+  /** Топ тоглогчид — бүх хүн харна, нэвтрэх шаардлагагүй. */
+  | { t: 'leaderboard' }
   /** Өрөөн доторх өөр тоглогчийн ил мэдээллийг асуух. */
   | { t: 'inspect'; playerId: string }
   /**
@@ -101,6 +103,8 @@ export type ServerMessage =
   /** Нэвтрэлтийн төлөв. account null бол нэвтрээгүй. */
   | { t: 'auth'; account: Account | null; token?: string }
   | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[]; topCombos: TopCombo[] }
+  /** Топ тоглогчид — цолоор эрэмбэлсэн жагсаалт. */
+  | { t: 'leaderboard'; entries: LeaderboardEntry[] }
   /** Өөр тоглогчийн ил мэдээлэл. Бүртгэлгүй бол stats нь null. */
   | { t: 'playerInfo'; info: PlayerInfo }
   /**
@@ -192,6 +196,20 @@ export interface PlayerStats {
   /** Хожсон/алдсан чипийн нийлбэр. */
   chips: number;
   dragons: number;
+}
+
+/**
+ * Топ тоглогчийн нэг мөр — бүх хүнд харагдана.
+ * Цолоор (чиптэй тоглолтын хожил) эрэмбэлнэ.
+ */
+export interface LeaderboardEntry {
+  username: string;
+  /** Цолыг тодорхойлох хожил (чиптэй тоглолт). */
+  rankedWins: number;
+  /** Нийт хожил. */
+  wins: number;
+  /** Нийт тоглолт. */
+  matches: number;
 }
 
 /** Тоглогчийн тавьсан том хослол — профайлд харуулах (хэнтэй, хэзээ). */

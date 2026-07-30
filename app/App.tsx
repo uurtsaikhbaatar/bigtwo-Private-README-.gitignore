@@ -243,6 +243,8 @@ function Root() {
           auth={authProps}
           guestReady={guestChosen}
           onEnterGuest={() => setGuestChosen(true)}
+          leaderboard={game.leaderboard}
+          onLoadLeaderboard={game.loadLeaderboard}
         />
       ) : view.phase === 'lobby' ? (
         <LobbyScreen

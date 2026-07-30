@@ -8,7 +8,12 @@
 import type { Card } from '../../app/src/shared/cards';
 import { comboLabel, detectCombo } from '../../app/src/shared/combos';
 import type { GameState } from '../../app/src/shared/game';
-import type { MatchSummary, PlayerStats, TopCombo } from '../../app/src/shared/protocol';
+import type {
+  LeaderboardEntry,
+  MatchSummary,
+  PlayerStats,
+  TopCombo,
+} from '../../app/src/shared/protocol';
 import { getPool } from './db';
 
 /**
@@ -174,5 +179,44 @@ export async function recentMatches(userId: string, limit = 10): Promise<MatchSu
     score: row.score,
     chips: row.chips,
     players: row.players ?? [],
+  }));
+}
+
+/**
+ * Топ тоглогчид — бүх хүнд харагдана. Цолыг тодорхойлдог чиптэй тоглолтын
+ * хожлоор эрэмбэлнэ (тэнцвэл нийт хожлоор). Зөвхөн бүртгэлтэй хэрэглэгч
+ * (bot биш — bot-д user_id байхгүй), тест тоглолт хасагдана. Ядаж нэг
+ * удаа хожсон хүмүүсийг л оруулна.
+ */
+export async function leaderboard(limit = 10): Promise<LeaderboardEntry[]> {
+  const result = await getPool().query<{
+    username: string;
+    ranked_wins: number;
+    wins: number;
+    matches: number;
+  }>(
+    `SELECT u.username,
+            count(*) FILTER (WHERE mp.won AND m.stake > 0)::int AS ranked_wins,
+            count(*) FILTER (WHERE mp.won)::int                 AS wins,
+            count(*)::int                                       AS matches
+       FROM match_players mp
+       JOIN matches m ON m.id = mp.match_id
+       JOIN users u ON u.id = mp.user_id
+      WHERE mp.user_id IS NOT NULL AND NOT m.test
+        -- Автомат тест/smoke бүртгэлийг хасна (жинхэнэ тоглогч биш).
+        AND u.username NOT LIKE 'тест_%'
+        AND u.username NOT LIKE 'test_%'
+        AND u.username NOT LIKE 'smoke%'
+      GROUP BY u.username
+     HAVING count(*) FILTER (WHERE mp.won) > 0
+      ORDER BY ranked_wins DESC, wins DESC, matches ASC
+      LIMIT $1`,
+    [limit],
+  );
+  return result.rows.map((row) => ({
+    username: row.username,
+    rankedWins: row.ranked_wins,
+    wins: row.wins,
+    matches: row.matches,
   }));
 }

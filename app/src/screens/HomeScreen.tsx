@@ -12,8 +12,9 @@ import {
 
 import { AuthPanel } from '../components/AuthPanel';
 import { InviteList } from '../components/InviteList';
+import { LeaderboardPanel } from '../components/LeaderboardPanel';
 import { Button } from '../components/Button';
-import type { Invite } from '../shared/protocol';
+import type { Invite, LeaderboardEntry } from '../shared/protocol';
 import { theme } from '../theme';
 
 interface Props {
@@ -36,6 +37,9 @@ interface Props {
   guestReady: boolean;
   /** "Зочноор тоглох" дарахад — гейтийг хааж лобби руу оруулна. */
   onEnterGuest: () => void;
+  /** Топ тоглогчид (татагдаагүй бол null). */
+  leaderboard: LeaderboardEntry[] | null;
+  onLoadLeaderboard: () => void;
 }
 
 /**
@@ -61,6 +65,8 @@ export function HomeScreen({
   onDeclineInvite,
   guestReady,
   onEnterGuest,
+  leaderboard,
+  onLoadLeaderboard,
 }: Props) {
   const [code, setCode] = useState(initialCode);
   const [showSettings, setShowSettings] = useState(false);
@@ -94,6 +100,15 @@ export function HomeScreen({
       <Text style={styles.title}>Дай Ди</Text>
       <Text style={styles.subtitle}>Найзуудтайгаа хятад покер тоглох</Text>
     </View>
+  );
+
+  // Топ тоглогчид — гейт ба лобби хоёуланд харагдана, зочин ч харна.
+  const leaderboardButton = (
+    <LeaderboardPanel
+      entries={leaderboard}
+      onLoad={onLoadLeaderboard}
+      myUsername={auth.account?.username}
+    />
   );
 
   const serverSettings = (
@@ -194,6 +209,7 @@ export function HomeScreen({
             </Text>
           </View>
 
+          {leaderboardButton}
           {serverSettings}
         </ScrollView>
         {authPanel}
@@ -306,6 +322,7 @@ export function HomeScreen({
           />
         </View>
 
+        {leaderboardButton}
         {serverSettings}
       </ScrollView>
       {authPanel}
