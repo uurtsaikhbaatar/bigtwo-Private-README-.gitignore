@@ -226,8 +226,71 @@ export async function initSchema(): Promise<void> {
       PRIMARY KEY (day, visitor)
     );
     CREATE INDEX IF NOT EXISTS visits_day_idx ON visits(day DESC);
+
+    -- Тойргийн бүртгэл. Тойрог дуусах бүрд тэр даруй бичнэ — тоглолт
+    -- дуустал хүлээхгүй. Ингэснээр дундаас ОРХИГДСОН тоглолтын дууссан
+    -- тойргууд ч хадгалагдана. Тоглогч тус бүрд нэг мөр. game_uid нь тоглолт
+    -- бүрд өвөрмөг (эхлэхэд үүснэ) — өрөө нэг код дор олон тоглолт хийж болно.
+    CREATE TABLE IF NOT EXISTS round_log (
+      id         BIGSERIAL PRIMARY KEY,
+      game_uid   TEXT NOT NULL,
+      room_code  TEXT NOT NULL,
+      round_no   INTEGER NOT NULL,
+      ended_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      name       TEXT NOT NULL,
+      is_bot     BOOLEAN NOT NULL,
+      user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      won        BOOLEAN NOT NULL,
+      cards_left INTEGER NOT NULL,
+      test       BOOLEAN NOT NULL DEFAULT false
+    );
+    CREATE INDEX IF NOT EXISTS round_log_game_idx ON round_log(game_uid, round_no);
   `;
   await getPool().query(sql);
+}
+
+/** Нэг тойрогт нэг тоглогчийн бичлэг. */
+export interface RoundLogRow {
+  name: string;
+  isBot: boolean;
+  /** Бүртгэлтэй хэрэглэгчийн id (байвал), эс бөгөөс null. */
+  userId: string | null;
+  /** Тухайн тойргийг хожсон эсэх (place === 1). */
+  won: boolean;
+  /** Тойрог дуусахад үлдсэн хөзрийн тоо. */
+  cardsLeft: number;
+}
+
+/**
+ * Нэг дууссан тойргийг хадгална (тоглогч тус бүрд нэг мөр, нэг INSERT-ээр).
+ * Тойргийн тоолол чухал биш — санд алдаа гарвал тоглоомд саад болохгүйгээр
+ * чимээгүй өнгөрнө.
+ */
+export async function recordRound(
+  gameUid: string,
+  roomCode: string,
+  roundNo: number,
+  rows: RoundLogRow[],
+  isTest = false,
+): Promise<void> {
+  if (!dbEnabled() || rows.length === 0) return;
+  try {
+    // Мөр бүрд 9 параметр: ($1..$9), ($10..$18), …
+    const values: unknown[] = [];
+    const tuples = rows.map((r, i) => {
+      const b = i * 9;
+      values.push(gameUid, roomCode, roundNo, r.name, r.isBot, r.userId, r.won, r.cardsLeft, isTest);
+      return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}, $${b + 7}, $${b + 8}, $${b + 9})`;
+    });
+    await getPool().query(
+      `INSERT INTO round_log
+         (game_uid, room_code, round_no, name, is_bot, user_id, won, cards_left, test)
+       VALUES ${tuples.join(', ')}`,
+      values,
+    );
+  } catch (err) {
+    console.error('тойрог хадгалж чадсангүй:', err instanceof Error ? err.message : err);
+  }
 }
 
 /**

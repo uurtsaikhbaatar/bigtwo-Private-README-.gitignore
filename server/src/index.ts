@@ -7,7 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 
 import {
@@ -56,7 +56,7 @@ import {
   verifyEmail,
 } from './auth';
 import { adImage, adsFor, countAdEvent } from './ads';
-import { dbEnabled, getPool, recordVisit } from './db';
+import { dbEnabled, getPool, recordRound, recordVisit, type RoundLogRow } from './db';
 import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
 import { leaderboard, recentMatches, recordMatch, statsForUser, topCombosForUser } from './history';
 import { readReports, saveReport } from './reports';
@@ -554,6 +554,9 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
           stake,
         );
         room.matchRecorded = false;
+        // Шинэ тоглолт — тойргийн бүртгэлийг шинэ id-гаар эхлүүлнэ.
+        room.gameUid = randomUUID();
+        room.roundsLogged = 0;
         broadcast(room);
       };
 
@@ -1009,6 +1012,7 @@ function ensureActiveHost(room: Room): void {
 
 function broadcast(room: Room): void {
   ensureActiveHost(room);
+  saveNewRounds(room);
   saveFinishedMatch(room);
   const meta = metaOf(room);
   for (const s of room.seats.values()) {
@@ -1016,6 +1020,44 @@ function broadcast(room: Room): void {
       send(s.socket, { t: 'state', view: viewFor(room.state, meta, s.playerId) });
     }
   }
+}
+
+/**
+ * Шинээр дууссан тойргуудыг санд бичнэ (тоглогч тус бүрд нэг мөр).
+ *
+ * `broadcast` төлөв өөрчлөгдөх бүрд дуудагдана. Тойрог дуустал нь тэр даруй
+ * бичигддэг тул тоглолт сүүлд ОРХИГДСОН ч дууссан тойргууд хадгалагдана.
+ * `roundsLogged` тоолуур давхар бичихээс сэргийлнэ.
+ */
+function saveNewRounds(room: Room): void {
+  if (!dbEnabled()) return;
+  const history = room.state.history;
+  if (history.length <= room.roundsLogged) return;
+
+  // playerId → бүртгэлтэй хэрэглэгчийн userId (байвал).
+  const userIds = new Map<string, string>();
+  for (const seat of room.seats.values()) {
+    if (seat.userId) userIds.set(seat.playerId, seat.userId);
+  }
+  const byId = new Map(room.state.players.map((p) => [p.id, p]));
+
+  for (let i = room.roundsLogged; i < history.length; i++) {
+    const rec = history[i];
+    const rows: RoundLogRow[] = rec.entries
+      .filter((e) => e.played) // тухайн тойрогт суусан тоглогчид л
+      .map((e) => {
+        const p = byId.get(e.playerId);
+        return {
+          name: p?.name ?? '?',
+          isBot: p?.bot != null,
+          userId: userIds.get(e.playerId) ?? null,
+          won: e.place === 1,
+          cardsLeft: e.cardsLeft,
+        };
+      });
+    void recordRound(room.gameUid, room.code, rec.round, rows, Boolean(process.env.TEST_MODE));
+  }
+  room.roundsLogged = history.length;
 }
 
 /**

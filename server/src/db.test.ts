@@ -24,7 +24,7 @@ import {
   resendCode,
   verifyEmail,
 } from './auth';
-import { closePool, dbEnabled, getPool, initSchema } from './db';
+import { closePool, dbEnabled, getPool, initSchema, recordRound } from './db';
 import { recentMatches, recordMatch, statsForUser } from './history';
 import {
   STARTING_TOKENS,
@@ -79,6 +79,7 @@ after(async () => {
   if (!dbEnabled()) return;
   try {
     await getPool().query("DELETE FROM matches WHERE room_code IN ('TEST01', 'TEST02')");
+    await getPool().query("DELETE FROM round_log WHERE game_uid LIKE 'TEST-RL-%'");
   } catch (err) {
     console.error('туршилтын өгөгдөл цэвэрлэж чадсангүй:', err);
   }
@@ -112,6 +113,33 @@ test('бүртгүүлэх, нэвтрэх, session сэргээх', { skip }, a
   await logout(created.token);
   assert.equal(await accountForToken(created.token), null, 'гарсны дараа token хүчингүй');
   assert.ok(await accountForToken(signedIn.token), 'бусад session хэвээр');
+});
+
+test('тойргийн бүртгэл — олон мөр нэг INSERT-ээр, буцаж уншина', { skip }, async () => {
+  const uid = `TEST-RL-${Date.now()}`;
+  await recordRound(
+    uid,
+    'TSTRM',
+    2,
+    [
+      { name: 'Хулан (дунд)', isBot: true, userId: null, won: true, cardsLeft: 0 },
+      { name: 'зочин-1', isBot: false, userId: null, won: false, cardsLeft: 6 },
+      { name: 'зочин-2', isBot: false, userId: null, won: false, cardsLeft: 9 },
+    ],
+    true,
+  );
+  const rows = (
+    await getPool().query<{ name: string; is_bot: boolean; won: boolean; cards_left: number }>(
+      'SELECT name, is_bot, won, cards_left FROM round_log WHERE game_uid = $1 ORDER BY cards_left',
+      [uid],
+    )
+  ).rows;
+  assert.equal(rows.length, 3, 'гурван мөр бичигдэнэ');
+  assert.equal(rows[0].name, 'Хулан (дунд)');
+  assert.equal(rows[0].is_bot, true, 'бот тэмдэглэгдэнэ');
+  assert.equal(rows[0].won, true, 'хожсон нь тэмдэглэгдэнэ');
+  assert.equal(rows[0].cards_left, 0);
+  assert.equal(rows[1].is_bot, false, 'зочин бот биш');
 });
 
 test('нууц үг задлан хадгалагддаггүй', { skip }, async () => {

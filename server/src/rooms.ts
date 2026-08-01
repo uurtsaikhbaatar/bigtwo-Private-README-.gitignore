@@ -33,6 +33,13 @@ export interface Room {
   /** Одоогийн тоглолт түүхэд бичигдсэн эсэх — давхар бичихээс сэргийлнэ. */
   matchRecorded: boolean;
   /**
+   * Одоогийн тоглолтын өвөрмөц id — тойргийн бүртгэлд ашиглана. Тоглолт эхлэх
+   * бүрд шинэчилнэ (нэг өрөө дор олон тоглолт хийж болно).
+   */
+  gameUid: string;
+  /** Аль хэдийн санд бичсэн тойргийн тоо — давхар бичихээс сэргийлнэ. */
+  roundsLogged: number;
+  /**
    * Сүүлийн тоглолтод оролцсон бүртгэлтэй хүмүүсийн userId.
    *
    * Урилга илгээхэд хэрэгтэй: найз "Гарах" дараад өрөөнөөс бүрэн гарсан ч
@@ -58,6 +65,8 @@ export class RoomStore {
       seats: new Map(),
       chat: [],
       matchRecorded: false,
+      gameUid: randomUUID(),
+      roundsLogged: 0,
       lastPlayers: [],
       lastActivity: Date.now(),
       botMove: null,
