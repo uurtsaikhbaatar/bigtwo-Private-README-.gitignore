@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { BOT_LEVELS, BotLevel, chooseMove, legalMoves } from '../../app/src/shared/bot';
+import {
+  BOT_LEVELS,
+  BotLevel,
+  chooseMove,
+  legalMoves,
+  reflectOnRound,
+} from '../../app/src/shared/bot';
 import { Card, deal } from '../../app/src/shared/cards';
 import { beats, detectCombo } from '../../app/src/shared/combos';
 import {
@@ -124,4 +130,26 @@ test('хууль ёсны тавилт байхгүй бол пас', () => {
   for (const level of BOT_LEVELS) {
     assert.equal(chooseMove({ hand, current: table, opponentCards: [5] }, level), null);
   }
+});
+
+test('дасан зохицол (B1): хожигдож гацвал түрэмгий, хожвол тайвшина', () => {
+  // Хэт олон хөзөр үлдээж хожигдвол → түрэмгий тал руу (эерэг өснө).
+  const afterStuck = reflectOnRound(0, { won: false, cardsLeft: 9 }, 'hard');
+  assert.ok(afterStuck > 0, `гацвал түрэмгий болно: ${afterStuck}`);
+
+  // Хожвол одоогийн зан төлөв руу ойртож тогтворжино (0 руу татна).
+  const afterWin = reflectOnRound(0.5, { won: true, cardsLeft: 0 }, 'hard');
+  assert.ok(afterWin < 0.5 && afterWin > 0, `хожвол 0 руу татна: ${afterWin}`);
+
+  // −1..+1-д барина.
+  let bias = 0;
+  for (let i = 0; i < 100; i++) bias = reflectOnRound(bias, { won: false, cardsLeft: 12 }, 'hard');
+  assert.ok(bias <= 1, `дээд хязгаар: ${bias}`);
+});
+
+test('дасан зохицлын алхам: анхан < дунд < сайн', () => {
+  const step = (level: 'easy' | 'medium' | 'hard') =>
+    reflectOnRound(0, { won: false, cardsLeft: 9 }, level);
+  assert.ok(step('easy') < step('medium'), 'анхан нь дундаас бага тохируулна');
+  assert.ok(step('medium') < step('hard'), 'дунд нь сайнаас бага тохируулна');
 });

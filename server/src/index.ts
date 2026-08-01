@@ -31,6 +31,7 @@ import {
   BOT_THINK_MS,
   type BotLevel,
   chooseMove,
+  reflectOnRound,
 } from '../../app/src/shared/bot';
 import { promoted, rewardBetween } from '../../app/src/shared/ranks';
 import type { Account } from '../../app/src/shared/protocol';
@@ -557,6 +558,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         // Шинэ тоглолт — тойргийн бүртгэлийг шинэ id-гаар эхлүүлнэ.
         room.gameUid = randomUUID();
         room.roundsLogged = 0;
+        room.botBias.clear(); // дасан зохицол шинэ тоглолт бүрд эхнээс
         broadcast(room);
       };
 
@@ -1023,14 +1025,14 @@ function broadcast(room: Room): void {
 }
 
 /**
- * Шинээр дууссан тойргуудыг санд бичнэ (тоглогч тус бүрд нэг мөр).
+ * Шинээр дууссан тойргуудыг боловсруулна: (1) бот бүрийн дасан зохицлыг
+ * шинэчилнэ (B1), (2) санд бичнэ (тоглогч тус бүрд нэг мөр).
  *
  * `broadcast` төлөв өөрчлөгдөх бүрд дуудагдана. Тойрог дуустал нь тэр даруй
- * бичигддэг тул тоглолт сүүлд ОРХИГДСОН ч дууссан тойргууд хадгалагдана.
- * `roundsLogged` тоолуур давхар бичихээс сэргийлнэ.
+ * боловсруулагддаг тул тоглолт сүүлд ОРХИГДСОН ч дууссан тойргууд хамрагдана.
+ * `roundsLogged` тоолуур давхар боловсруулахаас сэргийлнэ.
  */
 function saveNewRounds(room: Room): void {
-  if (!dbEnabled()) return;
   const history = room.state.history;
   if (history.length <= room.roundsLogged) return;
 
@@ -1043,19 +1045,34 @@ function saveNewRounds(room: Room): void {
 
   for (let i = room.roundsLogged; i < history.length; i++) {
     const rec = history[i];
-    const rows: RoundLogRow[] = rec.entries
-      .filter((e) => e.played) // тухайн тойрогт суусан тоглогчид л
-      .map((e) => {
-        const p = byId.get(e.playerId);
-        return {
-          name: p?.name ?? '?',
-          isBot: p?.bot != null,
-          userId: userIds.get(e.playerId) ?? null,
-          won: e.place === 1,
-          cardsLeft: e.cardsLeft,
-        };
-      });
-    void recordRound(room.gameUid, room.code, rec.round, rows, Boolean(process.env.TEST_MODE));
+
+    // (B1) Бот бүр тухайн тойргоо эргэн дүгнэж, зан төлөвөө тохируулна.
+    for (const e of rec.entries) {
+      if (!e.played) continue;
+      const p = byId.get(e.playerId);
+      if (p?.bot) {
+        const prev = room.botBias.get(e.playerId) ?? 0;
+        const bias = reflectOnRound(prev, { won: e.place === 1, cardsLeft: e.cardsLeft }, p.bot);
+        room.botBias.set(e.playerId, bias);
+      }
+    }
+
+    // Санд бичих (сан асаалттай үед). Орхигдсон тоглолт ч энд хадгалагдана.
+    if (dbEnabled()) {
+      const rows: RoundLogRow[] = rec.entries
+        .filter((e) => e.played) // тухайн тойрогт суусан тоглогчид л
+        .map((e) => {
+          const p = byId.get(e.playerId);
+          return {
+            name: p?.name ?? '?',
+            isBot: p?.bot != null,
+            userId: userIds.get(e.playerId) ?? null,
+            won: e.place === 1,
+            cardsLeft: e.cardsLeft,
+          };
+        });
+      void recordRound(room.gameUid, room.code, rec.round, rows, Boolean(process.env.TEST_MODE));
+    }
   }
   room.roundsLogged = history.length;
 }
@@ -1278,6 +1295,7 @@ setInterval(() => {
           opponentCards: state.players
             .filter((p) => p.id !== turnId && p.seated && p.place === null)
             .map((p) => p.hand.length),
+          selfBias: room.botBias.get(turnId) ?? 0,
         },
         seat.bot,
       );

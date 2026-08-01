@@ -40,6 +40,11 @@ export interface Room {
   /** Аль хэдийн санд бичсэн тойргийн тоо — давхар бичихээс сэргийлнэ. */
   roundsLogged: number;
   /**
+   * B1: бот бүрийн тоглолт доторх дасан зохицол (playerId → −1..+1).
+   * Тойрог дуусах бүрд `reflectOnRound`-оор шинэчилнэ, тоглолт эхлэхэд цэвэрлэнэ.
+   */
+  botBias: Map<string, number>;
+  /**
    * Сүүлийн тоглолтод оролцсон бүртгэлтэй хүмүүсийн userId.
    *
    * Урилга илгээхэд хэрэгтэй: найз "Гарах" дараад өрөөнөөс бүрэн гарсан ч
@@ -67,6 +72,7 @@ export class RoomStore {
       matchRecorded: false,
       gameUid: randomUUID(),
       roundsLogged: 0,
+      botBias: new Map(),
       lastPlayers: [],
       lastActivity: Date.now(),
       botMove: null,
