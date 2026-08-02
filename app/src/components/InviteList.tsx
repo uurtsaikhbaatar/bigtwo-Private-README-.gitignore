@@ -24,20 +24,20 @@ export function InviteList({ invites, onAccept, onDecline }: Props) {
   return (
     <View style={styles.box}>
       <Text style={styles.title}>
-        {invites.length === 1 ? 'Урилга ирлээ' : `${invites.length} урилга ирлээ`}
+        🎴 {invites.length === 1 ? 'Дахин тоглох урилга' : `${invites.length} дахин тоглох урилга`}
       </Text>
 
       {invites.map((invite) => (
         <View key={invite.id} style={styles.row}>
           <View style={styles.text}>
-            <Text style={styles.from} numberOfLines={1}>
-              {invite.from}
+            <Text style={styles.from} numberOfLines={2}>
+              <Text style={styles.name}>{invite.from}</Text> найзаас тань ирлээ
             </Text>
-            <Text style={styles.hint}>урьж байна · {invite.roomCode}</Text>
+            <Text style={styles.hint}>Өрөө {invite.roomCode}</Text>
           </View>
 
           <Button
-            title="Орох"
+            title="Дахин тоглох →"
             onPress={() => onAccept(invite.roomCode)}
             style={styles.accept}
           />
@@ -67,7 +67,8 @@ const styles = StyleSheet.create({
   title: { color: theme.accent, fontSize: 13, fontWeight: '800' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   text: { flex: 1, gap: 1 },
-  from: { color: theme.text, fontSize: 15, fontWeight: '700' },
+  from: { color: theme.text, fontSize: 15, fontWeight: '500', lineHeight: 20 },
+  name: { color: theme.accent, fontWeight: '800' },
   hint: { color: theme.textMuted, fontSize: 12 },
   accept: { paddingHorizontal: 18 },
   decline: {

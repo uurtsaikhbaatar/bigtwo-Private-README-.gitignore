@@ -21,6 +21,13 @@ export interface Seat {
   userId: string | null;
   /** Бот бол түвшин. Хүн бол null. Ботод socket байхгүй. */
   bot: BotLevel | null;
+  /**
+   * Салгагдсан хүнд нэмэлт хугацаа (grace) олгосон тойргийн дугаар — тойрогт
+   * нэг л удаа олгоно. Өөр тойрог болмогц дахин боломжтой болно.
+   */
+  graceUsedRound?: number;
+  /** Салгагдсаны улмаас одоо бот түүний оронд тоглож байгаа эсэх. */
+  botControlled?: boolean;
 }
 
 export interface Room {

@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -41,6 +42,9 @@ function ChatButtonInner({ lines, youName, onSend, onSendVoice }: Props) {
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // Чатыг тохимжтой өндөртэй болгоно — мессеж цөөн байсан ч жижгэрэхгүй.
+  const { height: winHeight } = useWindowDimensions();
+  const sheetHeight = Math.round(winHeight * 0.72);
   const unread = Math.max(0, lines.length - seen);
   const canRecord = voiceSupported();
 
@@ -103,7 +107,7 @@ function ChatButtonInner({ lines, youName, onSend, onSendVoice }: Props) {
       </Pressable>
 
       <Overlay visible={open} onClose={() => setOpen(false)}>
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { height: sheetHeight }]}>
             <View style={styles.header}>
               <Text style={styles.title}>Чат</Text>
               <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
@@ -269,7 +273,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     paddingBottom: 16,
-    maxHeight: '85%',
+    // Өндрийг inline-аар пикселээр өгдөг (useWindowDimensions × 0.72).
+    // Энд хувиар maxHeight тавихгүй — эцэг элемент дээр буруу тооцогдож
+    // тодорхой өндрийг маань дарж, чатыг жижигрүүлдэг байв.
   },
   header: {
     flexDirection: 'row',

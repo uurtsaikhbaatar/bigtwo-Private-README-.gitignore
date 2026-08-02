@@ -447,6 +447,12 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       existing.socket?.close();
       existing.socket = socket;
       sessions.set(socket, { room, playerId: existing.playerId });
+      // Бот орлож байсан бол зогсоож, буцаж ирснийг мэдэгдэнэ.
+      if (existing.botControlled) {
+        existing.botControlled = false;
+        const p = room.state.players.find((pp) => pp.id === existing.playerId);
+        room.state.log.push(`${p?.name ?? '?'} буцаж ирлээ.`);
+      }
       // Нэвтрэлт (authResume) resume-ээс өмнө ирсэн бол линк тухайн үед session
       // байгаагүй тул амжаагүй — одоо session бэлэн болсон тул дахин холбоно.
       const acct = accounts.get(socket);
@@ -1234,6 +1240,9 @@ function cleanName(raw: unknown): string {
  * таймер алдагдах, давхардах эрсдэлгүй.
  */
 const TICK_MS = 500;
+/** Салгагдсан тоглогчид тойрогт нэг удаа олгох нэмэлт хугацаа (тестэд бууруулж болно). */
+const GRACE_SEC = Number(process.env.GRACE_SEC ?? 30);
+const GRACE_MS = GRACE_SEC * 1000;
 setInterval(() => {
   const now = Date.now();
   rooms.forEach((room) => {
@@ -1245,6 +1254,41 @@ setInterval(() => {
     if (!anyoneOnline) return;
 
     try {
+      const turnId = state.seats[state.turn];
+      const seat = turnId ? room.seats.get(turnId) : undefined;
+      // Салгагдсан ХҮН (бот биш, socket алга) — эргэж холбогдох боломж олгоно.
+      if (seat && !seat.bot && seat.socket === null) {
+        const p = state.players.find((pp) => pp.id === turnId);
+        const name = p?.name ?? '?';
+        // 1) Тойрогт нэг удаа нэмэлт 30 сек хүлээнэ.
+        if (seat.graceUsedRound !== state.round) {
+          seat.graceUsedRound = state.round;
+          state.turnEndsAt = now + GRACE_MS;
+          state.log.push(`${name} салгагдлаа — ${GRACE_SEC} секунд хүлээж байна…`);
+          return broadcast(room);
+        }
+        // 2) Grace дууссан ч алга бол бот түүний оронд тоглоно.
+        if (!seat.botControlled) {
+          seat.botControlled = true;
+          state.log.push(`🤖 ${name} эргэж ирсэнгүй — бот орлон тоглож байна.`);
+        }
+        const move = chooseMove(
+          {
+            hand: p?.hand ?? [],
+            current: state.current?.combo ?? null,
+            opponentCards: state.players
+              .filter((x) => x.id !== turnId && x.seated && x.place === null)
+              .map((x) => x.hand.length),
+            selfBias: 0,
+          },
+          'medium',
+        );
+        if (move) play(state, turnId!, move);
+        else pass(state, turnId!);
+        return broadcast(room);
+      }
+
+      // Хэвийн: холбогдсон хүн эсвэл бот — пас/хамгийн сул хөзөр.
       timeoutTurn(state);
       broadcast(room);
     } catch (err) {
