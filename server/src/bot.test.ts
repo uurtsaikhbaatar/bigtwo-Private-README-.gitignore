@@ -7,6 +7,7 @@ import {
   chooseMove,
   legalMoves,
   reflectOnRound,
+  safetyOf,
 } from '../../app/src/shared/bot';
 import { Card, deal } from '../../app/src/shared/cards';
 import { beats, detectCombo } from '../../app/src/shared/combos';
@@ -101,6 +102,7 @@ test('түвшний эрэмбэ зөв: сайн > дунд > анхан', () 
             opponentCards: state.players
               .filter((p) => p.id !== id && p.seated && p.place === null)
               .map((p) => p.hand.length),
+            playedCards: state.playedThisRound,
           },
           levels[Number(id.slice(1))],
         );
@@ -145,6 +147,17 @@ test('дасан зохицол (B1): хожигдож гацвал түрэмг
   let bias = 0;
   for (let i = 0; i < 100; i++) bias = reflectOnRound(bias, { won: false, cardsLeft: 12 }, 'hard');
   assert.ok(bias <= 1, `дээд хязгаар: ${bias}`);
+});
+
+test('картын тоолол: дийлдэхгүй тавилтыг баттай илрүүлнэ', () => {
+  // 2♠ (51) — хамгийн өндөр ганц хөзөр, хэн ч дийлэхгүй → 1.
+  assert.equal(safetyOf([51], [51], [], [13]), 1);
+  // Хамгийн сул хөзөр (0 = 3♦) — дийлэгдэж болзошгүй → 1-ээс бага.
+  assert.ok(safetyOf([0], [0], [], [13]) < 1);
+  // Илүү өндөр бүх хөзөр аль хэдийн ТОГЛОГДСОН бол дийлдэхгүй болно → 1.
+  assert.equal(safetyOf([48], [48], [49, 50, 51], [13]), 1);
+  // 5-хөзрийн хослол — нарийн тул саармаг үнэлнэ.
+  assert.equal(safetyOf([0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [], [13]), 0.3);
 });
 
 test('дасан зохицлын алхам: анхан < дунд < сайн', () => {

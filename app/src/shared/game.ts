@@ -147,6 +147,8 @@ export interface GameState {
    */
   rotationWasActive: boolean;
   history: RoundRecord[];
+  /** Энэ тойрогт тоглогдсон бүх хөзөр (ил мэдээлэл — ботын картын тоолол). */
+  playedThisRound: Card[];
   lastRoundWinnerId: string | null;
   matchWinnerId: string | null;
   log: string[];
@@ -171,6 +173,7 @@ export function createGame(): GameState {
     turnSeq: 0,
     rotationWasActive: false,
     history: [],
+    playedThisRound: [],
     lastRoundWinnerId: null,
     matchWinnerId: null,
     log: [],
@@ -274,6 +277,7 @@ export function startRound(state: GameState, rng: () => number = Math.random): v
   const previousSeats = state.seats;
   state.seats = chooseSeats(state, contenders, rng);
   state.round += 1;
+  state.playedThisRound = []; // шинэ тойрог — картын тоолол шинээр
 
   const hands = deal(state.seats.length, rng);
   state.players.forEach((p) => {
@@ -498,6 +502,8 @@ export function play(state: GameState, playerId: string, cards: Card[]): void {
   }
 
   player.hand = player.hand.filter((c) => !cards.includes(c));
+  // Тоглогдсон хөзрийг санана — бот "картын тоолол"-д ашиглана (ил мэдээлэл).
+  for (const c of cards) state.playedThisRound.push(c);
   player.passed = false;
   player.lastPlay = combo;
   player.matchCombos.push(combo);

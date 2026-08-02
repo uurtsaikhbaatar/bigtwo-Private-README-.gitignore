@@ -8,8 +8,11 @@
  *            хойшлуулж, дуусах боломж гарвал шууд ашиглана
  *
  * Нэмэлт ухаан (түвшнээр масштаблагдана — анхан бага, дунд дунд, сайн дээш):
- *   (A) картын тоолол — өрсөлдөгчийн үлдсэн хөзрийг хараад аюул ойртвол
+ *   (A) картын тоолол — өрсөлдөгчийн үлдсэн хөзрийн ТОО-г хараад аюул ойртвол
  *       идэвхтэй хааж, хяналт авах руу хазайна;
+ *   (A2) тоглогдсон хөзрийг санах — "тодорхойгүй хөзөр = 52 − гар − тоглогдсон"-оос
+ *       тавилт дийлдэхгүй эсэхийг баттай тооцож, аюулгүй тавилтыг дэмжинэ
+ *       (зөвхөн ил мэдээлэл — өрсөлдөгчийн гарыг ХАРАХГҮЙ);
  *   (B1) дасан зохицол — тойрог дуусахад өөрийгөө үнэлж (`reflectOnRound`),
  *       нэг тоглолтын туршид зан төлөвөө тохируулна.
  *
@@ -189,6 +192,60 @@ interface Context {
    * бол 0 (саармаг).
    */
   selfBias?: number;
+  /**
+   * Картын тоолол: энэ тойрогт аль хэдийн тоглогдсон хөзрүүд (ил мэдээлэл).
+   * Үүгээр "тодорхойгүй хөзөр = 52 − гар − тоглогдсон"-ыг гарган, тавилт
+   * дийлдэхгүй эсэхийг баттай тооцно. Байхгүй бол картын тоолол хийхгүй.
+   */
+  playedCards?: Card[];
+}
+
+/**
+ * Тавилтын "аюулгүй" зэрэг (0..1). 1 = хэн ч дийлж чадахгүй нь БАТТАЙ.
+ *
+ * Зөвхөн ИЛ мэдээлэл ашиглана: тодорхойгүй хөзөр = бүх 52 − өөрийн гар −
+ * тоглогдсон. Дийлэх хөзөр эдгээрийн дунд огт байхгүй бол дийлдэхгүй нь
+ * баттай (өрсөлдөгчийн гарыг ХАРАХГҮЙ — шударга). Хэмжээ 1–3-д баттай
+ * шалгана; 5 хөзрийн хослолд нарийн тул саармаг үнэлнэ.
+ */
+export function safetyOf(move: Card[], hand: Card[], played: Card[], opponentCards: number[]): number {
+  const size = move.length;
+  if (size > 3) return 0.3; // 5-хөзрийн хослол — тодорхойгүй, саармаг
+  const seen = new Uint8Array(52);
+  for (const c of hand) seen[c] = 1;
+  for (const c of played) seen[c] = 1;
+  let unknownCount = 0;
+  let maxUnknown = -1;
+  const unkRank = new Array(13).fill(0);
+  for (let c = 0; c < 52; c++) {
+    if (!seen[c]) {
+      unknownCount += 1;
+      unkRank[rankOf(c)] += 1;
+      if (c > maxUnknown) maxUnknown = c;
+    }
+  }
+  const top = move[move.length - 1]; // эрэмбэлэгдсэн — хамгийн өндөр
+  const myRank = rankOf(top);
+  let unbeatable: boolean;
+  if (size === 1) {
+    // Илүү өндөр индекстэй тодорхойгүй хөзөр байхгүй бол дийлдэхгүй.
+    unbeatable = maxUnknown < top;
+  } else {
+    // Хос/гурвал: миний зэрэглэлээс дээш (эсвэл тэнцүү — өндөр өнгөтэй байж
+    // болзошгүй) зэрэглэлд хангалттай тооны тодорхойгүй хөзөр байвал дийлж болно.
+    unbeatable = true;
+    for (let r = myRank; r < 13; r += 1) {
+      if (unkRank[r] >= size) {
+        unbeatable = false;
+        break;
+      }
+    }
+  }
+  if (unbeatable) return 1;
+  // Дийлж магадгүй — өрсөлдөгчид тодорхойгүй хөзрийн хэдэн хувийг барьж байгаагаар.
+  const totalOpp = opponentCards.reduce((a, b) => a + b, 0);
+  const held = unknownCount > 0 ? Math.min(1, totalOpp / unknownCount) : 1;
+  return Math.max(0, 1 - held);
 }
 
 /**
@@ -223,8 +280,29 @@ export function chooseMove(
   const agg = clamp((threatBias(ctx.opponentCards) + (ctx.selfBias ?? 0)) * smarts, -1, 1);
   const weight = clamp(WEIGHT * (1 - 0.35 * agg), 0.1, 1.2);
 
+  // Картын тоолол — дийлдэхгүй тавилтыг ЗӨВХӨН зөв нөхцөлд дэмжинэ:
+  //   (1) эцсийн тоглолт (гар цөөрсөн) — хяналтаа барьж хөзрөө дуусгах;
+  //   (2) өрсөлдөгч дуусах дөхсөн (цөөн хөзөртэй) — тэргүүлэхдээ дийлдэхгүйгээр
+  //       хааж, түүнд хяналт өгөхгүй.
+  // Дунд тоглолтод хэрэглэхгүй — тэнд өндөр хөзрөө ХАДГАЛах нь чухал (эс бөгөөс
+  // "аюулгүй" хөзрөө эрт цацаж, хяналтаа алдана).
+  //
+  // Эмпирик замнал (300 тоглолт бүрд, хуучин ботын эсрэг): бүх тавилтад
+  // хэрэглэхэд ИЛТ МУУ (сайн 37%). Эцсийн тоглолт+хаахаар хязгаарлаад жинг
+  // 22→16 болгоход бүх түвшин дээшилэв: анхан 50.7%, дунд 53.7%, сайн 54.3%.
+  const played = ctx.playedCards;
+  const minOpp = ctx.opponentCards.length ? Math.min(...ctx.opponentCards) : 99;
+  const useSafety = Boolean(played) && leading && (ctx.hand.length <= 5 || minOpp <= 2);
+  const SAFETY_W = 16;
   const ranked = moves
-    .map((move) => ({ move, cost: moveCost(move, ctx.hand, weight) }))
+    .map((move) => {
+      let cost = moveCost(move, ctx.hand, weight);
+      if (useSafety) {
+        const safety = safetyOf(move, ctx.hand, played!, ctx.opponentCards);
+        cost -= safety * SAFETY_W * smarts;
+      }
+      return { move, cost };
+    })
     .sort((a, b) => a.cost - b.cost);
 
   if (level === 'easy') {

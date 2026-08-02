@@ -1280,6 +1280,7 @@ setInterval(() => {
               .filter((x) => x.id !== turnId && x.seated && x.place === null)
               .map((x) => x.hand.length),
             selfBias: 0,
+            playedCards: state.playedThisRound,
           },
           'medium',
         );
@@ -1340,6 +1341,7 @@ setInterval(() => {
             .filter((p) => p.id !== turnId && p.seated && p.place === null)
             .map((p) => p.hand.length),
           selfBias: room.botBias.get(turnId) ?? 0,
+          playedCards: state.playedThisRound,
         },
         seat.bot,
       );
