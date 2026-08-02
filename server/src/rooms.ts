@@ -9,8 +9,10 @@ import { RoomMeta, ServerMessage } from '../../app/src/shared/protocol';
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
 
-/** Хоосон өрөөг ийм хугацааны дараа устгана. */
+/** Хэн ч онлайнгүй (гэхдээ суудалтай) өрөөг ийм хугацааны дараа устгана. */
 export const ROOM_TTL_MS = 60 * 60 * 1000;
+/** Суудал огт үлдээгүй (бүгд гарсан) өрөөг ийм богино grace-ийн дараа устгана. */
+export const EMPTY_ROOM_TTL_MS = 3 * 60 * 1000;
 
 export interface Seat {
   playerId: string;
@@ -92,18 +94,33 @@ export class RoomStore {
     return this.rooms.get(code.trim().toUpperCase());
   }
 
+  /** Санаас сэргээсэн өрөөг (аль хэдийн бүтэн бүтэцтэй) санах ойд буцаана. */
+  restore(room: Room): void {
+    this.rooms.set(room.code, room);
+  }
+
   delete(code: string): void {
     this.rooms.delete(code);
   }
 
-  /** Удаан хугацаанд хэн ч холбогдоогүй өрөөнүүдийг цэвэрлэнэ. */
-  sweep(now = Date.now()): number {
-    let removed = 0;
+  /**
+   * Идэвхгүй өрөөнүүдийг цэвэрлэнэ. Устгасан өрөөнүүдийн кодыг буцаана
+   * (санд хадгалсан snapshot-ыг ч устгахад ашиглана).
+   *   • Суудалгүй (бүгд гарсан) → EMPTY_ROOM_TTL_MS (богино grace).
+   *   • Суудалтай ч хэн ч онлайнгүй → ROOM_TTL_MS (урт).
+   */
+  sweep(now = Date.now()): string[] {
+    const removed: string[] = [];
     for (const [code, room] of this.rooms) {
+      const idle = now - room.lastActivity;
       const anyoneOnline = [...room.seats.values()].some((s) => s.socket !== null);
-      if (!anyoneOnline && now - room.lastActivity > ROOM_TTL_MS) {
+      const expired =
+        room.seats.size === 0
+          ? idle > EMPTY_ROOM_TTL_MS
+          : !anyoneOnline && idle > ROOM_TTL_MS;
+      if (expired) {
         this.rooms.delete(code);
-        removed++;
+        removed.push(code);
       }
     }
     return removed;

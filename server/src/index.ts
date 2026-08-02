@@ -17,6 +17,7 @@ import {
   MAX_PLAYERS,
   RuleError,
   addPlayer,
+  concludeIfAlone,
   pass,
   play,
   removePlayer,
@@ -57,12 +58,22 @@ import {
   verifyEmail,
 } from './auth';
 import { adImage, adsFor, countAdEvent } from './ads';
-import { dbEnabled, getPool, recordRound, recordVisit, type RoundLogRow } from './db';
+import {
+  dbEnabled,
+  deleteRoomStates,
+  getPool,
+  initSchema,
+  loadRoomStates,
+  recordRound,
+  recordVisit,
+  saveRoomState,
+  type RoundLogRow,
+} from './db';
 import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
 import { leaderboard, recentMatches, recordMatch, statsForUser, topCombosForUser } from './history';
 import { readReports, saveReport } from './reports';
 import { applySettlement, awardTokens, balanceOf, balancesOf, requestTokens } from './tokens';
-import { Room, RoomStore, metaOf, newSeat } from './rooms';
+import { ROOM_TTL_MS, Room, RoomStore, Seat, metaOf, newSeat } from './rooms';
 import { serveStatic } from './static';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -72,6 +83,107 @@ const MAX_CHAT_LENGTH = 200;
 const CHAT_HISTORY = 30;
 
 const rooms = new RoomStore();
+
+// ── Өрөө хадгалалт (#1) ─────────────────────────────────────────────────────
+// Өрөө санах ойд байдаг тул сервер дахин асахад устдаг байв. Энд төлөвийг
+// тогтмол санд хадгалж (throttle-той), сервер асахад сэргээнэ.
+
+/** Snapshot-д зориулж өрөөг энгийн (сокетгүй) объект болгоно. */
+function serializeRoom(room: Room): unknown {
+  return {
+    code: room.code,
+    state: room.state,
+    hostId: room.hostId,
+    seats: [...room.seats.values()].map((s) => ({
+      playerId: s.playerId,
+      token: s.token,
+      userId: s.userId,
+      bot: s.bot,
+      graceUsedRound: s.graceUsedRound,
+      botControlled: s.botControlled,
+    })),
+    chat: room.chat,
+    matchRecorded: room.matchRecorded,
+    gameUid: room.gameUid,
+    roundsLogged: room.roundsLogged,
+    botBias: [...room.botBias.entries()],
+    lastPlayers: room.lastPlayers,
+    lastActivity: room.lastActivity,
+  };
+}
+
+/** Snapshot-оос өрөөг сэргээнэ (бүх сокет null — хүмүүс дахин холбогдоно). */
+function deserializeRoom(data: any): Room {
+  const seats = new Map<string, Seat>();
+  for (const s of data.seats ?? []) {
+    seats.set(s.playerId, {
+      playerId: s.playerId,
+      token: s.token,
+      socket: null,
+      userId: s.userId ?? null,
+      bot: s.bot ?? null,
+      graceUsedRound: s.graceUsedRound,
+      botControlled: s.botControlled,
+    });
+  }
+  return {
+    code: data.code,
+    state: data.state,
+    hostId: data.hostId ?? '',
+    seats,
+    chat: data.chat ?? [],
+    matchRecorded: data.matchRecorded ?? false,
+    gameUid: data.gameUid ?? randomUUID(),
+    roundsLogged: data.roundsLogged ?? 0,
+    botBias: new Map<string, number>(data.botBias ?? []),
+    lastPlayers: data.lastPlayers ?? [],
+    lastActivity: data.lastActivity ?? Date.now(),
+    botMove: null,
+  };
+}
+
+/** Өөрчлөгдсөн өрөөнүүд — throttle-той санд бичихийн тулд тэмдэглэнэ. */
+const dirtyRooms = new Set<string>();
+
+/** Дараагийн flush-д хадгалахаар өрөөг тэмдэглэнэ. */
+function markRoomDirty(code: string): void {
+  if (dbEnabled()) dirtyRooms.add(code);
+}
+
+/** Тэмдэглэгдсэн өрөөнүүдийн snapshot-ыг санд бичнэ (2 сек тутам). */
+setInterval(() => {
+  if (!dbEnabled() || dirtyRooms.size === 0) return;
+  const codes = [...dirtyRooms];
+  dirtyRooms.clear();
+  for (const code of codes) {
+    const room = rooms.get(code);
+    if (room) {
+      void saveRoomState(code, serializeRoom(room)).catch((err) =>
+        console.error('өрөө хадгалж чадсангүй:', err),
+      );
+    }
+  }
+}, 2000).unref();
+
+/** Сервер асахад санд хадгалсан өрөөнүүдийг сэргээнэ. */
+async function restoreRooms(): Promise<void> {
+  if (!dbEnabled()) return;
+  try {
+    const snaps = await loadRoomStates(ROOM_TTL_MS);
+    let n = 0;
+    for (const { data } of snaps) {
+      try {
+        rooms.restore(deserializeRoom(data));
+        n += 1;
+      } catch (err) {
+        console.error('нэг өрөө сэргээхэд алдаа:', err);
+      }
+    }
+    if (n) console.log(`✓ ${n} өрөө санаас сэргээв.`);
+  } catch (err) {
+    console.error('өрөө сэргээж чадсангүй:', err);
+  }
+}
 
 /** Сокет бүрийн одоогийн суудал. */
 interface Session {
@@ -275,11 +387,11 @@ wss.on('connection', (socket, req) => {
     if (seat) seat.socket = null;
     session.room.lastActivity = Date.now();
 
-    // Лобби дээр байхад гарсан бол суудлыг чөлөөлнө; тоглоом эхэлсэн бол
-    // дахин холбогдох боломжтой байлгахын тулд суудлыг хадгална.
-    if (session.room.state.phase === 'lobby') {
-      releaseSeat(session.room, session.playerId);
-    }
+    // #2: ТАСАРСАН тохиолдолд суудлыг ЯМАР Ч ҮЕД чөлөөлөхгүй — лоббид ч гэсэн.
+    // Ингэснээр урьсан хүн утсаа түгжих/сүлжээ мөчлөх зэргээр богино тасарсан ч
+    // ӨРӨӨ АМЬД үлдэж, найз нь орж, өөрөө буцаж холбогдож чадна. Сайн дураар
+    // ГАРАХ ('leave') үед л суудал чөлөөлөгдөнө. Хэн ч эргэж ирэхгүй өрөөг sweep
+    // цэвэрлэнэ.
     sessions.delete(socket);
     broadcast(session.room);
   });
@@ -985,7 +1097,12 @@ function releaseSeat(room: Room, playerId: string): void {
         room.state.players.find((p) => !p.bot) ??
         room.state.players[0])?.id ?? '';
   }
-  if (room.seats.size === 0) rooms.delete(room.code);
+  // #3: өрсөлдөгч гарсны улмаас ганц үлдвэл тоглолтыг дуусгаж, үлдсэнийг хожуулна
+  // ("хүрэлцэхгүй" гэж гацаахын оронд).
+  concludeIfAlone(room.state);
+  // #2: өрөөг ЭНД шууд устгахгүй — хоосон ч хэсэг хугацаа хадгална (sweep
+  // цэвэрлэнэ). Ингэснээр урилга/реконнект богино зуур ажиллана.
+  room.lastActivity = Date.now();
 }
 
 /**
@@ -1022,6 +1139,7 @@ function broadcast(room: Room): void {
   ensureActiveHost(room);
   saveNewRounds(room);
   saveFinishedMatch(room);
+  markRoomDirty(room.code); // #1: төлөв өөрчлөгдсөн — санд хадгалахаар тэмдэглэнэ
   const meta = metaOf(room);
   for (const s of room.seats.values()) {
     if (s.socket && s.socket.readyState === s.socket.OPEN) {
@@ -1361,7 +1479,15 @@ setInterval(() => {
   });
 }, TICK_MS).unref();
 
-setInterval(() => rooms.sweep(), 5 * 60 * 1000).unref();
+setInterval(() => {
+  const removed = rooms.sweep();
+  if (removed.length) {
+    for (const code of removed) dirtyRooms.delete(code);
+    void deleteRoomStates(removed).catch((err) =>
+      console.error('өрөөний snapshot устгаж чадсангүй:', err),
+    );
+  }
+}, 5 * 60 * 1000).unref();
 // Хугацаа нь дууссан урилгыг цэвэрлэнэ.
 setInterval(() => {
   if (dbEnabled()) void purgeExpiredInvites().catch(() => undefined);
@@ -1370,3 +1496,11 @@ setInterval(() => {
 httpServer.listen(PORT, () => {
   console.log(`Big Two сервер http://localhost:${PORT} дээр ажиллаж байна`);
 });
+
+// Асахдаа: схемээ шалгаад (шинэ хүснэгт auto-migrate) идэвхтэй өрөөнүүдийг
+// санаас сэргээнэ — сервер дахин асахад тоглоом устахгүй болно (#1).
+if (dbEnabled()) {
+  void initSchema()
+    .then(() => restoreRooms())
+    .catch((err) => console.error('startup алдаа (схем/сэргээлт):', err));
+}

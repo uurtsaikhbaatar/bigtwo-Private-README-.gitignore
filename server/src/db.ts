@@ -245,8 +245,51 @@ export async function initSchema(): Promise<void> {
       test       BOOLEAN NOT NULL DEFAULT false
     );
     CREATE INDEX IF NOT EXISTS round_log_game_idx ON round_log(game_uid, round_no);
+
+    -- Идэвхтэй өрөөний snapshot. Өрөө санах ойд байдаг тул сервер дахин асахад
+    -- (deploy, restart, crash) устдаг байв — тоглож байсан хүмүүс шидэгддэг.
+    -- Энд өрөөний төлөвийг тогтмол хадгалж, сервер асахад сэргээнэ.
+    CREATE TABLE IF NOT EXISTS room_state (
+      code       TEXT PRIMARY KEY,
+      data       JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `;
   await getPool().query(sql);
+}
+
+/** Өрөөний snapshot-ыг санд хадгална (upsert). */
+export async function saveRoomState(code: string, data: unknown): Promise<void> {
+  if (!dbEnabled()) return;
+  await getPool().query(
+    `INSERT INTO room_state (code, data, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (code) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
+    [code, JSON.stringify(data)],
+  );
+}
+
+/** Өрөөнүүдийн snapshot-ыг санаас устгана. */
+export async function deleteRoomStates(codes: string[]): Promise<void> {
+  if (!dbEnabled() || codes.length === 0) return;
+  await getPool().query(`DELETE FROM room_state WHERE code = ANY($1)`, [codes]);
+}
+
+/**
+ * Санд хадгалсан бүх өрөөний snapshot-ыг унших (сервер асахад).
+ * Хэт хуучин (maxAgeMs-ээс өмнөх) snapshot-уудыг эхлээд устгана.
+ */
+export async function loadRoomStates(
+  maxAgeMs: number,
+): Promise<Array<{ code: string; data: unknown }>> {
+  if (!dbEnabled()) return [];
+  await getPool().query(
+    `DELETE FROM room_state WHERE updated_at < now() - ($1::int * interval '1 millisecond')`,
+    [maxAgeMs],
+  );
+  const r = await getPool().query<{ code: string; data: unknown }>(
+    `SELECT code, data FROM room_state`,
+  );
+  return r.rows;
 }
 
 /** Нэг тойрогт нэг тоглогчийн бичлэг. */

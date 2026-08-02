@@ -659,6 +659,30 @@ function finishRound(state: GameState): void {
 }
 
 /**
+ * Өрсөлдөгч ГАРСНЫ улмаас ганц тоглогч үлдвэл тоглолтыг дуусгаж, үлдсэнийг
+ * ялагч болгоно (гацахын оронд). Тоглоом идэвхтэй үед л ажиллана.
+ *
+ * Чип шилжүүлэхгүй (`settlement = null`) — өрсөлдөгч сайн дураар гарсан тул
+ * бооцоог хураахгүй. Хожил нь түүх/цолд тоологдоно.
+ *
+ * `true` буцаавал тоглолт дуусав.
+ */
+export function concludeIfAlone(state: GameState): boolean {
+  if (state.phase !== 'playing' && state.phase !== 'roundEnd') return false;
+  const remaining = state.players.filter((p) => !p.eliminated);
+  if (remaining.length > 1) return false;
+  state.matchWinnerId = remaining[0]?.id ?? null;
+  state.phase = 'matchEnd';
+  state.settlement = null;
+  state.current = null;
+  state.turnEndsAt = null;
+  if (remaining[0]) {
+    state.log.push(`🏆 ${remaining[0].name} тоглолтыг хожлоо! (өрсөлдөгч гарлаа)`);
+  }
+  return true;
+}
+
+/**
  * Чипийн тооцоо: тоглогч бүр чипээ тавьж, ялагч бүгдийг нь авна.
  * Чипгүй (0) бол тооцоо гарахгүй.
  *

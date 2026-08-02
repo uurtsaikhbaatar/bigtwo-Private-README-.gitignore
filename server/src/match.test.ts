@@ -16,12 +16,14 @@ import {
   RuleError,
   SEATS_PER_ROUND,
   addPlayer,
+  concludeIfAlone,
   DEFAULT_TURN_SECONDS,
   createGame,
   isDragon,
   pass,
   penaltyMultiplier,
   play,
+  removePlayer,
   startMatch,
   startRound,
   timeoutTurn,
@@ -679,4 +681,27 @@ test('тараасан хөзөр давхардахгүй, бүрэн байн�
       }
     }
   }
+});
+
+test('өрсөлдөгч гарвал үлдсэн тоглогч шууд хожно (гацахгүй)', () => {
+  const state = createGame();
+  addPlayer(state, 'a', 'A');
+  addPlayer(state, 'b', 'B');
+  startMatch(state, 30, 30, 0);
+  assert.equal(state.phase, 'playing');
+
+  // B гарлаа → үлдсэн ганц тоглогч (A) шууд хожно.
+  removePlayer(state, 'b');
+  const ended = concludeIfAlone(state);
+  assert.equal(ended, true, 'тоглолт дуусна');
+  assert.equal(state.phase, 'matchEnd');
+  assert.equal(state.matchWinnerId, 'a', 'үлдсэн тоглогч ялагч');
+  assert.equal(state.settlement, null, 'форфейтд чип шилжихгүй');
+
+  // Хоёр тоглогч байхад дуусгахгүй.
+  const s2 = createGame();
+  addPlayer(s2, 'x', 'X');
+  addPlayer(s2, 'y', 'Y');
+  startMatch(s2, 30, 30, 0);
+  assert.equal(concludeIfAlone(s2), false, '2 тоглогчтой бол үргэлжилнэ');
 });

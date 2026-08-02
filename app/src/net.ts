@@ -36,7 +36,6 @@ import {
 } from './storage';
 
 export const SERVER_PORT = 8787;
-const MAX_RECONNECT_ATTEMPTS = 6;
 /**
  * Тогтмол "амьд уу?" шалгалтын давтамж (ms). Утасны хөтөч сокетыг чимээгүй
  * үхүүлж болно (onclose гарахгүй) — периодик ping-ээр илрүүлж дахин холбогдоно.
@@ -232,11 +231,11 @@ export function useBigTwo(serverUrl: string) {
   }, [handleMessage]);
 
   const scheduleReconnect = useCallback(() => {
-    if (attemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-      setError('Холболт сэргэсэнгүй. Дахин оролдоно уу.');
-      return;
-    }
-    const delay = Math.min(1000 * 2 ** attemptsRef.current, 10000);
+    // Бүрмөсөн бууж өгөхгүй — сервер дахин асах (deploy 3–6 мин) эсвэл урт
+    // тасалдлын дараа ч эргэж холбогдохын тулд тасралтгүй оролдоно. Backoff
+    // хамгийн ихдээ 10 сек хүрч тогтоно. Хэрэглэгч гарвал (wantOnline=false)
+    // openSocket өөрөө зогсоно.
+    const delay = Math.min(1000 * 2 ** Math.min(attemptsRef.current, 4), 10000);
     attemptsRef.current += 1;
     timerRef.current = setTimeout(() => openSocket(), delay);
   }, [openSocket]);
