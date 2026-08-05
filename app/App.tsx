@@ -271,6 +271,9 @@ function Root() {
             game.inspectPlayer(playerId);
           }}
           onInvite={game.invitePlayers}
+          invites={game.invites}
+          onAcceptInvite={(roomCode) => game.joinRoom(name, roomCode)}
+          onDeclineInvite={game.declineInvite}
           ads={game.ads}
           httpBase={game.httpBase}
           onAdEvent={game.adEvent}

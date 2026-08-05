@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { AdSlot } from '../components/AdSlot';
+import { InviteList } from '../components/InviteList';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { RankBadge } from '../components/RankBadge';
@@ -12,7 +13,7 @@ import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import type { Card } from '../shared/cards';
 import { THREE_OF_DIAMONDS, cardName, rankOf, suitOf } from '../shared/cards';
 import { beats, comboLabel, detectCombo } from '../shared/combos';
-import type { AdView, GameView, PlayerView } from '../shared/protocol';
+import type { AdView, GameView, Invite, PlayerView } from '../shared/protocol';
 import { theme } from '../theme';
 
 /**
@@ -67,6 +68,10 @@ interface Props {
   onInspect: (playerId: string, name: string) => void;
   /** Өрөөний найзуудыг дараагийн тоглолтод урих. */
   onInvite: () => void;
+  /** Ирсэн урилгууд — тоглолт дууссаны үр дүнгийн дэлгэцэд харуулна. */
+  invites: Invite[];
+  onAcceptInvite: (roomCode: string) => void;
+  onDeclineInvite: (roomCode: string) => void;
   ads: AdView[];
   httpBase: string;
   onAdEvent: (id: string, kind: 'seen' | 'click') => void;
@@ -81,6 +86,9 @@ export function TableScreen({
   onLeave,
   onInspect,
   onInvite,
+  invites,
+  onAcceptInvite,
+  onDeclineInvite,
   ads,
   httpBase,
   onAdEvent,
@@ -144,6 +152,9 @@ export function TableScreen({
         onNewMatch={onNewMatch}
         onLeave={onLeave}
         onInvite={onInvite}
+        invites={invites}
+        onAcceptInvite={onAcceptInvite}
+        onDeclineInvite={onDeclineInvite}
         ads={ads}
         httpBase={httpBase}
         onAdEvent={onAdEvent}
@@ -472,6 +483,9 @@ function Results({
   onNewMatch,
   onLeave,
   onInvite,
+  invites,
+  onAcceptInvite,
+  onDeclineInvite,
   ads,
   httpBase,
   onAdEvent,
@@ -482,6 +496,9 @@ function Results({
   onNewMatch: () => void;
   onLeave: () => void;
   onInvite: () => void;
+  invites: Invite[];
+  onAcceptInvite: (roomCode: string) => void;
+  onDeclineInvite: (roomCode: string) => void;
   ads: AdView[];
   httpBase: string;
   onAdEvent: (id: string, kind: 'seen' | 'click') => void;
@@ -611,6 +628,17 @@ function Results({
         <Text style={styles.hint}>
           Хасагдсан: {justOut.map((p) => `${p.name} (${p.score})`).join(', ')}
         </Text>
+      )}
+
+      {/* Ирсэн урилга — тоглолт дуусахад "хаанаас хүлээж авахаа мэдэхгүй" байхгүй
+          болгохын тулд энд ШУУД харуулна. "Дахин тоглох →" дарахад тухайн өрөөнд
+          орно. */}
+      {invites.length > 0 && (
+        <InviteList
+          invites={invites}
+          onAccept={onAcceptInvite}
+          onDecline={onDeclineInvite}
+        />
       )}
 
       {ads.length > 0 && (

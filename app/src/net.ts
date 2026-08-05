@@ -467,12 +467,18 @@ export function useBigTwo(serverUrl: string) {
       [send],
     ),
     leaveRoom: useCallback(() => {
-      send({ t: 'leave' });
+      // 'leave'-ыг ЗӨВХӨН холбогдсон үед шууд илгээнэ. Офлайн бол дараалуулахгүй
+      // — эс бөгөөс энэ 'leave' дараалалд үлдэж, дараа өөр өрөөнд холбогдоход
+      // автоматаар илгээгдэж, тэр өрөөнөөс буруугаар хасдаг байв. (Салсан суудлыг
+      // сервер өөрөө цэвэрлэнэ.)
+      const ws = socketRef.current;
+      if (ws && ws.readyState === 1) rawSend(ws, { t: 'leave' });
+      queueRef.current = []; // хуулиас үлдсэн ямар ч мессежийг хаяна
       sessionRef.current = null;
       void clearSession();
       setView(null);
       setChat([]);
       disconnect();
-    }, [send, disconnect]),
+    }, [disconnect]),
   };
 }

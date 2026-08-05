@@ -557,7 +557,14 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       if (!existing || existing.token !== msg.token) {
         throw new RuleError('Суудлаа сэргээж чадсангүй.');
       }
-      existing.socket?.close();
+      // Хуучин сокетыг хаахаас ӨМНӨ түүний session-ыг устгана — эс бөгөөс түүний
+      // 'close' эвент нь ШИНЭ суудлын сокетыг null болгож, эргэж холбогдсон хүн
+      // дахин "офлайн" харагддаг байв.
+      const oldSocket = existing.socket;
+      if (oldSocket) {
+        sessions.delete(oldSocket);
+        oldSocket.close();
+      }
       existing.socket = socket;
       sessions.set(socket, { room, playerId: existing.playerId });
       // Бот орлож байсан бол зогсоож, буцаж ирснийг мэдэгдэнэ.
