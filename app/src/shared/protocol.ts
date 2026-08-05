@@ -40,6 +40,8 @@ export type ClientMessage =
   /** Бот хасах. */
   | { t: 'removeBot'; playerId: string }
   | { t: 'play'; cards: Card[] }
+  /** Суудлын сугалтад нэг позиц сонгох. */
+  | { t: 'pickDraw'; index: number }
   | { t: 'pass' }
   | { t: 'chat'; text: string }
   /** Дуут мессеж — base64 data URL. */
@@ -293,6 +295,8 @@ export interface GameView {
   current: PlayView | null;
   lastPlay: PlayView | null;
   phase: Phase;
+  /** Суудлын сугалт идэвхтэй (phase='drawing') үед. Эс бөгөөс null. */
+  draw: DrawView | null;
   round: number;
   targetScore: number;
   /** Нэг тоглогчийн виртуал чип. 0 бол чипгүй. */
@@ -312,6 +316,19 @@ export interface GameView {
   history: RoundRecord[];
   matchWinnerId: string | null;
   log: string[];
+}
+
+/** Суудлын сугалтын харагдац. Хөзрийн утга нь зөвхөн ил болсны дараа ирнэ. */
+export interface DrawView {
+  /** Позиц бүрийг сонгосон тоглогчийн id (сонгоогүй бол null). */
+  claimedBy: (string | null)[];
+  /** Позиц бүрийн хөзөр — ил болтол null. */
+  cards: (Card | null)[];
+  revealed: boolean;
+  /** Сонгох/харуулах хугацаа дуусах хүртэлх ms (клиент тоолно). */
+  remainingMs: number | null;
+  /** Таны сонгосон позиц (эс бөгөөс null). */
+  yourPick: number | null;
 }
 
 export interface RoomMeta {
@@ -354,6 +371,21 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
     current: toPlayView(state.current),
     lastPlay: toPlayView(state.lastPlay),
     phase: state.phase,
+    draw: state.draw
+      ? {
+          claimedBy: state.draw.claimedBy.slice(),
+          // Хөзрийн утга нь зөвхөн ил болсны дараа ирнэ — эс бөгөөс хууран мэхлэлт.
+          cards: state.draw.revealed
+            ? state.draw.cards.slice()
+            : state.draw.cards.map(() => null),
+          revealed: state.draw.revealed,
+          remainingMs:
+            state.draw.endsAt === null ? null : Math.max(0, state.draw.endsAt - Date.now()),
+          yourPick: state.draw.claimedBy.indexOf(youId) >= 0
+            ? state.draw.claimedBy.indexOf(youId)
+            : null,
+        }
+      : null,
     round: state.round,
     targetScore: state.targetScore,
     stake: state.stake,

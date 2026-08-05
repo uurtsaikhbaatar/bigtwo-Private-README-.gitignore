@@ -17,10 +17,13 @@ import {
   MAX_PLAYERS,
   RuleError,
   addPlayer,
+  completeDraw,
   concludeIfAlone,
   pass,
+  pickDraw,
   play,
   removePlayer,
+  revealDraw,
   startMatch,
   startRound,
   timeoutTurn,
@@ -840,6 +843,10 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       play(room.state, playerId, Array.isArray(msg.cards) ? msg.cards : []);
       return broadcast(room);
     }
+    case 'pickDraw': {
+      pickDraw(room.state, playerId, Number(msg.index));
+      return broadcast(room);
+    }
     case 'pass': {
       pass(room.state, playerId);
       return broadcast(room);
@@ -1373,6 +1380,22 @@ setInterval(() => {
   const now = Date.now();
   rooms.forEach((room) => {
     const { state } = room;
+
+    // Суудлын сугалт: хугацаа дуусахад ил болгоно; ил болсны 5 сек дараа эхэлнэ.
+    if (state.phase === 'drawing' && state.draw) {
+      if (state.draw.endsAt !== null && state.draw.endsAt <= now) {
+        try {
+          if (!state.draw.revealed) revealDraw(state);
+          else completeDraw(state);
+          broadcast(room);
+        } catch (err) {
+          console.error('сугалт боловсруулахад алдаа:', err);
+          state.draw.endsAt = null;
+        }
+      }
+      return;
+    }
+
     if (state.phase !== 'playing') return;
     if (state.turnEndsAt === null || state.turnEndsAt > now) return;
     // Хэн ч холбогдоогүй өрөөг ажиллуулах шаардлагагүй.

@@ -16,9 +16,11 @@ import {
   RuleError,
   SEATS_PER_ROUND,
   addPlayer,
+  completeDraw,
   concludeIfAlone,
   DEFAULT_TURN_SECONDS,
   createGame,
+  pickDraw,
   isDragon,
   pass,
   penaltyMultiplier,
@@ -42,6 +44,10 @@ function mulberry32(seed: number): () => number {
 function makeGame(playerCount: number): GameState {
   const state = createGame();
   for (let i = 0; i < playerCount; i++) addPlayer(state, `p${i}`, `Тоглогч${i + 1}`);
+  // Эдгээр тестүүд автомат суудал-эргэлтийн ЛОГИКийг шалгадаг тул тоглогчдыг
+  // БОТ болгоно — ингэснээр 5+ хүнд зориулсан интерактив сугалт (drawing) руу
+  // орохгүй, шууд эхэлнэ. (Интерактив сугалтыг тусад нь тестлэнэ.)
+  state.players.forEach((p) => (p.bot = 'medium'));
   return state;
 }
 
@@ -704,4 +710,51 @@ test('өрсөлдөгч гарвал үлдсэн тоглогч шууд хо�
   addPlayer(s2, 'y', 'Y');
   startMatch(s2, 30, 30, 0);
   assert.equal(concludeIfAlone(s2), false, '2 тоглогчтой бол үргэлжилнэ');
+});
+
+test('интерактив сугалт: 5+ хүн бол сугалт, бага 4 тоглоно, том хөзрөөр суудаг', () => {
+  const state = createGame();
+  for (let i = 0; i < 6; i++) addPlayer(state, `p${i}`, `H${i}`); // ХҮН (бот биш)
+  startMatch(state, 50, DEFAULT_TURN_SECONDS, 0, mulberry32(42));
+
+  assert.equal(state.phase, 'drawing', '5+ хүн → сугалт руу орно');
+  assert.ok(state.draw, 'сугалтын төлөв үүснэ');
+  assert.equal(state.draw!.claimedBy.length, 6, 'тоглогчийн тоогоор позиц');
+
+  // Зэрэг сонголт: нэг позицийг 2 дахь хүн сонговол алдаа.
+  pickDraw(state, 'p0', 0);
+  assert.throws(() => pickDraw(state, 'p1', 0), /өөр хүн сонгосон/);
+
+  // Тоглогч бүр нэг позиц сонгоно.
+  for (let i = 1; i < 6; i++) {
+    const free = state.draw!.claimedBy.findIndex((c) => c === null);
+    pickDraw(state, `p${i}`, free);
+  }
+  assert.equal(state.draw!.revealed, true, 'бүгд сонгоод ил болно');
+
+  const picks = state.draw!.claimedBy.map((id, i) => ({ id: id!, card: state.draw!.cards[i] }));
+  completeDraw(state, mulberry32(1));
+
+  assert.equal(state.phase, 'playing', 'тоглоом эхэлнэ');
+  assert.equal(state.seats.length, SEATS_PER_ROUND, '4 сууна');
+
+  // Хамгийн бага хөзөр татсан 4 суух ёстой.
+  const shouldPlay = new Set(
+    picks.slice().sort((a, b) => a.card - b.card).slice(0, SEATS_PER_ROUND).map((p) => p.id),
+  );
+  for (const id of state.seats) assert.ok(shouldPlay.has(id), 'бага хөзөр татсан нь суух');
+
+  // Суудлын дараалал: том хөзрөөр эхэлж (буурахаар).
+  const seatCards = state.seats.map((id) => picks.find((p) => p.id === id)!.card);
+  for (let i = 1; i < seatCards.length; i += 1) {
+    assert.ok(seatCards[i - 1] >= seatCards[i], 'том хөзрөөр эхэлж суудаг');
+  }
+});
+
+test('интерактив сугалт: 4 хүн бол сугалтгүй шууд эхэлнэ', () => {
+  const state = createGame();
+  for (let i = 0; i < 4; i++) addPlayer(state, `p${i}`, `H${i}`);
+  startMatch(state, 50, DEFAULT_TURN_SECONDS, 0, mulberry32(9));
+  assert.equal(state.phase, 'playing', '4 хүн → сугалтгүй');
+  assert.equal(state.draw, null);
 });

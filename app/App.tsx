@@ -13,6 +13,7 @@ import { ReportButton } from './src/components/ReportButton';
 import { clearRoomCodeFromUrl, pendingRoomCode } from './src/deeplink';
 import { installErrorReporter } from './src/errors';
 import { defaultServerUrl, useBigTwo } from './src/net';
+import { DrawScreen } from './src/screens/DrawScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LobbyScreen } from './src/screens/LobbyScreen';
 import { TableScreen } from './src/screens/TableScreen';
@@ -258,6 +259,8 @@ function Root() {
           httpBase={game.httpBase}
           onAdEvent={game.adEvent}
         />
+      ) : view.phase === 'drawing' ? (
+        <DrawScreen view={view} onPick={game.pickDraw} />
       ) : (
         <TableScreen
           view={view}

@@ -455,6 +455,7 @@ export function useBigTwo(serverUrl: string) {
     removeBot: useCallback((playerId: string) => send({ t: 'removeBot', playerId }), [send]),
     playCards: useCallback((cards: Card[]) => send({ t: 'play', cards }), [send]),
     passTurn: useCallback(() => send({ t: 'pass' }), [send]),
+    pickDraw: useCallback((index: number) => send({ t: 'pickDraw', index }), [send]),
     sendChat: useCallback((text: string) => send({ t: 'chat', text }), [send]),
     /** Алдааны мэдэгдэл илгээх. Орчны мэдээллийг өөрөө хавсаргана. */
     sendReport: useCallback(

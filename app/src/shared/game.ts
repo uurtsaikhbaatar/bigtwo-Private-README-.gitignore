@@ -112,7 +112,22 @@ export interface RoundRecord {
   dragonPlayerId?: string;
 }
 
-export type Phase = 'lobby' | 'playing' | 'roundEnd' | 'matchEnd';
+export type Phase = 'lobby' | 'drawing' | 'playing' | 'roundEnd' | 'matchEnd';
+
+/**
+ * Суудлын сугалт (5+ хүн тоглоход). Ширээн дээр тоглогчийн тоогоор далд хөзөр
+ * дэлгэж, тоглогч бүр нэг позиц сонгоно. Бага хөзөр сонгосон 4 тоглоно.
+ */
+export interface DrawState {
+  /** Позиц бүрийн хөзөр (ил болтол клиентэд нууц). */
+  cards: Card[];
+  /** Позиц бүрийг сонгосон тоглогчийн id (сонгоогүй бол null). */
+  claimedBy: (string | null)[];
+  /** Бүгд сонгосны дараа ил болно. */
+  revealed: boolean;
+  /** Сонгох хугацаа (ил болохоос өмнө) эсвэл харуулах 5 сек дуусах epoch ms. */
+  endsAt: number | null;
+}
 
 export interface GameState {
   players: Player[];
@@ -149,6 +164,8 @@ export interface GameState {
   history: RoundRecord[];
   /** Энэ тойрогт тоглогдсон бүх хөзөр (ил мэдээлэл — ботын картын тоолол). */
   playedThisRound: Card[];
+  /** Суудлын сугалт идэвхтэй үед (phase='drawing'). Эс бөгөөс null. */
+  draw: DrawState | null;
   lastRoundWinnerId: string | null;
   matchWinnerId: string | null;
   log: string[];
@@ -174,6 +191,7 @@ export function createGame(): GameState {
     rotationWasActive: false,
     history: [],
     playedThisRound: [],
+    draw: null,
     lastRoundWinnerId: null,
     matchWinnerId: null,
     log: [],
@@ -249,6 +267,8 @@ export function startMatch(
   state.round = 0;
   state.history = [];
   state.seats = [];
+  state.draw = null;
+  state.playedThisRound = [];
   state.lastRoundWinnerId = null;
   state.matchWinnerId = null;
   state.rotationWasActive = false;
@@ -268,14 +288,143 @@ export function startMatch(
   startRound(state, rng);
 }
 
-/** Дараагийн тойргийг эхлүүлнэ. */
+/** Суудлын сугалтын хугацаа. */
+export const DRAW_PICK_SECONDS = 15;
+export const DRAW_REVEAL_SECONDS = 5;
+
+/** Интерактив сугалт хэрэгтэй эсэх — 4-с дээш ХҮН (бот биш) байх үед. */
+function humanContenders(contenders: Player[]): number {
+  return contenders.filter((p) => !p.bot).length;
+}
+
+/**
+ * Дараагийн тойргийг эхлүүлнэ.
+ *
+ * Эхний суудал сонголтод (өмнөх суудалгүй) 4-с дээш ХҮН байвал интерактив
+ * СУГАЛТ руу орно (phase='drawing'). Бусад тохиолдолд шууд эхэлнэ. Дараагийн
+ * тойргуудын эргэлт (өнжих/орох) автомат хэвээр.
+ */
 export function startRound(state: GameState, rng: () => number = Math.random): void {
   if (state.phase === 'matchEnd') throw new RuleError('Тоглолт дууссан байна.');
   const contenders = state.players.filter((p) => !p.eliminated);
   if (contenders.length < MIN_PLAYERS) throw new RuleError('Үргэлжлүүлэх тоглогч хүрэлцэхгүй.');
 
+  const previous = state.seats
+    .map((id) => state.players.find((p) => p.id === id))
+    .filter((p): p is Player => !!p && !p.eliminated);
+
+  if (previous.length === 0 && humanContenders(contenders) > SEATS_PER_ROUND) {
+    beginDraw(state, contenders, rng);
+    return;
+  }
+  dealAndStart(state, chooseSeats(state, contenders, rng), rng);
+}
+
+/** Суудлын сугалт эхлүүлнэ. Бот шууд санамсаргүй позиц сонгоно. */
+function beginDraw(state: GameState, contenders: Player[], rng: () => number): void {
+  const n = contenders.length;
+  const cards = shuffle(fullDeck(), rng).slice(0, n);
+  const claimedBy: (string | null)[] = new Array(n).fill(null);
+  const freeSpots = () =>
+    claimedBy.map((c, i) => (c === null ? i : -1)).filter((i) => i >= 0);
+  for (const bot of contenders.filter((p) => p.bot)) {
+    const spots = freeSpots();
+    if (spots.length === 0) break;
+    claimedBy[spots[Math.floor(rng() * spots.length)]] = bot.id;
+  }
+  state.draw = {
+    cards,
+    claimedBy,
+    revealed: false,
+    endsAt: Date.now() + DRAW_PICK_SECONDS * 1000,
+  };
+  state.phase = 'drawing';
+  state.players.forEach((p) => (p.seated = false));
+  state.log = ['Суудлын сугалт — хөзрөө сонгоно уу.'];
+  maybeRevealDraw(state); // бүгд бот бол шууд
+}
+
+/** Тоглогч сугалтын нэг позиц сонгоно (зэрэг сонговол түрүүлсэн нь авна — сервер серийн). */
+export function pickDraw(state: GameState, playerId: string, index: number): void {
+  const d = state.draw;
+  if (state.phase !== 'drawing' || !d || d.revealed) throw new RuleError('Сугалт идэвхгүй байна.');
+  const player = state.players.find((p) => p.id === playerId && !p.eliminated);
+  if (!player) throw new RuleError('Та энэ сугалтад оролцохгүй.');
+  if (d.claimedBy.includes(playerId)) throw new RuleError('Та аль хэдийн сонгосон байна.');
+  if (index < 0 || index >= d.claimedBy.length) throw new RuleError('Буруу сонголт.');
+  if (d.claimedBy[index] !== null) throw new RuleError('Энэ хөзрийг өөр хүн сонгосон байна.');
+  d.claimedBy[index] = playerId;
+  maybeRevealDraw(state);
+}
+
+/** Бүх тоглогч сонгосон бол ил болгоно. */
+function maybeRevealDraw(state: GameState): void {
+  const d = state.draw;
+  if (!d || d.revealed) return;
+  const contenders = state.players.filter((p) => !p.eliminated);
+  if (contenders.every((p) => d.claimedBy.includes(p.id))) revealDraw(state);
+}
+
+/**
+ * Сугалтыг ил болгоно: сонгоогүй хүмүүст санамсаргүй позиц олгоод, 5 сек
+ * харуулна (хэн тоглох/өнжих). Timeout эсвэл бүгд сонгоход дуудагдана.
+ */
+export function revealDraw(state: GameState, rng: () => number = Math.random): void {
+  const d = state.draw;
+  if (!d || d.revealed) return;
+  const contenders = state.players.filter((p) => !p.eliminated);
+  for (const p of contenders) {
+    if (d.claimedBy.includes(p.id)) continue;
+    const spots = d.claimedBy.map((c, i) => (c === null ? i : -1)).filter((i) => i >= 0);
+    if (spots.length === 0) break;
+    d.claimedBy[spots[Math.floor(rng() * spots.length)]] = p.id;
+  }
+  d.revealed = true;
+  d.endsAt = Date.now() + DRAW_REVEAL_SECONDS * 1000;
+  const seats = seatsFromDraw(state);
+  const bench = contenders.filter((p) => !seats.includes(p.id));
+  state.log = [`Сугалт: тоглох — ${seats.map((id) => nameOf(state, id)).join(', ')}.`];
+  if (bench.length) state.log.push(`Өнжинө: ${bench.map((p) => p.name).join(', ')}.`);
+}
+
+/**
+ * Сугалтаас суудлыг тодорхойлно: хамгийн БАГА хөзөр сонгосон 4 тоглоно; тэдгээрийг
+ * ТОМ хөзрөөр эхлэн (буурахаар) дараалуулан суулгана.
+ */
+function seatsFromDraw(state: GameState): string[] {
+  const d = state.draw;
+  if (!d) return [];
+  const picks: { id: string; card: Card }[] = [];
+  d.claimedBy.forEach((id, i) => {
+    if (id && state.players.some((p) => p.id === id && !p.eliminated)) {
+      picks.push({ id, card: d.cards[i] });
+    }
+  });
+  const playing = picks
+    .slice()
+    .sort((a, b) => a.card - b.card) // бага нь эхэнд
+    .slice(0, SEATS_PER_ROUND); // бага 4 тоглоно
+  playing.sort((a, b) => b.card - a.card); // суудал: том хөзрөөр эхэлнэ
+  return playing.map((x) => x.id);
+}
+
+/** Харуулах 5 сек дуусмагц тойргийг жинхэнээр эхлүүлнэ. */
+export function completeDraw(state: GameState, rng: () => number = Math.random): void {
+  if (state.phase !== 'drawing' || !state.draw?.revealed) return;
+  const seats = seatsFromDraw(state);
+  state.draw = null;
+  dealAndStart(state, seats, rng);
+}
+
+function nameOf(state: GameState, id: string): string {
+  return state.players.find((p) => p.id === id)?.name ?? '?';
+}
+
+/** Суудал тодорсны дараа хөзөр тарааж тойргийг эхлүүлнэ. */
+function dealAndStart(state: GameState, seats: string[], rng: () => number): void {
   const previousSeats = state.seats;
-  state.seats = chooseSeats(state, contenders, rng);
+  const contenders = state.players.filter((p) => !p.eliminated);
+  state.seats = seats;
   state.round += 1;
   state.playedThisRound = []; // шинэ тойрог — картын тоолол шинээр
 
