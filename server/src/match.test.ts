@@ -758,3 +758,20 @@ test('интерактив сугалт: 4 хүн бол сугалтгүй шу
   assert.equal(state.phase, 'playing', '4 хүн → сугалтгүй');
   assert.equal(state.draw, null);
 });
+
+test('интерактив сугалт: 4 бот + 1 хүн ч сугална (хүн дардаг, бот автомат)', () => {
+  const state = createGame();
+  addPlayer(state, 'h', 'uuree'); // ХҮН
+  for (let i = 0; i < 4; i++) addPlayer(state, `b${i}`, `Bot${i}`);
+  state.players.filter((p) => p.id !== 'h').forEach((p) => (p.bot = 'medium'));
+  startMatch(state, 50, DEFAULT_TURN_SECONDS, 0, mulberry32(7));
+
+  assert.equal(state.phase, 'drawing', '4 бот + 1 хүн → сугалт руу орно');
+  // Бот аль хэдийн автоматаар сонгосон; хүнд яг 1 позиц үлдэнэ.
+  const free = state.draw!.claimedBy.filter((c) => c === null).length;
+  assert.equal(free, 1, 'бот 4 сонгож, хүнд 1 үлдэнэ');
+
+  const idx = state.draw!.claimedBy.findIndex((c) => c === null);
+  pickDraw(state, 'h', idx);
+  assert.equal(state.draw!.revealed, true, 'хүн сонгоход бүгд дуусаж ил болно');
+});

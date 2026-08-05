@@ -292,7 +292,7 @@ export function startMatch(
 export const DRAW_PICK_SECONDS = 15;
 export const DRAW_REVEAL_SECONDS = 5;
 
-/** Интерактив сугалт хэрэгтэй эсэх — 4-с дээш ХҮН (бот биш) байх үед. */
+/** Гарт (бот биш) хэдэн хүн байна вэ. */
 function humanContenders(contenders: Player[]): number {
   return contenders.filter((p) => !p.bot).length;
 }
@@ -300,9 +300,10 @@ function humanContenders(contenders: Player[]): number {
 /**
  * Дараагийн тойргийг эхлүүлнэ.
  *
- * Эхний суудал сонголтод (өмнөх суудалгүй) 4-с дээш ХҮН байвал интерактив
- * СУГАЛТ руу орно (phase='drawing'). Бусад тохиолдолд шууд эхэлнэ. Дараагийн
- * тойргуудын эргэлт (өнжих/орох) автомат хэвээр.
+ * Эхний суудал сонголтод (өмнөх суудалгүй) 4-с дээш ТОГЛОГЧ (нийт) байж, дор хаяж
+ * нэг ХҮН байвал интерактив СУГАЛТ руу орно — бот автомат сугалж, хүн дарж
+ * сонгоно (жишээ нь 4 бот + 1 хүн ч сугална). Бусад тохиолдолд шууд эхэлнэ.
+ * Дараагийн тойргуудын эргэлт (өнжих/орох) автомат хэвээр.
  */
 export function startRound(state: GameState, rng: () => number = Math.random): void {
   if (state.phase === 'matchEnd') throw new RuleError('Тоглолт дууссан байна.');
@@ -313,7 +314,11 @@ export function startRound(state: GameState, rng: () => number = Math.random): v
     .map((id) => state.players.find((p) => p.id === id))
     .filter((p): p is Player => !!p && !p.eliminated);
 
-  if (previous.length === 0 && humanContenders(contenders) > SEATS_PER_ROUND) {
+  if (
+    previous.length === 0 &&
+    contenders.length > SEATS_PER_ROUND &&
+    humanContenders(contenders) >= 1
+  ) {
     beginDraw(state, contenders, rng);
     return;
   }
