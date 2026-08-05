@@ -34,6 +34,7 @@ import {
   chooseMove,
   reflectOnRound,
 } from '../../app/src/shared/bot';
+import { searchMove } from './botSearch';
 import { promoted, rewardBetween } from '../../app/src/shared/ranks';
 import type { Account } from '../../app/src/shared/protocol';
 import {
@@ -1451,18 +1452,23 @@ setInterval(() => {
     if (!player) return;
 
     try {
-      const move = chooseMove(
-        {
-          hand: player.hand,
-          current: state.current?.combo ?? null,
-          opponentCards: state.players
-            .filter((p) => p.id !== turnId && p.seated && p.place === null)
-            .map((p) => p.hand.length),
-          selfBias: room.botBias.get(turnId) ?? 0,
-          playedCards: state.playedThisRound,
-        },
-        seat.bot,
-      );
+      // "Сайн" бот — гүн хайлт (PIMC): эвристикийн эсрэг ~80% ялдаг, ~47мс.
+      // Анхан/Дунд нь хурдан эвристик хэвээр (зориудаар сул).
+      const move =
+        seat.bot === 'hard'
+          ? searchMove(state, turnId)
+          : chooseMove(
+              {
+                hand: player.hand,
+                current: state.current?.combo ?? null,
+                opponentCards: state.players
+                  .filter((p) => p.id !== turnId && p.seated && p.place === null)
+                  .map((p) => p.hand.length),
+                selfBias: room.botBias.get(turnId) ?? 0,
+                playedCards: state.playedThisRound,
+              },
+              seat.bot,
+            );
       if (move) play(state, turnId, move);
       else pass(state, turnId);
       broadcast(room);
