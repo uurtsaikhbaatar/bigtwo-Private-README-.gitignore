@@ -925,12 +925,43 @@ function botName(room: Room, level: BotLevel): string {
 }
 
 function seat(socket: WebSocket, room: Room, name: string): void {
+  const account = accounts.get(socket);
+
+  // ДАВХАРДЛААС СЭРГИЙЛЭХ: ижил бүртгэлтэй хэрэглэгч аль хэдийн суудалтай бол
+  // ШИНЭ суудал үүсгэхгүй — хуучин суудалдаа эргэж холбогдоно. Найз "орж
+  // ирэхгүй" гэж дахин урихад Бат 2 удаа ороод ширээн дээр 2 Бат болдог байв.
+  if (account) {
+    const existing = [...room.seats.values()].find((st) => st.userId === account.id);
+    if (existing) {
+      const oldSocket = existing.socket;
+      if (oldSocket && oldSocket !== socket) {
+        sessions.delete(oldSocket); // хаагдах эвент шинэ суудлыг null болгохгүй
+        oldSocket.close();
+      }
+      existing.socket = socket;
+      sessions.set(socket, { room, playerId: existing.playerId });
+      room.lastActivity = Date.now();
+      if (dbEnabled()) {
+        void dropInvite(account.id, room.code)
+          .then(() => pushInvites(account.id))
+          .catch(() => undefined);
+      }
+      send(socket, {
+        t: 'joined',
+        code: room.code,
+        playerId: existing.playerId,
+        token: existing.token,
+      });
+      sendChatHistory(socket, room);
+      return;
+    }
+  }
+
   if (room.seats.size >= MAX_PLAYERS) {
     throw new RuleError(`Өрөө дүүрсэн байна (дээд тал нь ${MAX_PLAYERS} тоглогч).`);
   }
   const s = newSeat();
   s.socket = socket;
-  const account = accounts.get(socket);
   s.userId = account?.id ?? null;
   room.seats.set(s.playerId, s);
   addPlayer(room.state, s.playerId, name);
