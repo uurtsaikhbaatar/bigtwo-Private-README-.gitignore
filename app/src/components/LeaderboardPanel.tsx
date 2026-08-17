@@ -73,8 +73,14 @@ export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
                       </View>
                     </View>
                     <View style={styles.stats}>
-                      <Text style={styles.wins}>{e.wins}</Text>
-                      <Text style={styles.winsLabel}>хожил</Text>
+                      <View style={styles.statRow}>
+                        <Text style={styles.wins}>{e.rankedWins}</Text>
+                        <Text style={styles.winsLabel}>чиптэй</Text>
+                      </View>
+                      <View style={styles.statRow}>
+                        <Text style={styles.winsFree}>{e.wins - e.rankedWins}</Text>
+                        <Text style={styles.winsLabel}>чипгүй</Text>
+                      </View>
                     </View>
                   </View>
                 );
@@ -82,7 +88,8 @@ export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
             )}
 
             <Text style={styles.note}>
-              Цол нь чиптэй тоглолтын хожлоор тодорхойлогдоно. Жагсаалт цолоор эрэмбэлэгдэнэ.
+              Жагсаалт ба цол нь чиптэй тоглолтын хожлоор эрэмбэлэгдэнэ. Чипгүй
+              (боттой/үнэгүй) хожлыг доор нь тусад нь харуулав.
             </Text>
           </ScrollView>
         </View>
@@ -149,7 +156,9 @@ const styles = StyleSheet.create({
   rankLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   badge: { color: theme.accent, fontSize: 11, fontWeight: '800' },
   rankName: { color: theme.accent, fontSize: 12, fontWeight: '700', flexShrink: 1 },
-  stats: { alignItems: 'center', minWidth: 48 },
+  stats: { alignItems: 'flex-end', minWidth: 78, gap: 2 },
+  statRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
+  winsFree: { color: theme.textMuted, fontSize: 15, fontWeight: '700' },
   wins: { color: theme.text, fontSize: 20, fontWeight: '800' },
   winsLabel: { color: theme.textMuted, fontSize: 10 },
   note: {
