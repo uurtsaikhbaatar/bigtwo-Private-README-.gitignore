@@ -749,6 +749,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     case 'next': {
       if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн үргэлжлүүлж чадна.');
       if (room.state.phase !== 'roundEnd') throw new RuleError('Тойрог хараахан дуусаагүй байна.');
+      room.nextRoundAt = null; // автомат timer-ийг цэвэрлэнэ (дараагийн roundEnd-д дахин тохирно)
       startRound(room.state);
       return broadcast(room);
     }
@@ -1407,6 +1408,8 @@ const TICK_MS = 500;
 /** Салгагдсан тоглогчид тойрогт нэг удаа олгох нэмэлт хугацаа (тестэд бууруулж болно). */
 const GRACE_SEC = Number(process.env.GRACE_SEC ?? 30);
 const GRACE_MS = GRACE_SEC * 1000;
+/** Тойрог дуусаад дараагийн тойрог автоматаар эхлэх хүртэлх зай (үр дүн харах зав). */
+const ROUND_GAP_MS = Number(process.env.ROUND_GAP_MS ?? 6000);
 setInterval(() => {
   const now = Date.now();
   rooms.forEach((room) => {
@@ -1422,6 +1425,31 @@ setInterval(() => {
         } catch (err) {
           console.error('сугалт боловсруулахад алдаа:', err);
           state.draw.endsAt = null;
+        }
+      }
+      return;
+    }
+
+    // Тойрог дуусаад автоматаар дараагийн тойрог руу шилжинэ. Урьд нь зөвхөн эзэн
+    // "next" дардаг байсан тул эзэн алга/тасарвал тоглоом roundEnd дээр мөнхөд
+    // гацдаг байв. Эзний "next" одоо ч шуурхай түргэсгэнэ.
+    if (state.phase === 'roundEnd') {
+      // Хэн ч онлайнгүй бол эхлүүлэхгүй — хүн буцаж ирэхийг хүлээнэ.
+      if (![...room.seats.values()].some((s) => s.socket !== null)) {
+        room.nextRoundAt = null;
+        return;
+      }
+      if (room.nextRoundAt == null) {
+        room.nextRoundAt = now + ROUND_GAP_MS; // үр дүн харах зав
+        return;
+      }
+      if (now >= room.nextRoundAt) {
+        room.nextRoundAt = null;
+        try {
+          startRound(state);
+          broadcast(room);
+        } catch (err) {
+          console.error('автомат тойрог эхлүүлэхэд алдаа:', err);
         }
       }
       return;
