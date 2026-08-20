@@ -825,13 +825,21 @@ export function concludeIfAlone(state: GameState): boolean {
   if (state.phase !== 'playing' && state.phase !== 'roundEnd') return false;
   const remaining = state.players.filter((p) => !p.eliminated);
   if (remaining.length > 1) return false;
-  state.matchWinnerId = remaining[0]?.id ?? null;
+  const survivor = remaining[0];
   state.phase = 'matchEnd';
   state.settlement = null;
   state.current = null;
   state.turnEndsAt = null;
-  if (remaining[0]) {
-    state.log.push(`🏆 ${remaining[0].name} тоглолтыг хожлоо! (өрсөлдөгч гарлаа)`);
+  // Үлдсэн нь ХҮН бол л ялагч болгоно. Зөвхөн бот үлдсэн (бүх хүн гарсан) бол
+  // ялагчгүйгээр зогсооно — бот хүнийг "хожсон" гэж бүртгэхгүй. Урьд нь uuree
+  // боттой тоглоод тойрог хожоод гармагц Хулан бот "тоглолтыг хожлоо" гэж
+  // бүртгэгдэж, uuree-гийн түүхийг бузарладаг байв.
+  if (survivor && !survivor.bot) {
+    state.matchWinnerId = survivor.id;
+    state.log.push(`🏆 ${survivor.name} тоглолтыг хожлоо! (өрсөлдөгч гарлаа)`);
+  } else {
+    state.matchWinnerId = null;
+    state.log.push('Тоглолт зогслоо — бүх тоглогч гарлаа.');
   }
   return true;
 }

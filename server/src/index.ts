@@ -1315,6 +1315,12 @@ function saveNewRounds(room: Room): void {
  */
 function saveFinishedMatch(room: Room): void {
   if (room.state.phase !== 'matchEnd' || room.matchRecorded || !dbEnabled()) return;
+  // Ялагчгүй тоглолтыг (бүх хүн гарч зөвхөн бот үлдсэн, эсвэл тэнцсэн) бүртгэхгүй —
+  // түүх/цолыг бузарлахгүй. concludeIfAlone бот-онлайн тохиолдолд matchWinnerId=null.
+  if (!room.state.matchWinnerId) {
+    room.matchRecorded = true;
+    return;
+  }
   room.matchRecorded = true;
 
   const players = new Map<string, string>();

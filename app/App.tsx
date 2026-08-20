@@ -241,6 +241,10 @@ function Root() {
           invites={game.invites}
           onAcceptInvite={(roomCode) => game.joinRoom(name, roomCode)}
           onDeclineInvite={game.declineInvite}
+          onDismissInvite={() => {
+            setInvitedCode('');
+            clearRoomCodeFromUrl();
+          }}
           auth={authProps}
           guestReady={guestChosen}
           onEnterGuest={() => setGuestChosen(true)}

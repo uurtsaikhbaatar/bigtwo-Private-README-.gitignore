@@ -33,6 +33,8 @@ interface Props {
   invites: Invite[];
   onAcceptInvite: (roomCode: string) => void;
   onDeclineInvite: (roomCode: string) => void;
+  /** Линкээр ирсэн урилгын баннерыг хаах (код + URL-ыг цэвэрлэнэ). */
+  onDismissInvite?: () => void;
   /** Зочноор тоглохыг сонгосон эсэх (App-д хадгалагдана). */
   guestReady: boolean;
   /** "Зочноор тоглох" дарахад — гейтийг хааж лобби руу оруулна. */
@@ -63,6 +65,7 @@ export function HomeScreen({
   invites,
   onAcceptInvite,
   onDeclineInvite,
+  onDismissInvite,
   guestReady,
   onEnterGuest,
   leaderboard,
@@ -257,11 +260,24 @@ export function HomeScreen({
         <InviteList invites={invites} onAccept={onAcceptInvite} onDecline={onDeclineInvite} />
 
         {invited && (
-          <View style={styles.invite}>
-            <Text style={styles.inviteText}>
-              Танийг <Text style={styles.inviteCode}>{initialCode}</Text> өрөөнд урьжээ
-            </Text>
-            <Text style={styles.inviteHint}>Доороос нэгдээрэй</Text>
+          <View style={[styles.invite, { flexDirection: 'row', alignItems: 'center' }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inviteText}>
+                Танийг <Text style={styles.inviteCode}>{initialCode}</Text> өрөөнд урьжээ
+              </Text>
+              <Text style={styles.inviteHint}>Доороос нэгдээрэй</Text>
+            </View>
+            {onDismissInvite && (
+              <Pressable
+                onPress={onDismissInvite}
+                accessibilityRole="button"
+                accessibilityLabel="Урилгыг хаах"
+                hitSlop={12}
+                style={styles.inviteDismiss}
+              >
+                <Text style={styles.inviteDismissText}>✕</Text>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -402,4 +418,6 @@ const styles = StyleSheet.create({
   inviteText: { color: theme.text, fontSize: 15 },
   inviteCode: { color: theme.accent, fontWeight: '800', letterSpacing: 2 },
   inviteHint: { color: theme.textMuted, fontSize: 13 },
+  inviteDismiss: { paddingHorizontal: 8, paddingVertical: 4, marginLeft: 8 },
+  inviteDismissText: { color: theme.textMuted, fontSize: 18, fontWeight: '700' },
 });
