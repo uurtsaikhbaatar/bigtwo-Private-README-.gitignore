@@ -341,14 +341,21 @@ export async function recordRound(
  * төхөөрөмжийг нэг зочин гэж үзнэ). Санд алдаа гарвал тоглоомд саад
  * болохгүйгээр чимээгүй өнгөрнө.
  */
-export async function recordVisit(visitor: string): Promise<void> {
-  if (!dbEnabled() || !visitor) return;
+export async function recordVisits(visitors: string[]): Promise<void> {
+  if (!dbEnabled() || visitors.length === 0) return;
   try {
+    // Санг дэмий сэрээхгүйн тулд index.ts дотор санах ойд давхардлыг шүүж,
+    // өдөрт нэг зочныг нэг л удаа, багцлан (нэг query) бичнэ.
+    const values: unknown[] = [];
+    const tuples = visitors.map((v, i) => {
+      values.push(v);
+      return `(current_date, $${i + 1})`;
+    });
     await getPool().query(
-      `INSERT INTO visits (day, visitor) VALUES (current_date, $1)
+      `INSERT INTO visits (day, visitor) VALUES ${tuples.join(', ')}
          ON CONFLICT (day, visitor) DO UPDATE
          SET hits = visits.hits + 1, last_at = now()`,
-      [visitor],
+      values,
     );
   } catch {
     // хандалтын тоолол чухал биш — алдааг залгина

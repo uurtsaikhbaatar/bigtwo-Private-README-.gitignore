@@ -69,7 +69,7 @@ import {
   initSchema,
   loadRoomStates,
   recordRound,
-  recordVisit,
+  recordVisits,
   saveRoomState,
   type RoundLogRow,
 } from './db';
@@ -154,7 +154,10 @@ function markRoomDirty(code: string): void {
   if (dbEnabled()) dirtyRooms.add(code);
 }
 
-/** Тэмдэглэгдсэн өрөөнүүдийн snapshot-ыг санд бичнэ (2 сек тутам). */
+/** Тэмдэглэгдсэн өрөөнүүдийн snapshot-ыг санд бичнэ (8 сек тутам).
+ *  Санг байнга бичиж сэрээхгүйн тулд өмнөх 2 сек-ээс сунгав — snapshot нь зөвхөн
+ *  гэмтлээс сэргээхэд хэрэгтэй тул 8 сек хоцролт аюулгүй. Dirty өрөө байхгүй бол
+ *  огт бичихгүй (idle үед сан унтарна). */
 setInterval(() => {
   if (!dbEnabled() || dirtyRooms.size === 0) return;
   const codes = [...dirtyRooms];
@@ -167,7 +170,39 @@ setInterval(() => {
       );
     }
   }
-}, 2000).unref();
+}, 8000).unref();
+
+/**
+ * Хандалтын бүртгэлийг санах ойд давхардуулж, багцлан бичнэ.
+ *
+ * Урьд нь хандалт (WebSocket холболт) БҮРТ шууд DB бичдэг байсан тул сан
+ * унтрах зав олдохгүй, Neon-ийн compute квот хурдан шатдаг байв. Одоо нэг
+ * зочныг өдөрт нэг л удаа тэмдэглэж, 60 сек тутам НЭГ query-ээр багцлан
+ * бичнэ — шинэ зочин байхгүй бол санг огт сэрээхгүй.
+ */
+let visitsDay = '';
+const visitsSeen = new Set<string>(); // тухайн өдөр аль хэдийн бүртгэсэн зочид
+const visitsPending = new Set<string>(); // дараагийн flush-д бичих шинэ зочид
+
+function noteVisit(visitor: string): void {
+  if (!dbEnabled() || !visitor) return;
+  const day = new Date().toISOString().slice(0, 10);
+  if (day !== visitsDay) {
+    visitsDay = day;
+    visitsSeen.clear();
+    visitsPending.clear();
+  }
+  if (visitsSeen.has(visitor)) return; // өнөөдөр аль хэдийн бүртгэсэн
+  visitsSeen.add(visitor);
+  visitsPending.add(visitor);
+}
+
+setInterval(() => {
+  if (visitsPending.size === 0) return; // шинэ зочингүй бол санг сэрээхгүй
+  const batch = [...visitsPending];
+  visitsPending.clear();
+  void recordVisits(batch).catch(() => undefined);
+}, 60_000).unref();
 
 /** Сервер асахад санд хадгалсан өрөөнүүдийг сэргээнэ. */
 async function restoreRooms(): Promise<void> {
@@ -364,7 +399,7 @@ wss.on('connection', (socket, req) => {
   const rawIp = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0].trim() || req.socket.remoteAddress || '';
   if (rawIp) {
     const visitor = createHash('sha256').update(rawIp).digest('hex').slice(0, 16);
-    void recordVisit(visitor);
+    noteVisit(visitor); // санах ойд буферлэж, 60 сек тутам багцлан бичнэ
   }
 
   socket.on('message', (raw) => {
@@ -1609,9 +1644,14 @@ setInterval(() => {
     );
   }
 }, 5 * 60 * 1000).unref();
-// Хугацаа нь дууссан урилгыг цэвэрлэнэ.
+// Хугацаа нь дууссан урилгыг цэвэрлэнэ. Хэн ч онлайнгүй, өрөө ч байхгүй idle
+// үед санг сэрээхгүй — урьд нь энэ timer болзолгүй 30 мин тутам DB дуудаж,
+// сан унтрах завгүй compute квот шатаадаг байв. Урилга нь зөвхөн хүн онлайн
+// байхад л хамаатай тул idle үед хойшлуулах нь аюулгүй.
 setInterval(() => {
-  if (dbEnabled()) void purgeExpiredInvites().catch(() => undefined);
+  if (!dbEnabled()) return;
+  if (rooms.size === 0 && online.size === 0) return;
+  void purgeExpiredInvites().catch(() => undefined);
 }, 30 * 60 * 1000).unref();
 
 httpServer.listen(PORT, () => {
