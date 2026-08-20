@@ -926,6 +926,32 @@ function botName(room: Room, level: BotLevel): string {
 }
 
 function seat(socket: WebSocket, room: Room, name: string): void {
+  // НЭГ СОКЕТ = НЭГ СУУДАЛ. Нэвтрэлт (authResume) DB-гээс ASYNC ирдэг тул түүнээс
+  // ӨМНӨ дараалалд байсан 'join' боловсрогдож болно — тэр агшинд account хараахан
+  // холбогдоогүй байдаг. Ийм үед энэ сокет аль хэдийн суудалтай атлаа ШИНЭ суудал
+  // үүсгэвэл нэг хүн ширээнд 2-3 удаа ороод гацдаг байв (2 урилга → 3 uuree).
+  // Тиймээс сокет аль хэдийн суудалтай бол:
+  const prior = sessions.get(socket);
+  if (prior) {
+    const priorSeat = prior.room.seats.get(prior.playerId);
+    if (priorSeat) {
+      if (prior.room === room) {
+        // Аль хэдийн энэ өрөөнд байна — шинэ суудал үүсгэхгүй, байгаагаа буцаана.
+        send(socket, {
+          t: 'joined',
+          code: room.code,
+          playerId: priorSeat.playerId,
+          token: priorSeat.token,
+        });
+        sendChatHistory(socket, room);
+        return;
+      }
+      // Өөр өрөөнд байсан — хуучныг чөлөөлж дараа нь шинэд суулгана.
+      releaseSeat(prior.room, prior.playerId);
+      broadcast(prior.room);
+    }
+  }
+
   const account = accounts.get(socket);
 
   // ДАВХАРДЛААС СЭРГИЙЛЭХ: ижил бүртгэлтэй хэрэглэгч аль хэдийн суудалтай бол
