@@ -1,8 +1,13 @@
 /**
  * Бүртгэл, нэвтрэлт, тоглолтын түүхийн тест.
  *
- * `DATABASE_URL` тохируулаагүй бол бүгд алгасагдана — сангүйгээр ч бусад
- * тестүүд ажиллах ёстой.
+ * ⚠️ Эдгээр тест жинхэнэ өгөгдөл (`тест_*` акаунт) үүсгэдэг тул ЗӨВХӨН тусгай
+ * `TEST_DATABASE_URL` руу л холбогдоно — продакшн `DATABASE_URL` руу ХЭЗЭЭ Ч
+ * бичихгүй. `TEST_DATABASE_URL` тохируулаагүй бол DB тестүүд бүгд алгасагдана
+ * (сангүйгээр ч бусад тест ажиллах ёстой). Дараа нь продакшныг тест акаунтаар
+ * бузарлахаас сэргийлнэ.
+ *
+ * Тест сан ажиллуулах:  TEST_DATABASE_URL=postgres://…/test npm test
  */
 
 import assert from 'node:assert/strict';
@@ -37,7 +42,17 @@ import {
   requestTokens,
 } from './tokens';
 
-const skip = dbEnabled() ? false : 'DATABASE_URL тохируулаагүй';
+// getPool() анх дуудагдахаас ӨМНӨ: холболтыг ЗӨВХӨН тест сан руу заана.
+// TEST_DATABASE_URL байвал түүнийг ашиглана; байхгүй бол DATABASE_URL-ыг
+// бүрмөсөн салгаж, доорх бүх DB тестийг алгасна — продакшн руу хэзээ ч бичихгүй.
+// (getPool нь зөвхөн тестийн дотор дуудагддаг тул энэ мөр түүнээс өмнө ажиллана.)
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+} else {
+  delete process.env.DATABASE_URL;
+}
+
+const skip = dbEnabled() ? false : 'TEST_DATABASE_URL тохируулаагүй — DB тест алгаслаа';
 
 /** Тест бүрд давхцахгүй нэр. */
 const uniqueName = () => `тест_${randomUUID().slice(0, 8)}`;
