@@ -17,6 +17,20 @@ import type {
 import { getPool } from './db';
 
 /**
+ * Тухайн тоглолтод ЯДАЖ НЭГ ХҮН өрсөлдөгч (бот биш) байсан эсэх.
+ *
+ * Цол/лидербордыг зөвхөн ХҮНТЭЙ тоглосон чиптэй хожлоор тооцоход ашиглана —
+ * ботыг бооцоотой тоглолтоор дүүргэж цол фарм хийхээс сэргийлнэ. Бот нэр
+ * үргэлж " (анхан шат|дунд|сайн)"-аар төгсдөг (index.ts botName). Гадна query нь
+ * тоглолтыг `m`, тоглогчийн мөрийг `mp` гэж нэрлэсэн байх ёстой.
+ */
+const HAS_HUMAN_OPPONENT = `EXISTS (
+        SELECT 1 FROM match_players o
+         WHERE o.match_id = m.id AND o.name <> mp.name
+           AND o.name !~ ' \\((анхан шат|дунд|сайн)\\)$'
+      )`;
+
+/**
  * Дууссан тоглолтыг хадгална.
  * `accounts` нь тоглогчийн id → бүртгэлтэй хэрэглэгчийн id (байвал).
  */
@@ -119,11 +133,12 @@ export async function statsForUser(userId: string): Promise<PlayerStats> {
     chips: string;
     dragons: string;
   }>(
-    // ranked_wins: ЗӨВХӨН чиптэй тоглолтын хожил — цол үүгээр тодорхойлогдоно.
-    // Чипгүй тоглолтоор цол цуглуулах боломжийг хаана.
+    // ranked_wins: ЗӨВХӨН ХҮНТЭЙ тоглосон чиптэй тоглолтын хожил — цол үүгээр
+    // тодорхойлогдоно. Чипгүй тоглолт, эсвэл зөвхөн боттой тоглолтоор цол
+    // цуглуулах боломжийг хаана (чип өөрөө боттой тоглоод хожиж болно).
     `SELECT count(*)                                            AS matches,
             count(*) FILTER (WHERE mp.won)                      AS wins,
-            count(*) FILTER (WHERE mp.won AND m.stake > 0)      AS ranked_wins,
+            count(*) FILTER (WHERE mp.won AND m.stake > 0 AND ${HAS_HUMAN_OPPONENT}) AS ranked_wins,
             coalesce(sum(mp.chips), 0)                          AS chips,
             count(*) FILTER (WHERE m.dragon AND mp.won)         AS dragons
        FROM match_players mp
@@ -196,7 +211,7 @@ export async function leaderboard(limit = 10): Promise<LeaderboardEntry[]> {
     matches: number;
   }>(
     `SELECT u.username,
-            count(*) FILTER (WHERE mp.won AND m.stake > 0)::int AS ranked_wins,
+            count(*) FILTER (WHERE mp.won AND m.stake > 0 AND ${HAS_HUMAN_OPPONENT})::int AS ranked_wins,
             count(*) FILTER (WHERE mp.won)::int                 AS wins,
             count(*)::int                                       AS matches
        FROM match_players mp

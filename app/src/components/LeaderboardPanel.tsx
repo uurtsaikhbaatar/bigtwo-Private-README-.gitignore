@@ -75,11 +75,11 @@ export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
                     <View style={styles.stats}>
                       <View style={styles.statRow}>
                         <Text style={styles.wins}>{e.rankedWins}</Text>
-                        <Text style={styles.winsLabel}>чиптэй</Text>
+                        <Text style={styles.winsLabel}>хүнтэй</Text>
                       </View>
                       <View style={styles.statRow}>
                         <Text style={styles.winsFree}>{e.wins - e.rankedWins}</Text>
-                        <Text style={styles.winsLabel}>чипгүй</Text>
+                        <Text style={styles.winsLabel}>бусад</Text>
                       </View>
                     </View>
                   </View>
@@ -88,8 +88,10 @@ export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
             )}
 
             <Text style={styles.note}>
-              Жагсаалт ба цол нь чиптэй тоглолтын хожлоор эрэмбэлэгдэнэ. Чипгүй
-              (боттой/үнэгүй) хожлыг доор нь тусад нь харуулав.
+              Цол ба жагсаалт нь ЗӨВХӨН ХҮНТЭЙ тоглосон чиптэй хожлоор
+              тодорхойлогдоно — ботоор фарм хийж цол авахгүй. "Бусад" гэдэгт
+              боттой болон чипгүй хожил орно (чипээ боттой тоглоод хожиж болно,
+              гэхдээ цолд тооцогдохгүй).
             </Text>
           </ScrollView>
         </View>
