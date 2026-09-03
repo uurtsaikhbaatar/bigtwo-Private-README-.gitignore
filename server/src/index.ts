@@ -1031,6 +1031,33 @@ function seat(socket: WebSocket, room: Room, name: string): void {
     }
   }
 
+  // ЗОЧНЫ ДАВХАРДЛААС СЭРГИЙЛЭХ: бүртгэлгүй тоглогч (userId алга) ижил нэртэй
+  // ТАСАРСАН (socket=null) зочны суудалтай бол шинэ үүсгэхгүй, түүнд эргэж
+  // холбогдоно. Зочид userId-гүй тул account-аар dedup хийж болдоггүй — зочин
+  // тасраад дахин join хийхэд (session алдагдвал) ширээн дээр 2-3 давхар ижил
+  // нэр (ж: 3 Erkhemee) үүсдэг байв. Зөвхөн ТАСАРСАН суудлыг залгана — идэвхтэй
+  // ижил нэртэй бол өөр хүн тул шинэ суудал зөв.
+  if (!account) {
+    const orphan = [...room.seats.values()].find((st) => {
+      if (st.userId || st.bot || st.socket !== null) return false;
+      const pl = room.state.players.find((p) => p.id === st.playerId);
+      return pl?.name === name;
+    });
+    if (orphan) {
+      orphan.socket = socket;
+      sessions.set(socket, { room, playerId: orphan.playerId });
+      room.lastActivity = Date.now();
+      send(socket, {
+        t: 'joined',
+        code: room.code,
+        playerId: orphan.playerId,
+        token: orphan.token,
+      });
+      sendChatHistory(socket, room);
+      return;
+    }
+  }
+
   if (room.seats.size >= MAX_PLAYERS) {
     throw new RuleError(`Өрөө дүүрсэн байна (дээд тал нь ${MAX_PLAYERS} тоглогч).`);
   }
