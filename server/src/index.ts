@@ -259,19 +259,46 @@ function markOnline(socket: WebSocket, account: Account): void {
 function linkSeat(socket: WebSocket, account: Account): void {
   const session = sessions.get(socket);
   if (!session) return;
-  const seat = session.room.seats.get(session.playerId);
+  const room = session.room;
+  const seat = room.seats.get(session.playerId);
   if (!seat) return;
 
   seat.userId = account.id;
-  const player = session.room.state.players.find((p) => p.id === session.playerId);
+
+  // ДАВХАРДЛААС СЭРГИЙЛЭХ (auth-race): нэвтрэлт (authResume) нь join-оос ХОЙШ
+  // async ирдэг тул seat()-ийн account-dedup амждаггүй — зочин суудал үүсээд
+  // энд л бүртгэлтэй болдог. Хэрэв ижил бүртгэлтэй ӨӨР суудал аль хэдийн байвал
+  // (ж: ширээн дээр 2 Lord) нэгтгэнэ: хуучин суудлыг үлдээж, энэ шинэ суудлыг
+  // устгаад сокетыг хуучин руу шилжүүлнэ (account-dedup-тэй ижил зарчим).
+  const twin = [...room.seats.values()].find(
+    (st) => st.playerId !== seat.playerId && st.userId === account.id,
+  );
+  if (twin) {
+    if (twin.socket && twin.socket !== socket) {
+      sessions.delete(twin.socket); // хаагдах эвент нэгтгэсэн суудлыг null болгохгүй
+      twin.socket.close();
+    }
+    twin.socket = socket;
+    if (room.hostId === seat.playerId) room.hostId = twin.playerId;
+    room.seats.delete(seat.playerId);
+    removePlayer(room.state, seat.playerId);
+    sessions.set(socket, { room, playerId: twin.playerId });
+    const tp = room.state.players.find((p) => p.id === twin.playerId);
+    if (tp && account.avatar) tp.avatar = account.avatar;
+    if (dbEnabled()) void refreshWins(room).catch(() => undefined);
+    broadcast(room);
+    return;
+  }
+
+  const player = room.state.players.find((p) => p.id === session.playerId);
   if (player && account.avatar) player.avatar = account.avatar;
 
   // Цол/токеныг ҮРГЭЛЖ шинэчилнэ (аль хэдийн холбогдсон ч) — дахин холбогдоход
   // цол алга болохоос сэргийлнэ.
   if (dbEnabled()) {
-    void refreshWins(session.room).catch(() => undefined);
+    void refreshWins(room).catch(() => undefined);
   }
-  broadcast(session.room);
+  broadcast(room);
 }
 
 function markOffline(socket: WebSocket): void {
