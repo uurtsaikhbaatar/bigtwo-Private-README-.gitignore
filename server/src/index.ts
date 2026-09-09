@@ -256,6 +256,19 @@ function markOnline(socket: WebSocket, account: Account): void {
  * хүний токен, цол тооцогдохгүй байв. Тоглогч 9 тоглолтоос 6-д нь ингэж
  * зочноор тоглож, бүх ахицаа алдсан.
  */
+/**
+ * Тасарсан суудалд эргэж холбогдоход бот удирдлагыг зогсооно.
+ *
+ * Урьд нь зөвхөн `resume` botControlled-г тэглэдэг байсан тул account/зочин/twin
+ * re-link замаар буцаж ирсэн тоглогч бот удирдлагад үлдэж болзошгүй байв.
+ */
+function markReturned(room: Room, seat: Seat): void {
+  if (!seat.botControlled) return;
+  seat.botControlled = false;
+  const p = room.state.players.find((pp) => pp.id === seat.playerId);
+  room.state.log.push(`${p?.name ?? '?'} буцаж ирлээ.`);
+}
+
 function linkSeat(socket: WebSocket, account: Account): void {
   const session = sessions.get(socket);
   if (!session) return;
@@ -279,6 +292,7 @@ function linkSeat(socket: WebSocket, account: Account): void {
       twin.socket.close();
     }
     twin.socket = socket;
+    markReturned(room, twin); // бот орлож байсан суудал руу буцаж байвал зогсооно
     if (room.hostId === seat.playerId) room.hostId = twin.playerId;
     room.seats.delete(seat.playerId);
     removePlayer(room.state, seat.playerId);
@@ -480,9 +494,26 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       if (!room) throw new RuleError('Ийм кодтой өрөө олдсонгүй.');
       // Тоглолт ДУУССАН өрөөнд орохыг зөвшөөрнө: урилгаар ирсэн найз
       // "Тоглоом эхэлсэн байна" гэж хөөгдөх ёсгүй. Явж байгаа тоглолтыг л
-      // хамгаална.
+      // хамгаална — ГЭХДЭЭ суудлаа эргүүлэн авах гэж буй тоглогчийг (reconnect)
+      // ХӨӨХГҮЙ. Урьд нь тасарсан тоглогч session-оо алдвал 'join'-оор буцаж
+      // орох гэхэд seat()-ийн эргэн-холболтын логикт хүрэлгүй "Тоглолт явагдаж
+      // байна" гэж хөөгдөж, тоглолтдоо буцаж орж чадахгүй гацдаг байв.
       if (room.state.phase !== 'lobby' && room.state.phase !== 'matchEnd') {
-        throw new RuleError('Тоглолт явагдаж байна. Дуусахыг хүлээнэ үү.');
+        const account = accounts.get(socket);
+        const name = cleanName(msg.name);
+        const reclaiming = [...room.seats.values()].some((st) => {
+          if (account && st.userId === account.id) return true; // бүртгэлтэй эзэн буцаж байна
+          if (st.socket === null) {
+            // Тасарсан ижил нэртэй суудал = тэр хүн буцаж байна (зочин ч, эсвэл
+            // authResume амжаагүй бүртгэлтэй ч). Идэвхтэй суудлыг хөндөхгүй.
+            const pl = room.state.players.find((p) => p.id === st.playerId);
+            if (pl?.name === name) return true;
+          }
+          return false;
+        });
+        if (!reclaiming) {
+          throw new RuleError('Тоглолт явагдаж байна. Дуусахыг хүлээнэ үү.');
+        }
       }
       seat(socket, room, cleanName(msg.name));
       return broadcast(room);
@@ -632,12 +663,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       }
       existing.socket = socket;
       sessions.set(socket, { room, playerId: existing.playerId });
-      // Бот орлож байсан бол зогсоож, буцаж ирснийг мэдэгдэнэ.
-      if (existing.botControlled) {
-        existing.botControlled = false;
-        const p = room.state.players.find((pp) => pp.id === existing.playerId);
-        room.state.log.push(`${p?.name ?? '?'} буцаж ирлээ.`);
-      }
+      markReturned(room, existing); // бот орлож байсан бол зогсоож, буцаж ирснийг мэдэгдэнэ
       // Нэвтрэлт (authResume) resume-ээс өмнө ирсэн бол линк тухайн үед session
       // байгаагүй тул амжаагүй — одоо session бэлэн болсон тул дахин холбоно.
       const acct = accounts.get(socket);
@@ -1040,6 +1066,7 @@ function seat(socket: WebSocket, room: Room, name: string): void {
         oldSocket.close();
       }
       existing.socket = socket;
+      markReturned(room, existing); // бот орлож байсан бол зогсоож, буцаж ирснийг мэдэгдэнэ
       sessions.set(socket, { room, playerId: existing.playerId });
       room.lastActivity = Date.now();
       if (dbEnabled()) {
@@ -1072,6 +1099,7 @@ function seat(socket: WebSocket, room: Room, name: string): void {
     });
     if (orphan) {
       orphan.socket = socket;
+      markReturned(room, orphan); // зочин ч бот удирдлагад байж болно — зогсооно
       sessions.set(socket, { room, playerId: orphan.playerId });
       room.lastActivity = Date.now();
       send(socket, {
