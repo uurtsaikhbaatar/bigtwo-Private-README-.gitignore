@@ -97,7 +97,7 @@ export function AdSlot({ ads, httpBase, onEvent, height = 90 }: Props) {
         )}
       </Pressable>
 
-      <Text style={styles.label}>реклам</Text>
+      <Text style={styles.label}>сурталчилгаа</Text>
     </Animated.View>
   );
 }

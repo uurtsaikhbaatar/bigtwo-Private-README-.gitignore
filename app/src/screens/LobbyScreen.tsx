@@ -99,7 +99,7 @@ export function LobbyScreen({
               {p.name}
               {p.id === view.youId ? ' (та)' : ''}
             </Text>
-            {p.bot && <Text style={styles.botTag}>бот</Text>}
+            {p.bot && <Text style={styles.botTag}>робот</Text>}
             {p.isHost && <Text style={styles.badge}>эзэн</Text>}
             {p.bot && isHost && (
               <Pressable
@@ -115,7 +115,7 @@ export function LobbyScreen({
 
         {isHost && view.players.length < MAX_PLAYERS && (
           <View style={styles.botAdd}>
-            <Text style={styles.botAddLabel}>Бот нэмэх</Text>
+            <Text style={styles.botAddLabel}>Робот нэмэх</Text>
             <View style={styles.botLevels}>
               {BOT_LEVELS.map((level) => (
                 <Pressable
@@ -129,8 +129,8 @@ export function LobbyScreen({
               ))}
             </View>
             <Text style={styles.hint}>
-              Найз завгүй үед ботуудтай тоглож болно. Ботын тоглолт токен, цолд
-              тооцогдохгүй.
+              Найз завгүй үед роботуудтай тоглож болно. Роботтой тоглолт цолд
+              тооцогдохгүй (чип хожиж болно).
             </Text>
           </View>
         )}
@@ -264,7 +264,7 @@ export function LobbyScreen({
               keyboardType="number-pad"
               inputMode="numeric"
             />
-            <Text style={styles.customUnit}>токен</Text>
+            <Text style={styles.customUnit}>чип</Text>
           </View>
         )}
         <Text style={[styles.hint, customInvalid && styles.warn]}>

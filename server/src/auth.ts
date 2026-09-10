@@ -104,7 +104,7 @@ export async function register(
       throw new AuthError('Энэ нэр аль хэдийн бүртгэгдсэн байна.');
     }
     if (row.email_key === normalise(address)) {
-      throw new AuthError('Энэ имэйлээр бүртгэл үүссэн байна.');
+      throw new AuthError('Энэ цахим шуудангаар бүртгэл үүссэн байна.');
     }
   }
 

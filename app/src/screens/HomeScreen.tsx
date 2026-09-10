@@ -240,7 +240,7 @@ export function HomeScreen({
               <Text style={[styles.idLabel, styles.idLabelIn]}>✓ Нэвтэрсэн</Text>
               <Text style={styles.idName}>👤 {auth.account?.username}</Text>
             </View>
-            <Text style={styles.idAction}>Профайл ›</Text>
+            <Text style={styles.idAction}>Хувийн мэдээлэл ›</Text>
           </Pressable>
         ) : (
           <View style={styles.idCard}>
@@ -315,7 +315,7 @@ export function HomeScreen({
             <View style={styles.line} />
           </View>
 
-          <Text style={styles.label}>Өрөөний код</Text>
+          <Text style={styles.label}>Өрөөний дугаар</Text>
           <TextInput
             value={code}
             onChangeText={(t) => setCode(t.toUpperCase())}

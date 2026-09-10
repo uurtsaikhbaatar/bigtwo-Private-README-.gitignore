@@ -132,7 +132,7 @@ function FullCeremony({ promotion }: { promotion: Promotion }) {
         <Text style={styles.rank}>{promotion.rank.toUpperCase()}</Text>
         <Text style={styles.who}>{promotion.name}</Text>
         {promotion.reward > 0 && (
-          <Text style={styles.reward}>+{groupDigits(promotion.reward)} токен</Text>
+          <Text style={styles.reward}>+{groupDigits(promotion.reward)} чип</Text>
         )}
       </Animated.View>
     </Animated.View>

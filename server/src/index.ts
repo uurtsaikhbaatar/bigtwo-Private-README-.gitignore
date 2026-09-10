@@ -491,7 +491,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
 
     case 'join': {
       const room = rooms.get(msg.code ?? '');
-      if (!room) throw new RuleError('Ийм кодтой өрөө олдсонгүй.');
+      if (!room) throw new RuleError('Ийм дугаартай өрөө олдсонгүй.');
       // Тоглолт ДУУССАН өрөөнд орохыг зөвшөөрнө: урилгаар ирсэн найз
       // "Тоглоом эхэлсэн байна" гэж хөөгдөх ёсгүй. Явж байгаа тоглолтыг л
       // хамгаална — ГЭХДЭЭ суудлаа эргүүлэн авах гэж буй тоглогчийг (reconnect)
@@ -797,7 +797,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         .then(() =>
           send(socket, {
             t: 'notice',
-            message: 'Хүсэлт илгээгдлээ. Админ токен нэмэхэд танд мэдэгдэнэ.',
+            message: 'Хүсэлт илгээгдлээ. Админ чип нэмэхэд танд мэдэгдэнэ.',
           }),
         )
         .catch((err) => sendAuthError(socket, err));
@@ -808,7 +808,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
      * Зөвхөн лоббид, зөвхөн эзэн.
      */
     case 'addBot': {
-      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн бот нэмж чадна.');
+      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн робот нэмж чадна.');
       if (room.state.phase !== 'lobby' && room.state.phase !== 'matchEnd') {
         throw new RuleError('Тоглолт явагдаж байна. Дуусахыг хүлээнэ үү.');
       }
@@ -827,9 +827,9 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     }
 
     case 'removeBot': {
-      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн бот хасаж чадна.');
+      if (playerId !== room.hostId) throw new RuleError('Зөвхөн өрөөний эзэн робот хасаж чадна.');
       const target = room.seats.get(String(msg.playerId ?? ''));
-      if (!target?.bot) throw new RuleError('Тэр бот олдсонгүй.');
+      if (!target?.bot) throw new RuleError('Тэр робот олдсонгүй.');
       releaseSeat(room, target.playerId);
       return broadcast(room);
     }
@@ -1010,7 +1010,7 @@ function botName(room: Room, level: BotLevel): string {
   // бүгд ижил нэртэй болно ("Бат (дунд)", "Бат (сайн)"…).
   const used = new Set(room.state.players.map((p) => p.name.split(' (')[0]));
   const free = BOT_NAMES.find((name) => !used.has(name));
-  return free ? `${free} (${suffix})` : `Бот ${room.state.players.length + 1} (${suffix})`;
+  return free ? `${free} (${suffix})` : `Робот ${room.state.players.length + 1} (${suffix})`;
 }
 
 function seat(socket: WebSocket, room: Room, name: string): void {
@@ -1491,7 +1491,7 @@ async function refreshWins(room: Room, announce = false): Promise<void> {
       from: 'Дай Ди',
       text:
         `${rank.badge} ${player.name} — ${rank.name.toUpperCase()} боллоо!` +
-        (reward > 0 ? ` Шагнал: ${reward.toLocaleString('en-US').replace(/,/g, ' ')} токен.` : ''),
+        (reward > 0 ? ` Шагнал: ${reward.toLocaleString('en-US').replace(/,/g, ' ')} чип.` : ''),
       at: Date.now(),
     });
 
@@ -1524,7 +1524,7 @@ async function ensureTokens(room: Room, stake: number): Promise<void> {
 
   if (short.length > 0) {
     throw new RuleError(
-      `${short.join(', ')}-д ${stake} токен хүрэлцэхгүй байна. ` +
+      `${short.join(', ')}-д ${stake} чип хүрэлцэхгүй байна. ` +
         'Бага бооцоо сонгох эсвэл токен хүсэх шаардлагатай.',
     );
   }
@@ -1639,7 +1639,7 @@ setInterval(() => {
         // 2) Grace дууссан ч алга бол бот түүний оронд тоглоно.
         if (!seat.botControlled) {
           seat.botControlled = true;
-          state.log.push(`🤖 ${name} эргэж ирсэнгүй — бот орлон тоглож байна.`);
+          state.log.push(`🤖 ${name} эргэж ирсэнгүй — робот орлон тоглож байна.`);
         }
         const move = chooseMove(
           {

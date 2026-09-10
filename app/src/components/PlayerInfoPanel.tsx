@@ -58,7 +58,7 @@ export function PlayerInfoPanel({ pendingName, info, onClose }: Props) {
             {info.registered ? (
               <>
                 <View style={styles.tokenBox}>
-                  <Text style={styles.tokenLabel}>Токен</Text>
+                  <Text style={styles.tokenLabel}>Чип</Text>
                   <Text style={styles.tokenValue}>{groupDigits(info.tokens ?? 0)}</Text>
                 </View>
 
@@ -74,7 +74,7 @@ export function PlayerInfoPanel({ pendingName, info, onClose }: Props) {
               </>
             ) : (
               <Text style={styles.guest}>
-                Зочноор тоглож байна — бүртгэлгүй тул токен, түүх хадгалагдахгүй.
+                Зочноор тоглож байна — бүртгэлгүй тул чип, түүх хадгалагдахгүй.
               </Text>
             )}
           </View>

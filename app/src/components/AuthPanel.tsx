@@ -121,7 +121,7 @@ export function AuthPanel({
           <View style={styles.sheet}>
             <View style={styles.header}>
               <Text style={styles.title}>
-                {account ? 'Профайл' : 'Бүртгэл'}
+                {account ? 'Хувийн мэдээлэл' : 'Бүртгэл'}
               </Text>
               <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
                 <Text style={styles.close}>Хаах</Text>
@@ -154,7 +154,7 @@ export function AuthPanel({
                     болно. */}
                 {verifying && (
                   <View style={styles.verifyBox}>
-                    <Text style={styles.verifyTitle}>Имэйлээ баталгаажуулна уу</Text>
+                    <Text style={styles.verifyTitle}>Цахим шуудангаа баталгаажуулна уу</Text>
                     <Text style={styles.hint}>
                       <Text style={styles.verifyEmail}>{account.email}</Text> хаяг руу 6 оронтой
                       код илгээлээ. Спам хавтсаа ч шалгаарай.
@@ -179,17 +179,17 @@ export function AuthPanel({
                 )}
 
                 <View style={styles.tokenBox}>
-                  <Text style={styles.tokenLabel}>Токены үлдэгдэл</Text>
+                  <Text style={styles.tokenLabel}>Чипийн үлдэгдэл</Text>
                   <Text style={styles.tokenValue}>{groupDigits(account.tokens)}</Text>
                   {account.tokens < LOW_TOKENS && (
-                    <Text style={styles.tokenLow}>Токен дуусах дөхлөө.</Text>
+                    <Text style={styles.tokenLow}>Чип дуусах дөхлөө.</Text>
                   )}
                   {/* Товч үргэлж харагдана — үлдэгдэл дуусахыг хүлээхгүй.
                       Дахин дахин дархад сервер тодорхой хугацаанд нэг л
                       хүсэлт хүлээж авна. */}
-                  <Button title="Токен хүсэх" variant="secondary" onPress={onRequestTokens} />
+                  <Button title="Чип хүсэх" variant="secondary" onPress={onRequestTokens} />
                   <Text style={styles.tokenNote}>
-                    Токен нь виртуал тоглоомын оноо — бодит мөнгө биш.
+                    Чип нь виртуал тоглоомын оноо — бодит мөнгө биш.
                   </Text>
                 </View>
 
@@ -317,7 +317,7 @@ export function AuthPanel({
                   <TextInput
                     value={email}
                     onChangeText={setEmail}
-                    placeholder="Имэйл хаяг"
+                    placeholder="Цахим шуудангийн хаяг"
                     placeholderTextColor={theme.textMuted}
                     style={styles.input}
                     autoCapitalize="none"
@@ -393,14 +393,14 @@ function ForgotForm({
     <>
       <Text style={styles.forgotTitle}>Нууц үг сэргээх</Text>
       <Text style={styles.hint}>
-        Бүртгүүлэхдээ оруулсан имэйл хаягаа бичнэ үү. Сэргээх код болон
+        Бүртгүүлэхдээ оруулсан цахим шуудангийн хаягаа бичнэ үү. Сэргээх код болон
         хэрэглэгчийн нэрийг тань тийш илгээнэ.
       </Text>
 
       <TextInput
         value={email}
         onChangeText={onEmailChange}
-        placeholder="Имэйл хаяг"
+        placeholder="Цахим шуудангийн хаяг"
         placeholderTextColor={theme.textMuted}
         style={styles.input}
         autoCapitalize="none"
@@ -466,7 +466,7 @@ function RankCard({ wins }: { wins: number }) {
       <Text style={styles.rankHint}>
         {next
           ? `${next.rank.name} цол хүртэл ${next.remaining} хожил үлдлээ` +
-            (next.rank.reward > 0 ? ` · шагнал ${groupDigits(next.rank.reward)} токен` : '')
+            (next.rank.reward > 0 ? ` · шагнал ${groupDigits(next.rank.reward)} чип` : '')
           : 'Хамгийн дээд цолд хүрлээ 🎖'}
       </Text>
       <Text style={styles.rankHint}>

@@ -28,7 +28,7 @@ export function GuestNotice({ action, compact = false }: Props) {
         <Text style={styles.title}>Та зочноор тоглож байна</Text>
         {!compact && (
           <Text style={styles.body}>
-            Токен нэмэгдэхгүй, цол ахихгүй, тоглолт түүхэнд үлдэхгүй. Нэвтэрвэл
+            Чип нэмэгдэхгүй, цол ахихгүй, тоглолт түүхэнд үлдэхгүй. Нэвтэрвэл
             энэ тоглолтоос эхлэн тооцогдоно.
           </Text>
         )}

@@ -95,7 +95,7 @@ function ChatButtonInner({ lines, youName, onSend, onSendVoice }: Props) {
       <Pressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Чат"
+        accessibilityLabel="Зурвас"
         style={styles.fab}
       >
         <Text style={styles.fabIcon}>💬</Text>
@@ -109,7 +109,7 @@ function ChatButtonInner({ lines, youName, onSend, onSendVoice }: Props) {
       <Overlay visible={open} onClose={() => setOpen(false)}>
           <View style={[styles.sheet, { height: sheetHeight }]}>
             <View style={styles.header}>
-              <Text style={styles.title}>Чат</Text>
+              <Text style={styles.title}>Зурвас</Text>
               <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
                 <Text style={styles.close}>Хаах</Text>
               </Pressable>

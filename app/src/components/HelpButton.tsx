@@ -71,18 +71,18 @@ export function HelpButton({ wins }: Props) {
           <View style={styles.ruleBox}>
             <Text style={styles.ruleText}>
               <Text style={styles.ruleStrong}>Бүртгэлтэй</Text> тоглогч{' '}
-              <Text style={styles.ruleStrong}>токентой</Text> тоглож{' '}
+              <Text style={styles.ruleStrong}>чиптэй</Text> тоглож{' '}
               <Text style={styles.ruleStrong}>хожсон</Text> тохиолдолд л цол авна.
             </Text>
           </View>
 
           <Text style={styles.lead}>
-            Гурвуулаа биелэх ёстой. Зочноор тоглосон, токенгүй тоглосон, эсвэл
+            Гурвуулаа биелэх ёстой. Зочноор тоглосон, чипгүй тоглосон, эсвэл
             зөвхөн тойрог хожсон бол цолд тоологдохгүй — тоглолтыг бүхэлд нь,
             сүүлчийн үлдсэн хүн байж хожих ёстой.
           </Text>
           <Text style={styles.lead}>
-            Цол ахих бүрд токен шагнал автоматаар нэмэгдэнэ.
+            Цол ахих бүрд чип шагнал автоматаар нэмэгдэнэ.
           </Text>
 
           {/* Баганын толгой — доорх тоонууд юу болохыг хэлнэ. */}
@@ -119,7 +119,7 @@ export function HelpButton({ wins }: Props) {
           </ScrollView>
 
           <Text style={styles.footer}>
-            Цол ахих бүрд чатад зарлагдана.
+            Цол ахих бүрд зурваст зарлагдана.
           </Text>
 
           <Button title="Хаах" variant="secondary" onPress={() => setOpen(false)} />

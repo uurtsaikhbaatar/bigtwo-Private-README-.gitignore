@@ -12,7 +12,7 @@ export function groupDigits(value: number): string {
 
 /** 50000 → "50 000 токен" */
 export function formatChips(amount: number): string {
-  return `${groupDigits(Math.abs(amount))} токен`;
+  return `${groupDigits(Math.abs(amount))} чип`;
 }
 
 /** Тооцоонд эерэг дүнг "+" тэмдэгтэй харуулна. */
@@ -26,7 +26,7 @@ export function formatSignedChips(amount: number): string {
 const round = (value: number): string => String(Math.round(value * 10) / 10);
 
 export function shortChips(amount: number): string {
-  if (amount === 0) return 'Токенгүй';
+  if (amount === 0) return 'Чипгүй';
   if (amount >= 1_000_000) return `${round(amount / 1_000_000)}сая`;
   if (amount >= 1000) return `${round(amount / 1000)}мянга`;
   return String(amount);
