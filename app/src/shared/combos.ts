@@ -169,23 +169,23 @@ export function beats(challenger: Combo, current: Combo | null): boolean {
 export function comboLabel(combo: Combo): string {
   switch (combo.kind) {
     case 'single':
-      return 'Ганц';
+      return 'Single';
     case 'pair':
-      return 'Хос';
+      return 'Pair';
     case 'triple':
-      return 'Гурвал';
+      return 'Triple';
     case 'five':
       switch (combo.category) {
         case 'straight':
-          return 'Шулуун';
+          return 'Straight';
         case 'flush':
-          return 'Өнгө';
+          return 'Flush';
         case 'fullhouse':
-          return 'Дүүрэн байшин';
+          return 'Full House';
         case 'quads':
-          return 'Дөрвөл';
+          return 'Four of a Kind';
         case 'straightflush':
-          return 'Шулуун өнгө';
+          return 'Straight Flush';
       }
   }
   return '';
