@@ -8,6 +8,7 @@
 import { Platform } from 'react-native';
 
 const PARAM = 'code';
+const WATCH_PARAM = 'watch';
 const CODE_PATTERN = /^[A-Z0-9]{6}$/;
 
 const onWeb = (): boolean => Platform.OS === 'web' && typeof window !== 'undefined';
@@ -37,6 +38,32 @@ export function clearRoomCodeFromUrl(): void {
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   } catch {
     // Хаяг өөрчлөх боломжгүй бол алгасна.
+  }
+}
+
+/** Хаягт `?watch=XXXXXX` байвал буцаана — ҮЗЭГЧээр орох линк. */
+export function pendingWatchCode(): string | null {
+  if (!onWeb()) return null;
+  try {
+    const raw = new URLSearchParams(window.location.search).get(WATCH_PARAM);
+    const code = raw?.trim().toUpperCase() ?? '';
+    return CODE_PATTERN.test(code) ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+/** ҮЗЭГЧид илгээх линк (`?watch=XXXXXX`). Вэб дээр л боломжтой. */
+export function watchUrl(code: string): string | null {
+  if (!onWeb()) return null;
+  try {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set(WATCH_PARAM, code);
+    return url.toString();
+  } catch {
+    return null;
   }
 }
 

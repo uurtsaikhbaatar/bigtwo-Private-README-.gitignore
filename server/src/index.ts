@@ -143,6 +143,7 @@ function deserializeRoom(data: any): Room {
     lastPlayers: data.lastPlayers ?? [],
     lastActivity: data.lastActivity ?? Date.now(),
     botMove: null,
+    spectators: new Set(),
   };
 }
 
@@ -230,6 +231,13 @@ interface Session {
   playerId: string;
 }
 const sessions = new WeakMap<WebSocket, Session>();
+/**
+ * ҮЗЭГЧ сокет → (харж буй өрөө, нэр). Тоглогч БИШ тул `sessions`-оос тусдаа
+ * хөтөлнө — цэвэрлэх, зурвас илгээхэд ашиглана.
+ */
+const spectatorOf = new Map<WebSocket, { room: Room; name: string }>();
+/** Нэг өрөөг зэрэг харах үзэгчийн дээд хязгаар. */
+const MAX_SPECTATORS = 10;
 /** Сокет бүрийн нэвтэрсэн хэрэглэгч (нэвтрээгүй бол байхгүй). */
 const accounts = new WeakMap<WebSocket, Account>();
 /**
@@ -461,6 +469,13 @@ wss.on('connection', (socket, req) => {
 
   socket.on('close', () => {
     markOffline(socket);
+    // ҮЗЭГЧ бол өрөөнөөс хасаад дуусна (тоглогч биш тул суудал цэвэрлэх хэрэггүй).
+    const spec = spectatorOf.get(socket);
+    if (spec) {
+      spec.room.spectators.delete(socket);
+      spectatorOf.delete(socket);
+      spec.room.lastActivity = Date.now();
+    }
     const session = sessions.get(socket);
     if (!session) return;
     const seat = session.room.seats.get(session.playerId);
@@ -517,6 +532,26 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       }
       seat(socket, room, cleanName(msg.name));
       return broadcast(room);
+    }
+
+    /**
+     * ҮЗЭГЧ (watch линкээр) — тоглогч биш, суудалгүй. Явцыг л харна (хөзөр
+     * нуулттай), зурвас бичиж болно. Тоглолт явж байгаа өрөөнд ч орж болно.
+     */
+    case 'watch': {
+      const room = rooms.get(msg.code ?? '');
+      if (!room) throw new RuleError('Ийм дугаартай өрөө олдсонгүй.');
+      if (sessions.get(socket)) throw new RuleError('Та тоглогчоор сууж байна.');
+      const already = spectatorOf.get(socket);
+      if (already?.room !== room && room.spectators.size >= MAX_SPECTATORS) {
+        throw new RuleError(`Үзэгчийн тоо дүүрсэн (дээд тал нь ${MAX_SPECTATORS}).`);
+      }
+      room.spectators.add(socket);
+      spectatorOf.set(socket, { room, name: cleanName(msg.name) });
+      room.lastActivity = Date.now();
+      send(socket, { t: 'state', view: viewFor(room.state, metaOf(room), '', true) });
+      sendChatHistory(socket, room);
+      return;
     }
 
     case 'register':
@@ -752,6 +787,20 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       // Тоолуур алдагдсан ч тоглоомд нөлөөлөхгүй — чимээгүй өнгөрнө.
     });
     return;
+  }
+
+  // ҮЗЭГЧийн зурвас — тоглогч биш ч бичиж болно. Нэрийн хажууд 👁 тэмдэг.
+  if (msg.t === 'chat') {
+    const spec = spectatorOf.get(socket);
+    if (spec && !sessions.get(socket)) {
+      const text = String(msg.text ?? '').trim().slice(0, MAX_CHAT_LENGTH);
+      if (!text) return;
+      const line: ServerMessage = { t: 'chat', from: `${spec.name} 👁`, text, at: Date.now() };
+      spec.room.chat.push(line);
+      if (spec.room.chat.length > CHAT_HISTORY) spec.room.chat.shift();
+      spec.room.lastActivity = Date.now();
+      return broadcastRaw(spec.room, line);
+    }
   }
 
   // Доорх үйлдлүүдэд өрөөнд сууж байх шаардлагатай.
@@ -1348,6 +1397,13 @@ function broadcast(room: Room): void {
       send(s.socket, { t: 'state', view: viewFor(room.state, meta, s.playerId) });
     }
   }
+  // ҮЗЭГЧид — хөзөр огт харагдахгүй spectator view (бүгдэд нэг ижил).
+  if (room.spectators.size) {
+    const specView = viewFor(room.state, meta, '', true);
+    for (const ws of room.spectators) {
+      if (ws.readyState === ws.OPEN) send(ws, { t: 'state', view: specView });
+    }
+  }
 }
 
 /**
@@ -1546,6 +1602,9 @@ async function refreshAccounts(room: Room): Promise<void> {
 function broadcastRaw(room: Room, msg: ServerMessage): void {
   for (const s of room.seats.values()) {
     if (s.socket && s.socket.readyState === s.socket.OPEN) send(s.socket, msg);
+  }
+  for (const ws of room.spectators) {
+    if (ws.readyState === ws.OPEN) send(ws, msg);
   }
 }
 

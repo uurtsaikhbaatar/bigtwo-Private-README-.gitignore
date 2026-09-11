@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { RankBadge } from '../components/RankBadge';
 import { CARD_CORNER_WIDTH, CARD_SIZES, PlayingCard } from '../components/PlayingCard';
 import { ScoreBoard } from '../components/ScoreBoard';
+import { WatchLinkButton } from '../components/WatchLinkButton';
 import { formatChips, formatSignedChips } from '../chips';
 import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import type { Card } from '../shared/cards';
@@ -75,6 +76,8 @@ interface Props {
   ads: AdView[];
   httpBase: string;
   onAdEvent: (id: string, kind: 'seen' | 'click') => void;
+  /** ҮЗЭГЧээр (watch линк) харж байгаа эсэх — тоглох/удирдах товч харагдахгүй. */
+  spectating?: boolean;
 }
 
 export function TableScreen({
@@ -92,6 +95,7 @@ export function TableScreen({
   ads,
   httpBase,
   onAdEvent,
+  spectating = false,
 }: Props) {
   const [selected, setSelected] = useState<Card[]>([]);
   // Хөзрийг хэрхэн эрэмбэлж харуулах: 'rank' = дараалалаар (3→2), 'suit' =
@@ -158,6 +162,7 @@ export function TableScreen({
         ads={ads}
         httpBase={httpBase}
         onAdEvent={onAdEvent}
+        spectating={spectating}
       />
     );
   }
@@ -355,27 +360,40 @@ export function TableScreen({
         </View>
       ) : (
         <View style={styles.spectator}>
-          <Pressable
-            onPress={() => you && onInspect(you.id, you.name)}
-            accessibilityRole="button"
-            accessibilityLabel="Миний мэдээлэл"
-            style={styles.meRow}
-          >
-            <Avatar name={you?.name ?? ''} avatar={you?.avatar ?? null} size={22} />
-            <Text style={styles.meName} numberOfLines={1}>
-              {you?.name ?? ''}
-            </Text>
-            <RankBadge wins={you?.rankedWins ?? null} />
-          </Pressable>
+          {spectating ? (
+            <>
+              <Text style={styles.spectatorTitle}>👁 Үзэгчээр харж байна</Text>
+              <Text style={styles.hint}>
+                Зөвхөн тоглоомын явцыг харна — тоглогчдын хөзөр харагдахгүй. Зурвас
+                бичиж болно.
+              </Text>
+              <Button title="Үзэхээ болих" variant="ghost" onPress={onLeave} />
+            </>
+          ) : (
+            <>
+              <Pressable
+                onPress={() => you && onInspect(you.id, you.name)}
+                accessibilityRole="button"
+                accessibilityLabel="Миний мэдээлэл"
+                style={styles.meRow}
+              >
+                <Avatar name={you?.name ?? ''} avatar={you?.avatar ?? null} size={22} />
+                <Text style={styles.meName} numberOfLines={1}>
+                  {you?.name ?? ''}
+                </Text>
+                <RankBadge wins={you?.rankedWins ?? null} />
+              </Pressable>
 
-          <Text style={styles.spectatorTitle}>
-            {youAreOut ? 'Та хасагдлаа — үзэж байна' : 'Та энэ тойрогт өнжиж байна'}
-          </Text>
-          <Text style={styles.hint}>
-            {youAreOut
-              ? 'Тоглолт дуустал үзэж, харилцаж болно. Тоглогчдын гар харагдахгүй. Дараагийн тоглолтод дахин орно.'
-              : 'Ширээн дээрх хөзрийг харж болно, гэхдээ тоглогчдын гар харагдахгүй. Оноо нэмэгдэхгүй — дараагийн тойрогт орно.'}
-          </Text>
+              <Text style={styles.spectatorTitle}>
+                {youAreOut ? 'Та хасагдлаа — үзэж байна' : 'Та энэ тойрогт өнжиж байна'}
+              </Text>
+              <Text style={styles.hint}>
+                {youAreOut
+                  ? 'Тоглолт дуустал үзэж, харилцаж болно. Тоглогчдын гар харагдахгүй. Дараагийн тоглолтод дахин орно.'
+                  : 'Ширээн дээрх хөзрийг харж болно, гэхдээ тоглогчдын гар харагдахгүй. Оноо нэмэгдэхгүй — дараагийн тойрогт орно.'}
+              </Text>
+            </>
+          )}
         </View>
       )}
     </View>
@@ -489,6 +507,7 @@ function Results({
   ads,
   httpBase,
   onAdEvent,
+  spectating = false,
 }: {
   view: GameView;
   isHost: boolean;
@@ -502,6 +521,7 @@ function Results({
   ads: AdView[];
   httpBase: string;
   onAdEvent: (id: string, kind: 'seen' | 'click') => void;
+  spectating?: boolean;
 }) {
   const matchOver = view.phase === 'matchEnd';
   const winner = view.players.find((p) => p.id === view.matchWinnerId);
@@ -646,22 +666,34 @@ function Results({
       )}
 
       <View style={styles.resultActions}>
-        {isHost ? (
-          matchOver ? (
-            <Button title="Шинэ тоглолт" onPress={onNewMatch} />
-          ) : (
-            <Button title="Дараагийн тойрог" onPress={onNextRound} />
-          )
+        {spectating ? (
+          <>
+            <Text style={styles.hint}>
+              {matchOver ? 'Тоглолт дууслаа.' : 'Дараагийн тойргийг хүлээж байна…'} 👁 Үзэгч
+            </Text>
+            <Button title="Үзэхээ болих" variant="ghost" onPress={onLeave} />
+          </>
         ) : (
-          <Text style={styles.hint}>
-            Өрөөний эзэн {matchOver ? 'шинэ тоглолт эхлүүлэхийг' : 'үргэлжлүүлэхийг'} хүлээж
-            байна…
-          </Text>
+          <>
+            {isHost ? (
+              matchOver ? (
+                <Button title="Шинэ тоглолт" onPress={onNewMatch} />
+              ) : (
+                <Button title="Дараагийн тойрог" onPress={onNextRound} />
+              )
+            ) : (
+              <Text style={styles.hint}>
+                Өрөөний эзэн {matchOver ? 'шинэ тоглолт эхлүүлэхийг' : 'үргэлжлүүлэхийг'} хүлээж
+                байна…
+              </Text>
+            )}
+            {matchOver && (
+              <Button title="Найзуудаа дахин урих" variant="secondary" onPress={onInvite} />
+            )}
+            <WatchLinkButton code={view.code} />
+            <Button title="Гарах" variant="ghost" onPress={onLeave} />
+          </>
         )}
-        {matchOver && (
-          <Button title="Найзуудаа дахин урих" variant="secondary" onPress={onInvite} />
-        )}
-        <Button title="Гарах" variant="ghost" onPress={onLeave} />
       </View>
     </ScrollView>
   );

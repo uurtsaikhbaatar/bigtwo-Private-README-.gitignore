@@ -100,6 +100,8 @@ export function useBigTwo(serverUrl: string) {
 
   const socketRef = useRef<WebSocket | null>(null);
   const sessionRef = useRef<SavedSession | null>(null);
+  /** ҮЗЭГЧээр харж байгаа бол {нэр, өрөөний код}. Дахин холбогдоход 'watch' явуулна. */
+  const watchRef = useRef<{ name: string; code: string } | null>(null);
   const queueRef = useRef<ClientMessage[]>([]);
   const resumingRef = useRef(false);
   const attemptsRef = useRef(0);
@@ -205,7 +207,10 @@ export function useBigTwo(serverUrl: string) {
       if (authTokenRef.current) {
         rawSend(ws, { t: 'authResume', token: authTokenRef.current });
       }
-      if (sessionRef.current) {
+      if (watchRef.current) {
+        // ҮЗЭГЧ — суудал сэргээхгүй, зөвхөн дахин харна.
+        rawSend(ws, { t: 'watch', ...watchRef.current });
+      } else if (sessionRef.current) {
         resumingRef.current = true;
         rawSend(ws, { t: 'resume', ...sessionRef.current });
       }
@@ -226,7 +231,7 @@ export function useBigTwo(serverUrl: string) {
     ws.onclose = () => {
       socketRef.current = null;
       setStatus('offline');
-      if (wantOnlineRef.current && sessionRef.current) scheduleReconnect();
+      if (wantOnlineRef.current && (sessionRef.current || watchRef.current)) scheduleReconnect();
     };
   }, [handleMessage]);
 
@@ -267,7 +272,7 @@ export function useBigTwo(serverUrl: string) {
    * ирэхгүй бол албадан дахин холбогдоно. Сокет хаалттай бол шууд сэргээнэ.
    */
   const checkAlive = useCallback(() => {
-    if (!wantOnlineRef.current || !sessionRef.current) return;
+    if (!wantOnlineRef.current || (!sessionRef.current && !watchRef.current)) return;
     const ws = socketRef.current;
     if (!ws || ws.readyState !== 1) {
       forceReconnect();
@@ -434,6 +439,22 @@ export function useBigTwo(serverUrl: string) {
       (name: string, code: string) => send({ t: 'join', name, code: code.trim().toUpperCase() }),
       [send],
     ),
+    /** ҮЗЭГЧээр орох (watch линк) — тоглогч биш, зөвхөн явцыг харна. */
+    watchRoom: useCallback(
+      (name: string, code: string) => {
+        watchRef.current = { name: name.trim() || 'Үзэгч', code: code.trim().toUpperCase() };
+        sessionRef.current = null; // үзэгч суудалгүй
+        openSocket();
+      },
+      [openSocket],
+    ),
+    /** Үзэгчээс гарах. */
+    stopWatching: useCallback(() => {
+      watchRef.current = null;
+      setView(null);
+      setChat([]);
+      disconnect();
+    }, [disconnect]),
     /** Хадгалсан суудлаа сэргээх (апп дахин нээгдэхэд). */
     resumeSession: useCallback(
       (session: SavedSession) => {

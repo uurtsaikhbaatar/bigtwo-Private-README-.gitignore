@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 
 import { AdSlot } from '../components/AdSlot';
 import { AuthPanel } from '../components/AuthPanel';
 import { Button } from '../components/Button';
+import { WatchLinkButton } from '../components/WatchLinkButton';
 import { GuestNotice } from '../components/GuestNotice';
 import { joinUrl } from '../deeplink';
 import { formatChips, groupDigits, shortChips } from '../chips';
@@ -297,6 +298,7 @@ export function LobbyScreen({
         ) : (
           <Text style={styles.hint}>Өрөөний эзэн эхлүүлэхийг хүлээж байна…</Text>
         )}
+        <WatchLinkButton code={view.code} />
         <Button title="Өрөөнөөс гарах" variant="ghost" onPress={onLeave} />
       </View>
     </ScrollView>

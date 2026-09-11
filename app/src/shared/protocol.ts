@@ -29,6 +29,8 @@ export const MAX_VOICE_MS = 30_000;
 export type ClientMessage =
   | { t: 'create'; name: string }
   | { t: 'join'; name: string; code: string }
+  /** ҮЗЭГЧээр орох (watch линк) — тоглогч биш, зөвхөн явцыг харна. */
+  | { t: 'watch'; name: string; code: string }
   /** Тасарсны дараа өмнөх суудалдаа буцаж орох. */
   | { t: 'resume'; code: string; playerId: string; token: string }
   /** Шинэ тоглолт эхлүүлэх (лобби эсвэл тоглолт дууссаны дараа). */
@@ -291,6 +293,11 @@ export interface GameView {
   yourHand: Card[];
   /** Та энэ тойрогт тоглож байгаа эсэх (үгүй бол зөвхөн ажиглана). */
   youAreSeated: boolean;
+  /**
+   * Энэ харагдагч зөвхөн ҮЗЭГЧ (watch линкээр орсон) эсэх — тоглогч биш, ямар ч
+   * тоглогчийн хөзөр (тойрог дуусах ил болголт ч) харагдахгүй, зөвхөн явц.
+   */
+  spectating: boolean;
   turnId: string | null;
   current: PlayView | null;
   lastPlay: PlayView | null;
@@ -338,10 +345,15 @@ export interface RoomMeta {
 }
 
 /** Сервер дээрх бүрэн төлвөөс нэг тоглогчид зориулсан харагдац үүсгэнэ. */
-export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameView {
+export function viewFor(
+  state: GameState,
+  meta: RoomMeta,
+  youId: string,
+  spectator = false,
+): GameView {
   const you = state.players.find((p) => p.id === youId);
-  // Тойрог/тоглолт дуусахад л бусдын гарыг ил гаргана.
-  const revealing = state.phase === 'roundEnd' || state.phase === 'matchEnd';
+  // Тойрог/тоглолт дуусахад л бусдын гарыг ил гаргана. ҮЗЭГЧид ХЭЗЭЭ Ч биш.
+  const revealing = !spectator && (state.phase === 'roundEnd' || state.phase === 'matchEnd');
   return {
     code: meta.code,
     youId,
@@ -362,11 +374,12 @@ export function viewFor(state: GameState, meta: RoomMeta, youId: string): GameVi
       bot: p.bot,
       lastPlay: comboPlayView(p.id, p.lastPlay),
       revealHand: revealing && p.seated ? p.hand.slice() : null,
-      topCombos: state.phase === 'matchEnd' ? topCombosOf(p.id, p.matchCombos) : [],
+      topCombos: !spectator && state.phase === 'matchEnd' ? topCombosOf(p.id, p.matchCombos) : [],
     })),
     seats: state.seats.slice(),
-    yourHand: you ? you.hand.slice() : [],
-    youAreSeated: you?.seated ?? false,
+    yourHand: spectator || !you ? [] : you.hand.slice(),
+    youAreSeated: spectator ? false : (you?.seated ?? false),
+    spectating: spectator,
     turnId: state.phase === 'playing' ? (state.seats[state.turn] ?? null) : null,
     current: toPlayView(state.current),
     lastPlay: toPlayView(state.lastPlay),

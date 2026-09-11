@@ -73,6 +73,12 @@ export interface Room {
    * санд хадгалахгүй (сэргээхэд tick дахин тохируулна).
    */
   nextRoundAt?: number | null;
+  /**
+   * ҮЗЭГЧид (watch линкээр орсон сокетууд). Тоглогч БИШ — суудалгүй, тоглоомд
+   * нөлөөлөхгүй, зөвхөн явцыг харна (хөзөр нуулттай). Түр төлөв тул санд
+   * хадгалахгүй; нэр нь `spectatorNames`-д.
+   */
+  spectators: Set<WebSocket>;
 }
 
 export class RoomStore {
@@ -92,6 +98,7 @@ export class RoomStore {
       lastPlayers: [],
       lastActivity: Date.now(),
       botMove: null,
+      spectators: new Set(),
     };
     this.rooms.set(room.code, room);
     return room;

@@ -10,7 +10,7 @@ import { HelpButton } from './src/components/HelpButton';
 import { PlayerInfoPanel } from './src/components/PlayerInfoPanel';
 import { SoundToggle } from './src/components/SoundToggle';
 import { ReportButton } from './src/components/ReportButton';
-import { clearRoomCodeFromUrl, pendingRoomCode } from './src/deeplink';
+import { clearRoomCodeFromUrl, pendingRoomCode, pendingWatchCode } from './src/deeplink';
 import { installErrorReporter } from './src/errors';
 import { defaultServerUrl, useBigTwo } from './src/net';
 import { DrawScreen } from './src/screens/DrawScreen';
@@ -67,7 +67,7 @@ function Root() {
   );
   const celebratedRoundRef = useRef(-1);
   const game = useBigTwo(serverUrl);
-  const { resumeSession, joinRoom, resumeAuth, clearError, error } = game;
+  const { resumeSession, joinRoom, resumeAuth, clearError, error, watchRoom } = game;
   const startedRef = useRef(false);
 
   // Апп нээгдэхэд өмнөх нэр, серверийн хаяг, суудлыг сэргээнэ.
@@ -90,8 +90,12 @@ function Root() {
       if (savedName) setName(savedName);
       if (savedServer) setServerUrl(savedServer);
 
+      const watching = pendingWatchCode();
       const invited = pendingRoomCode();
-      if (session) {
+      if (watching) {
+        // ҮЗЭГЧийн линк бүх зүйлээс давуу — линк дарсан хүн харахыг хүсэж байна.
+        watchRoom(savedName ?? '', watching);
+      } else if (session) {
         // Идэвхтэй суудал байвал тэр нь линкээс давуу.
         resumeSession(session);
       } else if (invited) {
@@ -106,7 +110,7 @@ function Root() {
     return () => {
       cancelled = true;
     };
-  }, [resumeSession, joinRoom, resumeAuth]);
+  }, [resumeSession, joinRoom, resumeAuth, watchRoom]);
 
   // Аппад гарсан алдааг автоматаар мэдэгдэнэ.
   const { sendReport } = game;
@@ -250,6 +254,27 @@ function Root() {
           onEnterGuest={() => setGuestChosen(true)}
           leaderboard={game.leaderboard}
           onLoadLeaderboard={game.loadLeaderboard}
+        />
+      ) : view.spectating ? (
+        <TableScreen
+          view={view}
+          spectating
+          onPlay={game.playCards}
+          onPass={game.passTurn}
+          onNextRound={game.nextRound}
+          onNewMatch={() => undefined}
+          onLeave={game.stopWatching}
+          onInspect={(playerId, name) => {
+            setInspecting(name);
+            game.inspectPlayer(playerId);
+          }}
+          onInvite={() => undefined}
+          invites={[]}
+          onAcceptInvite={() => undefined}
+          onDeclineInvite={() => undefined}
+          ads={game.ads}
+          httpBase={game.httpBase}
+          onAdEvent={game.adEvent}
         />
       ) : view.phase === 'lobby' ? (
         <LobbyScreen
