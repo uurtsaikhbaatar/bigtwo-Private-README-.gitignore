@@ -541,6 +541,10 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     case 'watch': {
       const room = rooms.get(msg.code ?? '');
       if (!room) throw new RuleError('Ийм дугаартай өрөө олдсонгүй.');
+      // Зөвхөн ЯВАГДАЖ байгаа тоглолтыг л үзнэ — лобби (эхлээгүй) өрөөг үзэхгүй.
+      if (room.state.phase === 'lobby') {
+        throw new RuleError('Тоглолт хараахан эхлээгүй байна. Эхэлсэн үед дахин оролдоно уу.');
+      }
       if (sessions.get(socket)) throw new RuleError('Та тоглогчоор сууж байна.');
       const already = spectatorOf.get(socket);
       if (already?.room !== room && room.spectators.size >= MAX_SPECTATORS) {

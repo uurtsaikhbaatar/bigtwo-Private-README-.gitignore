@@ -364,8 +364,8 @@ export function TableScreen({
             <>
               <Text style={styles.spectatorTitle}>👁 Үзэгчээр харж байна</Text>
               <Text style={styles.hint}>
-                Зөвхөн тоглоомын явцыг харна — тоглогчдын хөзөр харагдахгүй. Зурвас
-                бичиж болно.
+                Тоглох үед тоглогчдын хөзөр харагдахгүй — тойрог дуусахад л үлдсэн
+                хөзөр ил болно. Зурвас бичиж болно.
               </Text>
               <Button title="Үзэхээ болих" variant="ghost" onPress={onLeave} />
             </>

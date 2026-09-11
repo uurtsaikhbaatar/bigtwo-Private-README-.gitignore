@@ -352,8 +352,9 @@ export function viewFor(
   spectator = false,
 ): GameView {
   const you = state.players.find((p) => p.id === youId);
-  // Тойрог/тоглолт дуусахад л бусдын гарыг ил гаргана. ҮЗЭГЧид ХЭЗЭЭ Ч биш.
-  const revealing = !spectator && (state.phase === 'roundEnd' || state.phase === 'matchEnd');
+  // Тойрог/тоглолт дуусахад л бусдын гарыг ил гаргана — ҮЗЭГЧ ч тэр мөчид
+  // үлдсэн хөзрийг харна (тоглох үед хэнийхийг ч харахгүй).
+  const revealing = state.phase === 'roundEnd' || state.phase === 'matchEnd';
   return {
     code: meta.code,
     youId,
@@ -374,7 +375,7 @@ export function viewFor(
       bot: p.bot,
       lastPlay: comboPlayView(p.id, p.lastPlay),
       revealHand: revealing && p.seated ? p.hand.slice() : null,
-      topCombos: !spectator && state.phase === 'matchEnd' ? topCombosOf(p.id, p.matchCombos) : [],
+      topCombos: state.phase === 'matchEnd' ? topCombosOf(p.id, p.matchCombos) : [],
     })),
     seats: state.seats.slice(),
     yourHand: spectator || !you ? [] : you.hand.slice(),
