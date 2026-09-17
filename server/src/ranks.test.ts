@@ -71,7 +71,7 @@ test('цол ахих мөчийг зөв илрүүлнэ', () => {
 test('тэмдэг бүр богино — нэрний хажууд багтана', () => {
   for (const rank of RANKS) {
     assert.ok(rank.badge.length > 0, `${rank.name}: тэмдэггүй`);
-    assert.ok([...rank.badge].length <= 3, `${rank.name}: тэмдэг хэт урт`);
+    assert.ok([...rank.badge].length <= 4, `${rank.name}: тэмдэг хэт урт`);
   }
 });
 

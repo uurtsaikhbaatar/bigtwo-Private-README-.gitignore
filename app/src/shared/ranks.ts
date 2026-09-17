@@ -43,9 +43,9 @@ export const RANKS: readonly Rank[] = [
   { wins: 27, name: 'Сургагч ахлагч', badge: '◆◆◆', reward: 150_000, group: 'Ахлагч' },
   { wins: 34, name: 'Тэргүүн ахлагч', badge: '◈', reward: 200_000, group: 'Ахлагч' },
 
-  { wins: 42, name: 'Дэслэгч', badge: '★', reward: 250_000, group: 'Офицер' },
-  { wins: 50, name: 'Ахлах дэслэгч', badge: '★★', reward: 300_000, group: 'Офицер' },
-  { wins: 60, name: 'Ахмад', badge: '★★★', reward: 400_000, group: 'Офицер' },
+  { wins: 42, name: 'Дэслэгч', badge: '★★', reward: 250_000, group: 'Офицер' },
+  { wins: 50, name: 'Ахлах дэслэгч', badge: '★★★', reward: 300_000, group: 'Офицер' },
+  { wins: 60, name: 'Ахмад', badge: '★★★★', reward: 400_000, group: 'Офицер' },
   { wins: 75, name: 'Хошууч', badge: '✦', reward: 500_000, group: 'Офицер' },
   { wins: 95, name: 'Дэд хурандаа', badge: '✦✦', reward: 600_000, group: 'Офицер' },
   { wins: 115, name: 'Хурандаа', badge: '✦✦✦', reward: 800_000, group: 'Офицер' },
