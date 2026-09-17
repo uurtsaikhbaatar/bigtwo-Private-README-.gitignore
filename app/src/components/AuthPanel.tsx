@@ -467,7 +467,7 @@ function RankCard({ wins }: { wins: number }) {
         {next
           ? `${next.rank.name} цол хүртэл ${next.remaining} хожил үлдлээ` +
             (next.rank.reward > 0 ? ` · шагнал ${groupDigits(next.rank.reward)} чип` : '')
-          : 'Хамгийн дээд цолд хүрлээ 🎖'}
+          : 'Хамгийн дээд цолд хүрлээ ⭐'}
       </Text>
       <Text style={styles.rankHint}>
         Чиптэй тоглолтын хожил: {wins}. Чипгүй тоглолт цолд тоологдохгүй.
