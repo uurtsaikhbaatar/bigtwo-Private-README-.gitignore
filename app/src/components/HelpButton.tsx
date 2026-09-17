@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   rowMine: { backgroundColor: 'rgba(242,183,5,0.12)' },
-  badge: { color: theme.accent, fontSize: 11, width: 48 },
+  badge: { color: theme.accent, fontSize: 11, width: 64 },
   name: { color: theme.text, fontSize: 13, flex: 1 },
   nameMine: { fontWeight: '800' },
   wins: { color: theme.textMuted, fontSize: 12, width: 74, textAlign: 'right' },

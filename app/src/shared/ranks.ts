@@ -50,10 +50,10 @@ export const RANKS: readonly Rank[] = [
   { wins: 95, name: 'Дэд хурандаа', badge: '✦✦', reward: 600_000, group: 'Офицер' },
   { wins: 115, name: 'Хурандаа', badge: '✦✦✦', reward: 800_000, group: 'Офицер' },
 
-  { wins: 140, name: 'Бригадын генерал', badge: '🎖', reward: 1_000_000, group: 'Генерал' },
-  { wins: 170, name: 'Хошууч генерал', badge: '🎖🎖', reward: 1_250_000, group: 'Генерал' },
-  { wins: 205, name: 'Дэслэгч генерал', badge: '🎖🎖🎖', reward: 1_500_000, group: 'Генерал' },
-  { wins: 245, name: 'Генерал', badge: '👑', reward: 2_000_000, group: 'Генерал' },
+  { wins: 140, name: 'Бригадын генерал', badge: '⭐', reward: 1_000_000, group: 'Генерал' },
+  { wins: 170, name: 'Хошууч генерал', badge: '⭐⭐', reward: 1_250_000, group: 'Генерал' },
+  { wins: 205, name: 'Дэслэгч генерал', badge: '⭐⭐⭐', reward: 1_500_000, group: 'Генерал' },
+  { wins: 245, name: 'Генерал', badge: '⭐⭐⭐⭐', reward: 2_000_000, group: 'Генерал' },
 ] as const;
 
 /** Хожлын тоонд харгалзах цол. Сөрөг тоог 0 гэж үзнэ. */
