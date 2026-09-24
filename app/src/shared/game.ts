@@ -39,9 +39,19 @@ export const DEFAULT_TURN_SECONDS = 30;
  * Энэ нь зөвхөн тоглоомын оноо — бодит мөнгө биш бөгөөд апп ямар ч төлбөр
  * тооцоо хийдэггүй.
  */
-export const STAKE_CHOICES = [0, 1_000, 5_000, 10_000, 50_000] as const;
+export const STAKE_CHOICES = [
+  0,
+  1_000,
+  5_000,
+  10_000,
+  50_000,
+  100_000,
+  500_000,
+  1_000_000,
+  5_000_000,
+] as const;
 export const MIN_STAKE = 100;
-export const MAX_STAKE = 1_000_000;
+export const MAX_STAKE = 5_000_000;
 export const DEFAULT_STAKE = 0;
 
 export const MIN_TURN_SECONDS = 10;
