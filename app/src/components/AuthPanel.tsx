@@ -196,7 +196,12 @@ export function AuthPanel({
                   </Text>
                 </View>
 
-                <TransferForm onSend={(amount, name) => onTransferTokens({ username: name }, amount)} />
+                {/* Баталгаажаагүй бол сервер татгалзана — маягтыг ч нуана. */}
+                {!verifying && (
+                  <TransferForm
+                    onSend={(amount, name) => onTransferTokens({ username: name }, amount)}
+                  />
+                )}
 
                 {profile ? (
                   <>

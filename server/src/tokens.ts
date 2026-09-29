@@ -229,16 +229,19 @@ export async function transferTokens(
       id: string;
       username: string;
       tokens: string;
+      email: string | null;
       email_verified: boolean;
     }>(
-      `SELECT id, username, tokens, email_verified FROM users
+      `SELECT id, username, tokens, email, email_verified FROM users
         WHERE id = ANY($1::bigint[]) ORDER BY id FOR UPDATE`,
       [[fromId, toId]],
     );
     const sender = rows.rows.find((r) => r.id === fromId);
     const recipient = rows.rows.find((r) => r.id === toId);
     if (!sender || !recipient) throw new TokenError('Хэрэглэгч олдсонгүй.');
-    if (!sender.email_verified) {
+    // Имэйлгүй хуучин бүртгэлүүд баталгаажуулах боломжгүй — шинээр ийм бүртгэл
+    // үүсэхгүй тул (бүртгэлд имэйл заавал) тэднийг хаах шаардлагагүй.
+    if (sender.email !== null && !sender.email_verified) {
       throw new TokenError('Чип илгээхийн өмнө имэйлээ баталгаажуулна уу.');
     }
 
