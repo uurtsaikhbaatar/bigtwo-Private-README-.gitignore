@@ -57,6 +57,11 @@ export type ClientMessage =
   | { t: 'resendCode' }
   /** Токен дуусахад админаас нэмж хүсэх. */
   | { t: 'requestTokens' }
+  /**
+   * Өөр тоглогч руу чип илгээх. Өрөөн доторх тоглогчийг `playerId`-аар,
+   * эсвэл хэн нэгнийг хэрэглэгчийн `username`-аар. 5% шимтгэл хасагдана.
+   */
+  | { t: 'transferTokens'; amount: number; playerId?: string; username?: string }
   | { t: 'login'; username: string; password: string }
   /** Нууц үг мартсан — имэйл рүү сэргээх код илгээнэ. */
   | { t: 'forgotPassword'; email: string }

@@ -79,6 +79,12 @@ export interface Room {
    * хадгалахгүй; нэр нь `spectatorNames`-д.
    */
   spectators: Set<WebSocket>;
+  /**
+   * Тоглолт дуусаад бооцооны тооцоо санд бичигдэж байгаа эсэх. Энэ хооронд
+   * бооцоо түгжигдсэн хэвээр — эс бөгөөс matchEnd болмогц чипээ шилжүүлж
+   * тооцооноос зугтах боломжтой.
+   */
+  settling?: boolean;
 }
 
 export class RoomStore {

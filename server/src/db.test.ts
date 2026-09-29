@@ -40,6 +40,7 @@ import {
   grantTokens,
   pendingRequests,
   requestTokens,
+  transferTokens,
 } from './tokens';
 
 // getPool() анх дуудагдахаас ӨМНӨ: холболтыг ЗӨВХӨН тест сан руу заана.
@@ -323,6 +324,88 @@ test('токен хүсэх, админ олгох урсгал', { skip }, asyn
     !after.some((r) => r.username === name),
     'олгосны дараа хүсэлт хаагдана',
   );
+});
+
+/** Имэйл баталгаажсан хэрэглэгч — чип илгээх эрхтэй. */
+async function verifiedUser() {
+  const { account } = await register(uniqueName(), 'нууц-үг-123', uniqueEmail());
+  await getPool().query('UPDATE users SET email_verified = true WHERE id = $1', [account.id]);
+  return account;
+}
+
+test('чип шилжүүлэх: 5% шимтгэл хасагдаж, түүх бичигдэнэ', { skip }, async () => {
+  const from = await verifiedUser();
+  const to = await verifiedUser();
+
+  const result = await transferTokens(from.id, { username: to.username }, 100_000);
+  assert.equal(result.fee, 5_000);
+  assert.equal(result.received, 95_000);
+  assert.equal(await balanceOf(from.id), STARTING_TOKENS - 100_000);
+  assert.equal(await balanceOf(to.id), STARTING_TOKENS + 95_000);
+
+  const log = await getPool().query(
+    'SELECT amount, fee FROM token_transfers WHERE from_user = $1',
+    [from.id],
+  );
+  assert.deepEqual(log.rows.map((r) => [Number(r.amount), Number(r.fee)]), [[100_000, 5_000]]);
+});
+
+test('чип шилжүүлэх: буруу оролтыг татгалзана', { skip }, async () => {
+  const from = await verifiedUser();
+  const to = await verifiedUser();
+  const unverified = (await register(uniqueName(), 'нууц-үг-123', uniqueEmail())).account;
+
+  await assert.rejects(() => transferTokens(from.id, { userId: from.id }, 1000), /Өөр рүүгээ/);
+  await assert.rejects(() => transferTokens(from.id, { userId: to.id }, 50), /Хамгийн багадаа/);
+  await assert.rejects(() => transferTokens(from.id, { userId: to.id }, 1500.5), TokenError);
+  await assert.rejects(() => transferTokens(from.id, { username: 'байхгүй_xyz' }, 1000), /олдсонгүй/);
+  await assert.rejects(() => transferTokens(unverified.id, { userId: to.id }, 1000), /баталгаажуулна/);
+  await assert.rejects(
+    () => transferTokens(from.id, { userId: to.id }, STARTING_TOKENS + 1),
+    /хүрэлцэхгүй/,
+  );
+  assert.equal(await balanceOf(from.id), STARTING_TOKENS, 'амжилтгүй бол үлдэгдэл хөдлөхгүй');
+});
+
+test('чип шилжүүлэх: бооцоонд түгжигдсэнийг илгээхгүй', { skip }, async () => {
+  const from = await verifiedUser();
+  const to = await verifiedUser();
+  const locked = 600_000;
+  await assert.rejects(
+    () => transferTokens(from.id, { userId: to.id }, 500_000, locked),
+    /түгжигдсэн/,
+  );
+  await transferTokens(from.id, { userId: to.id }, STARTING_TOKENS - locked, locked);
+  assert.equal(await balanceOf(from.id), locked);
+});
+
+test('чип шилжүүлэх: 24 цагийн хязгаар', { skip }, async () => {
+  const from = await verifiedUser();
+  const to = await verifiedUser();
+  await grantTokens(from.username, 10_000_000);
+  await transferTokens(from.id, { userId: to.id }, 4_000_000);
+  await assert.rejects(() => transferTokens(from.id, { userId: to.id }, 1_000_001), /Үлдсэн эрх: 1000000/);
+  await transferTokens(from.id, { userId: to.id }, 1_000_000);
+  await assert.rejects(() => transferTokens(from.id, { userId: to.id }, 100), /дууссан/);
+});
+
+test('чип шилжүүлэх: зэрэг ирсэн хүсэлт үлдэгдлийг давж зарцуулахгүй', { skip }, async () => {
+  const from = await verifiedUser();
+  const to = await verifiedUser();
+  const results = await Promise.allSettled([
+    transferTokens(from.id, { userId: to.id }, 700_000),
+    transferTokens(from.id, { userId: to.id }, 700_000),
+    transferTokens(to.id, { userId: from.id }, 700_000),
+  ]);
+  const ok = results.filter((r) => r.status === 'fulfilled').length;
+  assert.ok(ok >= 2, 'A→B-ийн нэг нь ба B→A амжилттай');
+  const [a, b] = [await balanceOf(from.id), await balanceOf(to.id)];
+  assert.ok(a >= 0 && b >= 0, 'сөрөг үлдэгдэл үүсэхгүй');
+  const fees = await getPool().query<{ fee: string }>(
+    'SELECT COALESCE(SUM(fee), 0) AS fee FROM token_transfers WHERE from_user = ANY($1::bigint[])',
+    [[from.id, to.id]],
+  );
+  assert.equal(a + b + Number(fees.rows[0].fee), STARTING_TOKENS * 2, 'чип алга болохгүй, хэвлэгдэхгүй');
 });
 
 test('байхгүй хэрэглэгчид токен олгохгүй', { skip }, async () => {

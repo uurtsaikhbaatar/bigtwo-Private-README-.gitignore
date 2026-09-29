@@ -14,6 +14,7 @@ import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { Overlay } from './Overlay';
 import { RankBadge } from './RankBadge';
+import { TransferForm } from './TransferForm';
 import type { PlayerInfo } from '../shared/protocol';
 import { theme } from '../theme';
 
@@ -22,9 +23,14 @@ interface Props {
   pendingName: string | null;
   info: PlayerInfo | null;
   onClose: () => void;
+  /**
+   * Энэ тоглогч руу чип илгээх. Өгөхгүй бол (зочин/үзэгч, эсвэл өөрийгөө
+   * харж байгаа) маягт гарахгүй.
+   */
+  onTransfer?: (playerId: string, amount: number) => void;
 }
 
-export function PlayerInfoPanel({ pendingName, info, onClose }: Props) {
+export function PlayerInfoPanel({ pendingName, info, onClose, onTransfer }: Props) {
   const visible = pendingName !== null;
   const loading = visible && info === null;
 
@@ -71,6 +77,16 @@ export function PlayerInfoPanel({ pendingName, info, onClose }: Props) {
                 <Text style={styles.note}>
                   Хожсон/алдсан чип: {groupDigits(info.stats?.chips ?? 0)}
                 </Text>
+
+                {onTransfer && (
+                  <TransferForm
+                    recipient={info.name}
+                    onSend={(amount) => {
+                      onTransfer(info.playerId, amount);
+                      onClose();
+                    }}
+                  />
+                )}
               </>
             ) : (
               <Text style={styles.guest}>

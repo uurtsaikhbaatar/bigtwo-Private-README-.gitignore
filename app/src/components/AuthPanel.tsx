@@ -16,6 +16,7 @@ import type { Account, MatchSummary, PlayerStats, TopCombo } from '../shared/pro
 import { PlayingCard } from './PlayingCard';
 import { nextRank, rankFor } from '../shared/ranks';
 import { Overlay } from './Overlay';
+import { TransferForm } from './TransferForm';
 import { theme } from '../theme';
 
 /** Энэ хэмжээнээс доош унавал "токен хүсэх" товчийг харуулна. */
@@ -31,6 +32,7 @@ interface Props {
   onVerifyEmail: (code: string) => void;
   onResendCode: () => void;
   onRequestTokens: () => void;
+  onTransferTokens: (to: { username: string }, amount: number) => void;
   onSetAvatar: (avatar: string | null) => void;
   onForgotPassword: (email: string) => void;
   onResetPassword: (email: string, code: string, password: string) => void;
@@ -57,6 +59,7 @@ export function AuthPanel({
   onVerifyEmail,
   onResendCode,
   onRequestTokens,
+  onTransferTokens,
   onSetAvatar,
   onForgotPassword,
   onResetPassword,
@@ -192,6 +195,8 @@ export function AuthPanel({
                     Чип нь виртуал тоглоомын оноо — бодит мөнгө биш.
                   </Text>
                 </View>
+
+                <TransferForm onSend={(amount, name) => onTransferTokens({ username: name }, amount)} />
 
                 {profile ? (
                   <>

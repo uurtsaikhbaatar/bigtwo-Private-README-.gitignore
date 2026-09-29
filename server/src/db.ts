@@ -92,6 +92,19 @@ export async function initSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS token_requests_pending_idx
       ON token_requests(user_id) WHERE granted_at IS NULL;
 
+    -- Тоглогч хоорондын чип шилжүүлэг. Өдрийн хязгаар ба аудитад хэрэгтэй.
+    -- amount = илгээгчээс хасагдсан, fee = үүнээс устгагдсан шимтгэл.
+    CREATE TABLE IF NOT EXISTS token_transfers (
+      id         BIGSERIAL PRIMARY KEY,
+      from_user  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      to_user    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      amount     BIGINT NOT NULL,
+      fee        BIGINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS token_transfers_from_idx
+      ON token_transfers(from_user, created_at);
+
     -- Баталгаажуулах код. Хэрэглэгч тутамд нэг л идэвхтэй код байна.
     CREATE TABLE IF NOT EXISTS email_codes (
       user_id    BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

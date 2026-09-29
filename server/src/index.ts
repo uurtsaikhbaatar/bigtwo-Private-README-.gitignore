@@ -76,7 +76,15 @@ import {
 import { dropInvite, inviteUsers, invitesFor, purgeExpiredInvites } from './invites';
 import { leaderboard, recentMatches, recordMatch, statsForUser, topCombosForUser } from './history';
 import { readReports, saveReport } from './reports';
-import { applySettlement, awardTokens, balanceOf, balancesOf, requestTokens } from './tokens';
+import {
+  TokenError,
+  applySettlement,
+  awardTokens,
+  balanceOf,
+  balancesOf,
+  requestTokens,
+  transferTokens,
+} from './tokens';
 import { ROOM_TTL_MS, Room, RoomStore, Seat, metaOf, newSeat } from './rooms';
 import { serveStatic } from './static';
 
@@ -399,7 +407,7 @@ async function pingDb(): Promise<boolean> {
  * эхлэхгүй байгааг мэдэхгүй байв.
  */
 function sendAuthError(socket: WebSocket, err: unknown): void {
-  if (err instanceof AuthError || err instanceof RuleError) {
+  if (err instanceof AuthError || err instanceof RuleError || err instanceof TokenError) {
     return send(socket, { t: 'error', message: err.message });
   }
   console.error('handler error:', err);
@@ -781,6 +789,63 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     void dropInvite(account.id, String(msg.roomCode ?? ''))
       .then(() => pushInvites(account.id))
       .catch((err) => console.error('урилга устгаж чадсангүй:', err));
+    return;
+  }
+
+  /**
+   * Өөр тоглогч руу чип илгээх.
+   *
+   * Өрөөнөөс ГАДУУР ч (профайлаас нэрээр) ажиллана. Өрөөнд байвал `playerId`-аар
+   * хөршөө сонгож болно. Явж буй бооцоотой тоглолтын бооцоо түгжигдэнэ.
+   */
+  if (msg.t === 'transferTokens') {
+    requireDb();
+    const account = accounts.get(socket);
+    if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
+
+    const active = sessions.get(socket);
+    let to: { userId: string } | { username: string };
+    if (msg.playerId) {
+      const seat = active?.room.seats.get(String(msg.playerId));
+      if (!seat) throw new RuleError('Тоглогч олдсонгүй.');
+      if (!seat.userId) throw new RuleError('Зочин эсвэл робот руу чип илгээх боломжгүй.');
+      to = { userId: seat.userId };
+    } else {
+      const username = String(msg.username ?? '').trim();
+      if (!username) throw new RuleError('Хүлээн авагчийн нэрийг бичнэ үү.');
+      to = { username };
+    }
+
+    void transferTokens(account.id, to, Number(msg.amount), lockedStake(account.id))
+      .then((result) => {
+        setBalance(account.id, result.fromBalance);
+        setBalance(result.toId, result.toBalance);
+        send(socket, {
+          t: 'notice',
+          message:
+            `${result.toUsername} руу ${spaced(result.received)} чип илгээлээ ` +
+            `(шимтгэл ${spaced(result.fee)}).`,
+        });
+        for (const s of online.get(result.toId) ?? []) {
+          send(s, {
+            t: 'notice',
+            message: `${account.username} танд ${spaced(result.received)} чип илгээлээ.`,
+          });
+        }
+        // Нэг өрөөнд байвал бусад нь ч харна — ширээний ёс.
+        if (active && [...active.room.seats.values()].some((s) => s.userId === result.toId)) {
+          const line: ServerMessage = {
+            t: 'chat',
+            from: 'Дай Ди',
+            text: `💸 ${account.username} → ${result.toUsername}: ${spaced(result.received)} чип`,
+            at: Date.now(),
+          };
+          active.room.chat.push(line);
+          if (active.room.chat.length > CHAT_HISTORY) active.room.chat.shift();
+          broadcastRaw(active.room, line);
+        }
+      })
+      .catch((err) => sendAuthError(socket, err));
     return;
   }
 
@@ -1499,9 +1564,13 @@ function saveFinishedMatch(room: Room): void {
     if (userId) changes.set(userId, entry.amount);
   }
   if (changes.size > 0) {
+    room.settling = true;
     void applySettlement(changes)
       .then(() => refreshAccounts(room))
-      .catch((err) => console.error('токены тооцоо хийж чадсангүй:', err));
+      .catch((err) => console.error('токены тооцоо хийж чадсангүй:', err))
+      .finally(() => {
+        room.settling = false;
+      });
   }
 }
 
@@ -1588,6 +1657,41 @@ async function ensureTokens(room: Room, stake: number): Promise<void> {
         'Бага бооцоо сонгох эсвэл токен хүсэх шаардлагатай.',
     );
   }
+}
+
+/**
+ * Хэрэглэгчийн явж буй бооцоотой тоглолтуудад түгжигдсэн чип.
+ *
+ * Хожигдвол хамгийн ихдээ `stake` алдана. Тооцоо санд бичигдэж дуустал
+ * (matchEnd + settling) ч түгжээтэй хэвээр.
+ */
+function lockedStake(userId: string): number {
+  let locked = 0;
+  rooms.forEach((room) => {
+    const { phase, stake } = room.state;
+    if (stake <= 0 || phase === 'lobby') return;
+    if (phase === 'matchEnd' && !room.settling) return;
+    for (const seat of room.seats.values()) {
+      if (seat.userId === userId) locked += stake;
+    }
+  });
+  return locked;
+}
+
+/** Хэрэглэгчийн бүх нээлттэй сокетод шинэ үлдэгдлийг илгээнэ. */
+function setBalance(userId: string, tokens: number): void {
+  for (const s of online.get(userId) ?? []) {
+    const account = accounts.get(s);
+    if (!account) continue;
+    const updated = { ...account, tokens };
+    accounts.set(s, updated);
+    send(s, { t: 'auth', account: updated });
+  }
+}
+
+/** 1000000 → "1 000 000" */
+function spaced(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 /** Тоглолтын дараа шинэ үлдэгдлийг холбогдсон клиентүүдэд мэдэгдэнэ. */

@@ -197,6 +197,7 @@ function Root() {
     onVerifyEmail: game.verifyEmail,
     onResendCode: game.resendCode,
     onRequestTokens: game.requestTokens,
+    onTransferTokens: game.transferTokens,
     onSetAvatar: game.setAvatar,
     onForgotPassword: game.forgotPassword,
     onResetPassword: game.resetPassword,
@@ -343,6 +344,11 @@ function Root() {
             pendingName={inspecting}
             info={game.playerInfo}
             onClose={closeInspect}
+            onTransfer={
+              game.account && !view.spectating && game.playerInfo?.playerId !== view.youId
+                ? (playerId, amount) => game.transferTokens({ playerId }, amount)
+                : undefined
+            }
           />
           <ReportButton
             lastReportId={game.lastReportId}

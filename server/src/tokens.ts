@@ -6,6 +6,11 @@
  * тоглолтын үр дүнгээр хэлбэлзэнэ. Дуусвал админ гараар нэмж өгнө.
  */
 
+import {
+  DAILY_TRANSFER_LIMIT,
+  MIN_TRANSFER,
+  transferFee,
+} from '../../app/src/shared/transfer';
 import { getPool } from './db';
 import { sendEmail } from './email';
 
@@ -165,6 +170,126 @@ export async function grantTokens(username: string, amount: number): Promise<num
     );
     await client.query('COMMIT');
     return Number(row.tokens);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export interface TransferResult {
+  toId: string;
+  toUsername: string;
+  /** Илгээгчээс хасагдсан. */
+  amount: number;
+  fee: number;
+  /** Хүлээн авагчид очсон (amount − fee). */
+  received: number;
+  fromBalance: number;
+  toBalance: number;
+}
+
+/**
+ * Нэг тоглогчоос нөгөөд чип шилжүүлнэ.
+ *
+ * `to` нь userId эсвэл хэрэглэгчийн нэрээр. `locked` нь явж буй бооцоотой
+ * тоглолтод түгжигдсэн хэмжээ — түүнийг шилжүүлж болохгүй, эс бөгөөс
+ * хожигдохоосоо өмнө чипээ найздаа өгч бооцооноос зугтана.
+ *
+ * Хоёр мөрийг id-н дарааллаар FOR UPDATE түгжинэ: зэрэг ирсэн шилжүүлгүүд
+ * дараалалд орж, үлдэгдэл/өдрийн хязгаар давхар зарцуулагдахгүй, мөн A→B,
+ * B→A зэрэг явахад deadlock үүсэхгүй.
+ */
+export async function transferTokens(
+  fromId: string,
+  to: { userId: string } | { username: string },
+  amount: number,
+  locked = 0,
+): Promise<TransferResult> {
+  if (!Number.isInteger(amount) || amount < MIN_TRANSFER) {
+    throw new TokenError(`Хамгийн багадаа ${MIN_TRANSFER} чип илгээнэ.`);
+  }
+
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+
+    const target =
+      'userId' in to
+        ? await client.query<{ id: string }>('SELECT id FROM users WHERE id = $1', [to.userId])
+        : await client.query<{ id: string }>('SELECT id FROM users WHERE username_key = $1', [
+            to.username.trim().toLowerCase(),
+          ]);
+    const toId = target.rows[0]?.id;
+    if (!toId) throw new TokenError('Хүлээн авах хэрэглэгч олдсонгүй.');
+    if (toId === fromId) throw new TokenError('Өөр рүүгээ чип илгээх боломжгүй.');
+
+    const rows = await client.query<{
+      id: string;
+      username: string;
+      tokens: string;
+      email_verified: boolean;
+    }>(
+      `SELECT id, username, tokens, email_verified FROM users
+        WHERE id = ANY($1::bigint[]) ORDER BY id FOR UPDATE`,
+      [[fromId, toId]],
+    );
+    const sender = rows.rows.find((r) => r.id === fromId);
+    const recipient = rows.rows.find((r) => r.id === toId);
+    if (!sender || !recipient) throw new TokenError('Хэрэглэгч олдсонгүй.');
+    if (!sender.email_verified) {
+      throw new TokenError('Чип илгээхийн өмнө имэйлээ баталгаажуулна уу.');
+    }
+
+    const sent = await client.query<{ total: string }>(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM token_transfers
+        WHERE from_user = $1 AND created_at > now() - interval '24 hours'`,
+      [fromId],
+    );
+    const left = DAILY_TRANSFER_LIMIT - Number(sent.rows[0].total);
+    if (amount > left) {
+      throw new TokenError(
+        left > 0
+          ? `24 цагт ${DAILY_TRANSFER_LIMIT} хүртэл илгээнэ. Үлдсэн эрх: ${left}.`
+          : `24 цагийн хязгаар (${DAILY_TRANSFER_LIMIT}) дууссан байна.`,
+      );
+    }
+
+    const free = Number(sender.tokens) - locked;
+    if (amount > free) {
+      throw new TokenError(
+        locked > 0
+          ? `Чип хүрэлцэхгүй. ${locked} нь явж буй тоглолтын бооцоонд түгжигдсэн тул ${Math.max(0, free)} хүртэл илгээнэ.`
+          : `Чип хүрэлцэхгүй. Үлдэгдэл: ${sender.tokens}.`,
+      );
+    }
+
+    const fee = transferFee(amount);
+    const received = amount - fee;
+    const from = await client.query<{ tokens: string }>(
+      'UPDATE users SET tokens = tokens - $2 WHERE id = $1 RETURNING tokens',
+      [fromId, amount],
+    );
+    const toRow = await client.query<{ tokens: string }>(
+      'UPDATE users SET tokens = tokens + $2 WHERE id = $1 RETURNING tokens',
+      [toId, received],
+    );
+    await client.query(
+      'INSERT INTO token_transfers (from_user, to_user, amount, fee) VALUES ($1, $2, $3, $4)',
+      [fromId, toId, amount, fee],
+    );
+    await client.query('COMMIT');
+
+    return {
+      toId,
+      toUsername: recipient.username,
+      amount,
+      fee,
+      received,
+      fromBalance: Number(from.rows[0].tokens),
+      toBalance: Number(toRow.rows[0].tokens),
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

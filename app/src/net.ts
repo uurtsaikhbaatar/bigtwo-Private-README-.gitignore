@@ -433,6 +433,12 @@ export function useBigTwo(serverUrl: string) {
     resendCode: useCallback(() => send({ t: 'resendCode' }), [send]),
     /** Токен дуусахад админаас хүсэх. */
     requestTokens: useCallback(() => send({ t: 'requestTokens' }), [send]),
+    /** Өөр тоглогч руу чип илгээх: өрөөн доторхыг playerId-аар, бусдыг нэрээр. */
+    transferTokens: useCallback(
+      (to: { playerId: string } | { username: string }, amount: number) =>
+        send({ t: 'transferTokens', amount, ...to }),
+      [send],
+    ),
 
     createRoom: useCallback((name: string) => send({ t: 'create', name }), [send]),
     joinRoom: useCallback(
