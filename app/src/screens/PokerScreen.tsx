@@ -9,7 +9,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  LayoutChangeEvent,
   Pressable,
   useWindowDimensions,
   ScrollView,
@@ -22,7 +21,7 @@ import {
 
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
-import { CardBack, PlayingCard } from '../components/PlayingCard';
+import { PokerTable } from '../components/PokerTable';
 import { RankBadge } from '../components/RankBadge';
 import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import { WatchLinkButton } from '../components/WatchLinkButton';
@@ -67,7 +66,11 @@ export function PokerScreen(props: Props) {
   const started = view.handNo > 0;
   const showLobby = !started || view.phase === 'finished';
   return (
-    <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.page}
+      keyboardShouldPersistTaps="handled"
+    >
       <Header {...props} />
       {view.spectating && (
         <View style={styles.spectator}>
@@ -77,7 +80,7 @@ export function PokerScreen(props: Props) {
           </Pressable>
         </View>
       )}
-      {started && <Table {...props} />}
+      {started && <PokerTable view={view} onInspect={props.onInspect} />}
       {started && !view.spectating && view.phase !== 'finished' && <YouPanel {...props} />}
       {view.phase === 'finished' && <Results view={view} />}
       {showLobby && !view.spectating && <Lobby {...props} />}
@@ -129,183 +132,6 @@ function Header({ view, onLeave, onInvite }: Props) {
   );
 }
 
-// ── Ширээ ───────────────────────────────────────────────────────────────────
-
-function Table({ view, onInspect }: Props) {
-  const [size, setSize] = useState({ w: 360, h: 380 });
-  const onLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    if (Math.abs(width - size.w) > 1 || Math.abs(height - size.h) > 1) setSize({ w: width, h: height });
-  };
-  const me = view.players.find((p) => p.id === view.youId);
-  const anchor = me?.seat ?? 0;
-  const secondsLeft = useTurnCountdown(view.turnRemainingMs, view.turnSeq);
-
-  // Эллипс дээрх байрлал: k=0 доод төв (та), цагийн зүүний дагуу.
-  const pos = (seat: number, inset = 0) => {
-    const k = (seat - anchor + POKER_MAX_SEATS) % POKER_MAX_SEATS;
-    const a = Math.PI / 2 + (k * 2 * Math.PI) / POKER_MAX_SEATS;
-    const rx = size.w / 2 - 44 - inset * (size.w / 2 - 44);
-    // Доод суудлын хөзөр, цаг бүрэн харагдахаар зай үлдээнэ.
-    const ry = size.h / 2 - 58 - inset * (size.h / 2 - 58);
-    return { x: size.w / 2 + rx * Math.cos(a), y: size.h / 2 + ry * Math.sin(a) };
-  };
-
-  const winners = new Set(view.pots.flatMap((p) => p.winners));
-  const showResult = view.phase === 'handEnd' || view.phase === 'finished';
-
-  // Жинхэнэ покерын ширээ шиг зууван: модон хүрээ → ногоон даавуу → betting line.
-  // Утсанд (босоо дэлгэц) босоо, компьютерт хэвтээ — дэлгэцийн хэлбэрээс шууд.
-  return (
-    <View style={styles.tableWrap} onLayout={onLayout}>
-      <View style={styles.rail}>
-        <View style={styles.felt}>
-          <View style={styles.bettingLine} />
-          <Text style={styles.feltLogo}>♠ Дай Ди</Text>
-        </View>
-      </View>
-      {/* Төв: ширээний хөзөр ба Pot */}
-      <View style={[styles.center, { left: size.w / 2 - 120, top: size.h / 2 - 52 }]}>
-        <View style={styles.board}>
-          {Array.from({ length: 5 }, (_, i) =>
-            view.board[i] !== undefined ? (
-              <PlayingCard key={i} card={view.board[i]} size="sm" />
-            ) : (
-              <View key={i} style={styles.boardSlot} />
-            ),
-          )}
-        </View>
-        <Text style={styles.pot}>
-          {showResult ? 'Pot' : 'Pot'} {n(view.pot)}
-        </Text>
-        {showResult && view.pots.length > 0 && (
-          <View style={styles.potResults}>
-            {view.pots.map((pot, i) => (
-              <Text key={i} style={styles.potLine} numberOfLines={2}>
-                {pot.name} {n(pot.amount)} →{' '}
-                {pot.winners.map((id) => view.players.find((p) => p.id === id)?.name ?? '?').join(', ')}
-                {pot.hand ? ` · ${pot.hand}` : ''}
-              </Text>
-            ))}
-          </View>
-        )}
-      </View>
-
-      {view.players.map((p) => {
-        const at = pos(p.seat);
-        const chipAt = pos(p.seat, 0.42);
-        const acting = view.toAct === p.id;
-        return (
-          <React.Fragment key={p.id}>
-            {p.bet > 0 && (
-              <View style={[styles.betChip, { left: chipAt.x - 30, top: chipAt.y - 10 }]}>
-                <Text style={styles.betText}>{n(p.bet)}</Text>
-              </View>
-            )}
-            <Seat
-              p={p}
-              you={p.id === view.youId}
-              acting={acting}
-              winner={showResult && winners.has(p.id)}
-              secondsLeft={acting ? secondsLeft : null}
-              style={{ left: at.x - 42, top: at.y - 30 }}
-              onPress={() => onInspect(p.id, p.name)}
-            />
-          </React.Fragment>
-        );
-      })}
-    </View>
-  );
-}
-
-function Seat({
-  p,
-  you,
-  acting,
-  winner,
-  secondsLeft,
-  style,
-  onPress,
-}: {
-  p: PokerPlayerView;
-  you: boolean;
-  acting: boolean;
-  winner: boolean;
-  secondsLeft: number | null;
-  style: object;
-  onPress: () => void;
-}) {
-  const out = p.eliminated || (!p.dealt && p.stack === 0);
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.seat,
-        style,
-        acting && styles.seatActing,
-        winner && styles.seatWinner,
-        (p.folded || out) && styles.seatDim,
-      ]}
-      accessibilityRole="button"
-    >
-      <View style={styles.seatCards}>
-        {p.hole ? (
-          p.hole.map((c) => <PlayingCard key={c} card={c} size="sm" />)
-        ) : p.hasCards ? (
-          <>
-            <CardBack size="sm" />
-            <CardBack size="sm" />
-          </>
-        ) : null}
-      </View>
-      <View style={styles.seatInfo}>
-        {/* Big Two-гийн өрсөлдөгчийн толгойтой ижил: цэг, зураг, нэр, цол. */}
-        <View style={styles.seatNameRow}>
-          <View style={[styles.seatDot, { backgroundColor: p.connected ? theme.success : theme.danger }]} />
-          <Avatar name={p.name} avatar={p.avatar} size={16} />
-          <Text style={[styles.seatName, you && styles.seatNameYou]} numberOfLines={1}>
-            {p.name}
-          </Text>
-        </View>
-        {p.rankedWins !== null && (
-          <View style={styles.seatRank}>
-            <RankBadge wins={p.rankedWins} />
-          </View>
-        )}
-        <Text style={styles.seatStack}>
-          {p.eliminated ? `#${p.place}` : n(p.stack)}
-          {p.allIn ? ' · All-in' : ''}
-        </Text>
-        {p.lastAction && !p.eliminated && (
-          <Text style={styles.seatAction} numberOfLines={1}>
-            {p.lastAction}
-          </Text>
-        )}
-        {p.handLabel && p.hole && (
-          <Text style={styles.seatHand} numberOfLines={1}>
-            {p.handLabel}
-          </Text>
-        )}
-        {(p.sittingOut || p.waitBB || !p.connected) && !p.eliminated && (
-          <Text style={styles.seatAway} numberOfLines={1}>
-            {!p.connected ? 'тасарсан' : p.waitBB ? 'BB хүлээж байна' : 'Sit out'}
-          </Text>
-        )}
-      </View>
-      <View style={styles.badges}>
-        {p.isButton && <Text style={[styles.badge, styles.badgeD]}>D</Text>}
-        {p.isSB && <Text style={styles.badge}>SB</Text>}
-        {p.isBB && <Text style={styles.badge}>BB</Text>}
-      </View>
-      {secondsLeft !== null && (
-        <View style={styles.seatTimer}>
-          <TurnTimer secondsLeft={secondsLeft} yours={you} compact />
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
 // ── Танд ────────────────────────────────────────────────────────────────────
 
 function YouPanel(props: Props) {
@@ -337,9 +163,6 @@ function YouPanel(props: Props) {
         )}
       </Pressable>
       <View style={styles.youRow}>
-        <View style={styles.youCards}>
-          {me.hole?.map((c) => <PlayingCard key={c} card={c} size="md" dimmed={me.folded} />)}
-        </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.youStack}>Stack {n(me.stack)}</Text>
           {view.yourHand && <Text style={styles.youHand}>{view.yourHand}</Text>}
@@ -772,6 +595,7 @@ function HandLog({ view }: { view: PokerView }) {
 // ── Загвар ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: '#101010' },
   page: { padding: 12, paddingBottom: 140, gap: 10, width: '100%', maxWidth: 720, alignSelf: 'center' },
   // Утсанд нарийн тул гарчиг ба товчлуурыг хоёр мөрөнд (нэг мөрөнд бол гарчиг шахагдана).
   header: { gap: 8 },
@@ -793,94 +617,6 @@ const styles = StyleSheet.create({
   spectatorText: { color: theme.text, fontWeight: '700' },
   spectatorLeave: { color: theme.accent, fontWeight: '700' },
 
-  tableWrap: { width: '100%', height: 420, position: 'relative' },
-  // borderRadius '50%' → жинхэнэ эллипс (тойрог биш, дугуйрсан тэгш өнцөгт ч биш).
-  rail: {
-    position: 'absolute',
-    left: 22,
-    right: 22,
-    top: 26,
-    bottom: 26,
-    borderRadius: '50%',
-    backgroundColor: '#4a2c17',
-    borderWidth: 3,
-    borderColor: '#24140a',
-    padding: 11,
-    shadowColor: '#000',
-    shadowOpacity: 0.6,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  felt: {
-    flex: 1,
-    borderRadius: '50%',
-    backgroundColor: theme.felt,
-    borderWidth: 2,
-    borderColor: '#0a3d29',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  bettingLine: {
-    position: 'absolute',
-    left: 22,
-    right: 22,
-    top: 22,
-    bottom: 22,
-    borderRadius: '50%',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.16)',
-  },
-  feltLogo: {
-    position: 'absolute',
-    bottom: '22%',
-    color: 'rgba(255,255,255,0.10)',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  center: { position: 'absolute', width: 240, alignItems: 'center', gap: 4 },
-  board: { flexDirection: 'row', gap: 4 },
-  boardSlot: {
-    width: 40,
-    height: 58,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    borderStyle: 'dashed',
-  },
-  pot: { color: theme.accent, fontWeight: '800', fontSize: 15 },
-  potResults: { backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 8, padding: 6, gap: 2, maxWidth: 240 },
-  potLine: { color: theme.text, fontSize: 11 },
-  betChip: {
-    position: 'absolute',
-    width: 60,
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 10,
-    paddingVertical: 2,
-  },
-  betText: { color: theme.accent, fontSize: 11, fontWeight: '800' },
-
-  seat: {
-    position: 'absolute',
-    width: 84,
-    backgroundColor: 'rgba(16,35,58,0.94)',
-    borderRadius: 10,
-    padding: 4,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    alignItems: 'center',
-  },
-  seatActing: { borderColor: theme.accent },
-  seatWinner: { borderColor: theme.success },
-  seatDim: { opacity: 0.5 },
-  seatCards: { flexDirection: 'row', gap: 2, marginTop: -26, minHeight: 22 },
-  seatInfo: { alignItems: 'center', width: '100%' },
-  seatNameRow: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%' },
-  seatDot: { width: 6, height: 6, borderRadius: 3 },
-  seatRank: { marginTop: 1 },
   meRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', maxWidth: '100%' },
   meName: { color: theme.text, fontSize: 14, fontWeight: '700', flexShrink: 1 },
   guestTag: {
@@ -891,24 +627,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  seatName: { color: theme.text, fontSize: 11, fontWeight: '700', flexShrink: 1 },
-  seatNameYou: { color: theme.accent },
-  seatStack: { color: theme.text, fontSize: 11, fontWeight: '800' },
-  seatAction: { color: '#93c5fd', fontSize: 10 },
-  seatHand: { color: theme.success, fontSize: 9, fontWeight: '700' },
-  seatAway: { color: theme.textMuted, fontSize: 9, fontStyle: 'italic' },
-  badges: { position: 'absolute', top: -8, right: -8, flexDirection: 'row', gap: 2 },
-  badge: {
-    backgroundColor: '#e5e7eb',
-    color: '#111',
-    fontSize: 9,
-    fontWeight: '900',
-    paddingHorizontal: 4,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  badgeD: { backgroundColor: theme.accent },
-  seatTimer: { position: 'absolute', bottom: -12 },
 
   youPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12, gap: 10 },
   fabGap: { marginRight: 60 },
