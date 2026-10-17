@@ -14,6 +14,7 @@ import type {
   PlayerStats,
   TopCombo,
 } from '../../app/src/shared/protocol';
+import type { PokerState } from '../../app/src/shared/holdem/engine';
 import { getPool } from './db';
 
 /**
@@ -125,7 +126,9 @@ export async function topCombosForUser(userId: string, limit = 10): Promise<TopC
 }
 
 /** Хэрэглэгчийн нийт статистик. */
-export async function statsForUser(userId: string): Promise<PlayerStats> {
+export type GameKind = 'bigtwo' | 'holdem';
+
+export async function statsForUser(userId: string, game: GameKind = 'bigtwo'): Promise<PlayerStats> {
   const result = await getPool().query<{
     matches: string;
     wins: string;
@@ -143,8 +146,8 @@ export async function statsForUser(userId: string): Promise<PlayerStats> {
             count(*) FILTER (WHERE m.dragon AND mp.won)         AS dragons
        FROM match_players mp
        JOIN matches m ON m.id = mp.match_id
-      WHERE mp.user_id = $1`,
-    [userId],
+      WHERE mp.user_id = $1 AND m.game = $2`,
+    [userId, game],
   );
   const row = result.rows[0];
   return {
@@ -177,7 +180,7 @@ export async function recentMatches(userId: string, limit = 10): Promise<MatchSu
                FROM match_players p WHERE p.match_id = m.id) AS players
        FROM match_players mine
        JOIN matches m ON m.id = mine.match_id
-      WHERE mine.user_id = $1
+      WHERE mine.user_id = $1 AND m.game = 'bigtwo'
       ORDER BY m.finished_at DESC
       LIMIT $2`,
     [userId, limit],
@@ -203,7 +206,7 @@ export async function recentMatches(userId: string, limit = 10): Promise<MatchSu
  * (bot биш — bot-д user_id байхгүй), тест тоглолт хасагдана. Ядаж нэг
  * удаа хожсон хүмүүсийг л оруулна.
  */
-export async function leaderboard(limit = 10): Promise<LeaderboardEntry[]> {
+export async function leaderboard(limit = 10, game: GameKind = 'bigtwo'): Promise<LeaderboardEntry[]> {
   const result = await getPool().query<{
     username: string;
     ranked_wins: number;
@@ -217,7 +220,7 @@ export async function leaderboard(limit = 10): Promise<LeaderboardEntry[]> {
        FROM match_players mp
        JOIN matches m ON m.id = mp.match_id
        JOIN users u ON u.id = mp.user_id
-      WHERE mp.user_id IS NOT NULL AND NOT m.test
+      WHERE mp.user_id IS NOT NULL AND NOT m.test AND m.game = $2
         -- Автомат тест/smoke бүртгэлийг хасна (жинхэнэ тоглогч биш).
         AND u.username NOT LIKE 'тест_%'
         AND u.username NOT LIKE 'test_%'
@@ -226,7 +229,7 @@ export async function leaderboard(limit = 10): Promise<LeaderboardEntry[]> {
      HAVING count(*) FILTER (WHERE mp.won) > 0
       ORDER BY ranked_wins DESC, wins DESC, matches ASC
       LIMIT $1`,
-    [limit],
+    [limit, game],
   );
   return result.rows.map((row) => ({
     username: row.username,
@@ -234,4 +237,75 @@ export async function leaderboard(limit = 10): Promise<LeaderboardEntry[]> {
     wins: row.wins,
     matches: row.matches,
   }));
+}
+
+/**
+ * Hold'em Sit & Go-г түүхэд хадгална (game='holdem').
+ *   score = эзэлсэн байр, won = 1-р байр, chips = токены цэвэр өөрчлөлт.
+ * Цол (ranked_wins) нь Big Two-гийнхтой адил: чиптэй, хүн өрсөлдөгчтэй хожил.
+ */
+export async function recordPokerMatch(
+  state: PokerState,
+  roomCode: string,
+  accounts: Map<string, string>,
+  isTest = false,
+): Promise<string | null> {
+  if (state.format !== 'sng' || state.phase !== 'finished') return null;
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const match = await client.query<{ id: string }>(
+      `INSERT INTO matches (room_code, rounds, target_score, stake, dragon, test, game)
+       VALUES ($1, $2, 0, $3, false, $4, 'holdem') RETURNING id`,
+      [roomCode, state.handNo, state.buyIn, isTest],
+    );
+    const matchId = match.rows[0].id;
+    for (const p of state.players) {
+      if (p.place === null) continue;
+      const chips = state.settlement?.find((s) => s.playerId === p.id)?.amount ?? 0;
+      await client.query(
+        `INSERT INTO match_players (match_id, user_id, name, score, won, chips)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (match_id, name) DO NOTHING`,
+        [matchId, accounts.get(p.id) ?? null, p.name, p.place, p.place === 1, chips],
+      );
+    }
+    await client.query('COMMIT');
+    return matchId;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Hold'em-ийн гарыг бүртгэнэ (шинжилгээнд). Алдаа гарвал тоглоомд нөлөөлөхгүй. */
+export async function recordPokerHand(
+  state: PokerState,
+  roomCode: string,
+  accounts: Map<string, string>,
+  isTest = false,
+): Promise<void> {
+  const players = state.players
+    .filter((p) => p.dealt)
+    .map((p) => ({
+      name: p.name,
+      userId: accounts.get(p.id) ?? null,
+      bot: p.bot,
+      seat: p.seat,
+      hole: p.hole,
+      folded: p.folded,
+      shown: p.showCards,
+      won: p.won,
+      startStack: p.startStack,
+      endStack: p.stack,
+      hand: p.handLabel,
+    }));
+  const pot = state.pots.reduce((a, x) => a + x.amount, 0);
+  await getPool().query(
+    `INSERT INTO poker_hands (room_code, format, hand_no, sb, bb, board, pot, players, test)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [roomCode, state.format, state.handNo, state.sb, state.bb, state.board, pot, JSON.stringify(players), isTest],
+  );
 }

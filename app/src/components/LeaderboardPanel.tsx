@@ -8,14 +8,16 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import type { LeaderboardEntry } from '../shared/protocol';
+import type { GameKind, LeaderboardEntry } from '../shared/protocol';
 import { rankFor } from '../shared/ranks';
 import { Overlay } from './Overlay';
 import { theme } from '../theme';
 
 interface Props {
   entries: LeaderboardEntry[] | null;
-  onLoad: () => void;
+  /** `entries` аль тоглоомынх вэ (хариу ирэх хүртэл хуучин жагсаалт харагдахгүй). */
+  entriesGame?: GameKind;
+  onLoad: (game: GameKind) => void;
   /** Одоо нэвтэрсэн хэрэглэгчийн нэр — өөрийгөө онцолж харуулна. */
   myUsername?: string | null;
 }
@@ -25,12 +27,19 @@ function medal(place: number): string {
   return place === 1 ? '🥇' : place === 2 ? '🥈' : place === 3 ? '🥉' : `${place}`;
 }
 
-export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
+export function LeaderboardPanel({ entries, entriesGame = 'bigtwo', onLoad, myUsername }: Props) {
   const [open, setOpen] = useState(false);
+  // Цол тоглоом тус бүрт тусдаа — таб сольж харна.
+  const [game, setGame] = useState<GameKind>('bigtwo');
+  const shown = entriesGame === game ? entries : null;
 
   const openPanel = () => {
     setOpen(true);
-    onLoad(); // нээх бүрд шинэчилнэ
+    onLoad(game); // нээх бүрд шинэчилнэ
+  };
+  const pick = (g: GameKind) => {
+    setGame(g);
+    onLoad(g);
   };
 
   return (
@@ -48,13 +57,28 @@ export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
             </Pressable>
           </View>
 
+          <View style={styles.tabs}>
+            {(['bigtwo', 'holdem'] as const).map((g) => (
+              <Pressable
+                key={g}
+                onPress={() => pick(g)}
+                accessibilityRole="button"
+                style={[styles.tab, game === g && styles.tabOn]}
+              >
+                <Text style={[styles.tabText, game === g && styles.tabTextOn]}>
+                  {g === 'bigtwo' ? 'Big Two' : "Texas Hold'em"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
           <ScrollView contentContainerStyle={styles.body}>
-            {entries === null ? (
+            {shown === null ? (
               <Text style={styles.empty}>Ачаалж байна…</Text>
-            ) : entries.length === 0 ? (
+            ) : shown.length === 0 ? (
               <Text style={styles.empty}>Хараахан хожсон тоглогч алга.</Text>
             ) : (
-              entries.map((e, i) => {
+              shown.map((e, i) => {
                 const rank = rankFor(e.rankedWins);
                 const mine = myUsername != null && e.username === myUsername;
                 return (
@@ -88,6 +112,9 @@ export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
             )}
 
             <Text style={styles.note}>
+              {game === 'holdem'
+                ? "Texas Hold'em-ийн цол нь Sit & Go тэмцээнд 1-р байр эзэлсэн (Buy-in-тэй, ядаж нэг хүн өрсөлдөгчтэй) хожлоор тоологдоно. Cash game цолд тооцогдохгүй. "
+                : ''}
               Цол ба жагсаалт нь ЗӨВХӨН ХҮНТЭЙ тоглосон чиптэй хожлоор
               тодорхойлогдоно — роботоор фарм хийж цол авахгүй. "Бусад" гэдэгт
               роботтой болон чипгүй хожил орно (чипээ роботтой тоглоод хожиж болно,
@@ -101,6 +128,17 @@ export function LeaderboardPanel({ entries, onLoad, myUsername }: Props) {
 }
 
 const styles = StyleSheet.create({
+  tabs: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: theme.surfaceRaised,
+    alignItems: 'center',
+  },
+  tabOn: { backgroundColor: theme.accent },
+  tabText: { color: theme.textMuted, fontWeight: '700', fontSize: 13 },
+  tabTextOn: { color: '#1b1b1f' },
   trigger: {
     backgroundColor: theme.surface,
     borderRadius: theme.radius,

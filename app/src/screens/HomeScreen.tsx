@@ -14,7 +14,8 @@ import { AuthPanel } from '../components/AuthPanel';
 import { InviteList } from '../components/InviteList';
 import { LeaderboardPanel } from '../components/LeaderboardPanel';
 import { Button } from '../components/Button';
-import type { Invite, LeaderboardEntry } from '../shared/protocol';
+import type { GameKind, Invite, LeaderboardEntry } from '../shared/protocol';
+import type { PokerFormat } from '../shared/holdem/structure';
 import { theme } from '../theme';
 
 interface Props {
@@ -24,7 +25,8 @@ interface Props {
   onNameChange: (name: string) => void;
   serverUrl: string;
   onServerUrlChange: (url: string) => void;
-  onCreate: () => void;
+  /** Өрөө үүсгэх — тоглоом ба (Hold'em бол) хэлбэр. */
+  onCreate: (game: GameKind, format: PokerFormat) => void;
   onJoin: (code: string) => void;
   connecting: boolean;
   /** Линкээр урьсан өрөөний код (`?code=…`). */
@@ -41,6 +43,7 @@ interface Props {
   onEnterGuest: () => void;
   /** Топ тоглогчид (татагдаагүй бол null). */
   leaderboard: LeaderboardEntry[] | null;
+  leaderboardGame?: GameKind;
   onLoadLeaderboard: () => void;
 }
 
@@ -69,9 +72,13 @@ export function HomeScreen({
   guestReady,
   onEnterGuest,
   leaderboard,
+  leaderboardGame,
   onLoadLeaderboard,
 }: Props) {
   const [code, setCode] = useState(initialCode);
+  // Тоглогч өөрөө аль тоглоом тоглохоо сонгоно.
+  const [game, setGame] = useState<GameKind>('bigtwo');
+  const [format, setFormat] = useState<PokerFormat>('sng');
   const [showSettings, setShowSettings] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -109,6 +116,7 @@ export function HomeScreen({
   const leaderboardButton = (
     <LeaderboardPanel
       entries={leaderboard}
+      entriesGame={leaderboardGame}
       onLoad={onLoadLeaderboard}
       myUsername={auth.account?.username}
     />
@@ -300,10 +308,45 @@ export function HomeScreen({
             </>
           )}
 
+          <Text style={styles.label}>Тоглоом</Text>
+          <View style={styles.segment}>
+            {(['bigtwo', 'holdem'] as const).map((g) => (
+              <Pressable
+                key={g}
+                onPress={() => setGame(g)}
+                accessibilityRole="button"
+                style={[styles.segItem, game === g && styles.segOn]}
+              >
+                <Text style={[styles.segText, game === g && styles.segTextOn]}>
+                  {g === 'bigtwo' ? '🂡 Big Two' : "♠ Texas Hold'em"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {game === 'holdem' && (
+            <View style={styles.segment}>
+              {(['sng', 'cash'] as const).map((f) => (
+                <Pressable
+                  key={f}
+                  onPress={() => setFormat(f)}
+                  accessibilityRole="button"
+                  style={[styles.segItem, styles.segSmall, format === f && styles.segOn]}
+                >
+                  <Text style={[styles.segText, format === f && styles.segTextOn]}>
+                    {f === 'sng' ? 'Sit & Go' : 'Cash game'}
+                  </Text>
+                  <Text style={[styles.segHint, format === f && styles.segTextOn]}>
+                    {f === 'sng' ? 'тэмцээн, сүүлд үлдсэн нь хожно' : 'чип = токен, хүссэн үедээ гарна'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
           <Button
             title="Шинэ өрөө үүсгэх"
             variant={invited ? 'secondary' : 'primary'}
-            onPress={onCreate}
+            onPress={() => onCreate(game, format)}
             disabled={!ready}
             loading={connecting && !invited}
             style={styles.spaced}
@@ -348,6 +391,22 @@ export function HomeScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  segment: { flexDirection: 'row', gap: 8 },
+  segItem: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+  },
+  segSmall: { minHeight: 52 },
+  segOn: { backgroundColor: theme.accent },
+  segText: { color: theme.text, fontWeight: '700', fontSize: 15 },
+  segTextOn: { color: '#1b1b1f' },
+  segHint: { color: theme.textMuted, fontSize: 11, marginTop: 2, textAlign: 'center' },
   container: {
     padding: 20,
     paddingBottom: 48,

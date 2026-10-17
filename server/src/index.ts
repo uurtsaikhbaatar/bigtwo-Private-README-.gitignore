@@ -87,6 +87,8 @@ import {
 } from './tokens';
 import { ROOM_TTL_MS, Room, RoomStore, Seat, metaOf, newSeat } from './rooms';
 import { serveStatic } from './static';
+import { PokerError, PokerServer } from './poker';
+import { PokerRuleError } from '../../app/src/shared/holdem/engine';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_NAME_LENGTH = 16;
@@ -95,6 +97,33 @@ const MAX_CHAT_LENGTH = 200;
 const CHAT_HISTORY = 30;
 
 const rooms = new RoomStore();
+
+/**
+ * Texas Hold'em — Big Two-гоос тусдаа store/цохилт. Кодоор нь чиглүүлнэ:
+ * Big Two-д байхгүй код → покер.
+ */
+const poker = new PokerServer({
+  send: (socket, msg) => send(socket, msg),
+  accountOf: (socket) => accounts.get(socket),
+  setAccount: (socket, account) => accounts.set(socket, account),
+  cleanName: (raw) => cleanName(raw),
+  sendError: (socket, err) => sendAuthError(socket, err),
+  pushInvites: (userId) => pushInvites(userId),
+  bigTwoHas: (code) => rooms.get(code) !== undefined,
+  leaveBigTwo: (socket) => leaveBigTwo(socket),
+  botName: (taken, level) => botNameFrom(taken, level),
+});
+
+/** Хэрэглэгчид шууд харуулах алдаа эсэх (дотоод алдаа биш). */
+function isUserError(err: unknown): err is Error {
+  return (
+    err instanceof RuleError ||
+    err instanceof AuthError ||
+    err instanceof PokerError ||
+    err instanceof PokerRuleError ||
+    err instanceof TokenError
+  );
+}
 
 // ── Өрөө хадгалалт (#1) ─────────────────────────────────────────────────────
 // Өрөө санах ойд байдаг тул сервер дахин асахад устдаг байв. Энд төлөвийг
@@ -221,13 +250,15 @@ async function restoreRooms(): Promise<void> {
     let n = 0;
     for (const { data } of snaps) {
       try {
-        rooms.restore(deserializeRoom(data));
+        if ((data as { kind?: string })?.kind === 'poker') poker.restore(data);
+        else rooms.restore(deserializeRoom(data));
         n += 1;
       } catch (err) {
         console.error('нэг өрөө сэргээхэд алдаа:', err);
       }
     }
     if (n) console.log(`✓ ${n} өрөө санаас сэргээв.`);
+    await poker.afterRestore();
   } catch (err) {
     console.error('өрөө сэргээж чадсангүй:', err);
   }
@@ -263,6 +294,7 @@ function markOnline(socket: WebSocket, account: Account): void {
   set.add(socket);
   online.set(account.id, set);
   linkSeat(socket, account);
+  poker.linkAccount(socket, account);
 }
 
 /**
@@ -348,7 +380,9 @@ function markOffline(socket: WebSocket): void {
  */
 async function liveInvites(userId: string) {
   const all = await invitesFor(userId);
-  return all.filter((invite) => rooms.get(invite.roomCode) !== undefined);
+  return all.filter(
+    (invite) => rooms.get(invite.roomCode) !== undefined || poker.has(invite.roomCode),
+  );
 }
 
 /** Тухайн хэрэглэгчийн бүх нээлттэй цонхонд урилгуудыг дахин илгээнэ. */
@@ -407,7 +441,7 @@ async function pingDb(): Promise<boolean> {
  * эхлэхгүй байгааг мэдэхгүй байв.
  */
 function sendAuthError(socket: WebSocket, err: unknown): void {
-  if (err instanceof AuthError || err instanceof RuleError || err instanceof TokenError) {
+  if (isUserError(err)) {
     return send(socket, { t: 'error', message: err.message });
   }
   console.error('handler error:', err);
@@ -469,14 +503,15 @@ wss.on('connection', (socket, req) => {
     try {
       handle(socket, msg);
     } catch (err) {
-      const message = err instanceof RuleError ? err.message : 'Дотоод алдаа гарлаа.';
-      if (!(err instanceof RuleError)) console.error('handler error:', err);
+      const message = isUserError(err) ? err.message : 'Дотоод алдаа гарлаа.';
+      if (!isUserError(err)) console.error('handler error:', err);
       send(socket, { t: 'error', message });
     }
   });
 
   socket.on('close', () => {
     markOffline(socket);
+    poker.onClose(socket);
     // ҮЗЭГЧ бол өрөөнөөс хасаад дуусна (тоглогч биш тул суудал цэвэрлэх хэрэггүй).
     const spec = spectatorOf.get(socket);
     if (spec) {
@@ -506,6 +541,9 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       return send(socket, { t: 'pong' });
 
     case 'create': {
+      if (msg.game === 'holdem') {
+        return poker.create(socket, cleanName(msg.name), msg.format === 'cash' ? 'cash' : 'sng');
+      }
       const room = rooms.create();
       seat(socket, room, cleanName(msg.name));
       room.hostId = sessions.get(socket)!.playerId;
@@ -514,6 +552,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
 
     case 'join': {
       const room = rooms.get(msg.code ?? '');
+      if (!room && poker.has(msg.code ?? '')) return poker.join(socket, msg.code, cleanName(msg.name));
       if (!room) throw new RuleError('Ийм дугаартай өрөө олдсонгүй.');
       // Тоглолт ДУУССАН өрөөнд орохыг зөвшөөрнө: урилгаар ирсэн найз
       // "Тоглоом эхэлсэн байна" гэж хөөгдөх ёсгүй. Явж байгаа тоглолтыг л
@@ -548,6 +587,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
      */
     case 'watch': {
       const room = rooms.get(msg.code ?? '');
+      if (!room && poker.has(msg.code ?? '')) return poker.watch(socket, msg.code, cleanName(msg.name));
       if (!room) throw new RuleError('Ийм дугаартай өрөө олдсонгүй.');
       // Зөвхөн ЯВАГДАЖ байгаа тоглолтыг л үзнэ — лобби (эхлээгүй) өрөөг үзэхгүй.
       if (room.state.phase === 'lobby') {
@@ -670,9 +710,10 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
         statsForUser(account.id),
         recentMatches(account.id, 50),
         topCombosForUser(account.id, 10),
+        statsForUser(account.id, 'holdem'),
       ])
-        .then(([stats, matches, topCombos]) =>
-          send(socket, { t: 'profile', stats, matches, topCombos }),
+        .then(([stats, matches, topCombos, pokerStats]) =>
+          send(socket, { t: 'profile', stats, matches, topCombos, pokerStats }),
         )
         .catch((err) => {
           console.error('profile error:', err);
@@ -684,8 +725,9 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     case 'leaderboard': {
       requireDb();
       // Нэвтрэх шаардлагагүй — бүх тоглогч топ 10-ыг харна.
-      void leaderboard(10)
-        .then((entries) => send(socket, { t: 'leaderboard', entries }))
+      const game = msg.game === 'holdem' ? 'holdem' : 'bigtwo';
+      void leaderboard(10, game)
+        .then((entries) => send(socket, { t: 'leaderboard', entries, game }))
         .catch((err) => {
           console.error('leaderboard error:', err);
           send(socket, { t: 'error', message: 'Топ жагсаалт уншиж чадсангүй.' });
@@ -695,6 +737,9 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
 
     case 'resume': {
       const room = rooms.get(msg.code ?? '');
+      if (!room && poker.has(msg.code ?? '')) {
+        return poker.resume(socket, msg.code, String(msg.playerId ?? ''), String(msg.token ?? ''));
+      }
       if (!room) throw new RuleError('Өрөө олдсонгүй — дуусаад устсан байж магадгүй.');
       const existing = room.seats.get(msg.playerId);
       if (!existing || existing.token !== msg.token) {
@@ -739,6 +784,7 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       if (me) me.avatar = value;
       broadcast(active.room);
     }
+    poker.setAvatar(socket, value);
 
     const account = accounts.get(socket);
     if (!account) return;
@@ -806,10 +852,13 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     const active = sessions.get(socket);
     let to: { userId: string } | { username: string };
     if (msg.playerId) {
-      const seat = active?.room.seats.get(String(msg.playerId));
-      if (!seat) throw new RuleError('Тоглогч олдсонгүй.');
-      if (!seat.userId) throw new RuleError('Зочин эсвэл робот руу чип илгээх боломжгүй.');
-      to = { userId: seat.userId };
+      // Покерын ширээнд бол покерын суудлаас хайна.
+      const pokerUser = poker.seatUserId(socket, String(msg.playerId));
+      const seatUser =
+        pokerUser !== undefined ? pokerUser : active?.room.seats.get(String(msg.playerId))?.userId;
+      if (seatUser === undefined) throw new RuleError('Тоглогч олдсонгүй.');
+      if (!seatUser) throw new RuleError('Зочин эсвэл робот руу чип илгээх боломжгүй.');
+      to = { userId: seatUser };
     } else {
       const username = String(msg.username ?? '').trim();
       if (!username) throw new RuleError('Хүлээн авагчийн нэрийг бичнэ үү.');
@@ -857,6 +906,25 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
     });
     return;
   }
+
+  // Токен хүсэх — өрөөнөөс үл хамааран (Big Two, покер, нүүр хуудас).
+  if (msg.t === 'requestTokens') {
+    requireDb();
+    const account = accounts.get(socket);
+    if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
+    void requestTokens(account.id)
+      .then(() =>
+        send(socket, {
+          t: 'notice',
+          message: 'Хүсэлт илгээгдлээ. Админ чип нэмэхэд танд мэдэгдэнэ.',
+        }),
+      )
+      .catch((err) => sendAuthError(socket, err));
+    return;
+  }
+
+  // Texas Hold'em-ийн ширээнд суусан/үзэж буй сокет.
+  if (poker.owns(socket) && poker.handle(socket, msg)) return;
 
   // ҮЗЭГЧийн зурвас — тоглогч биш ч бичиж болно. Нэрийн хажууд 👁 тэмдэг.
   if (msg.t === 'chat') {
@@ -907,20 +975,6 @@ function handle(socket: WebSocket, msg: ClientMessage): void {
       return begin();
     }
 
-    case 'requestTokens': {
-      requireDb();
-      const account = accounts.get(socket);
-      if (!account) throw new RuleError('Эхлээд нэвтэрнэ үү.');
-      void requestTokens(account.id)
-        .then(() =>
-          send(socket, {
-            t: 'notice',
-            message: 'Хүсэлт илгээгдлээ. Админ чип нэмэхэд танд мэдэгдэнэ.',
-          }),
-        )
-        .catch((err) => sendAuthError(socket, err));
-      return;
-    }
     /**
      * Бот нэмнэ — найз завгүй үед ганцаараа тоглох боломж.
      * Зөвхөн лоббид, зөвхөн эзэн.
@@ -1123,15 +1177,43 @@ const BOT_NAMES = [
 ];
 
 function botName(room: Room, level: BotLevel): string {
+  return botNameFrom(room.state.players.map((p) => p.name), level);
+}
+
+/** Ботын нэр — ширээнд байгаа нэрсээс (Big Two ба покер хоёулаа ашиглана). */
+function botNameFrom(taken: string[], level: BotLevel): string {
   const suffix = BOT_LEVEL_NAMES[level].toLowerCase();
   // Суурь нэрийг ДАГАВАРГҮЙГЭЭР харьцуулна — эс бөгөөс өөр түвшний ботууд
   // бүгд ижил нэртэй болно ("Бат (дунд)", "Бат (сайн)"…).
-  const used = new Set(room.state.players.map((p) => p.name.split(' (')[0]));
+  const used = new Set(taken.map((name) => name.split(' (')[0]));
   const free = BOT_NAMES.find((name) => !used.has(name));
-  return free ? `${free} (${suffix})` : `Робот ${room.state.players.length + 1} (${suffix})`;
+  return free ? `${free} (${suffix})` : `Робот ${taken.length + 1} (${suffix})`;
+}
+
+/**
+ * Покерт суухаас өмнө Big Two-гийн суудлыг чөлөөлнө (нэг сокет = нэг суудал).
+ * Big Two-гийн тоглолтын дунд бол татгалзана — тоглогчийг тоглолтоос нь хөөхгүй.
+ */
+function leaveBigTwo(socket: WebSocket): void {
+  const spec = spectatorOf.get(socket);
+  if (spec) {
+    spec.room.spectators.delete(socket);
+    spectatorOf.delete(socket);
+  }
+  const prior = sessions.get(socket);
+  if (!prior) return;
+  const pp = prior.room.state.phase;
+  if (pp === 'playing' || pp === 'drawing' || pp === 'roundEnd') {
+    throw new RuleError('Та Big Two-гийн тоглолтын дунд байна. Эхлээд "Гарах" дарж гараарай.');
+  }
+  releaseSeat(prior.room, prior.playerId);
+  sessions.delete(socket);
+  broadcast(prior.room);
 }
 
 function seat(socket: WebSocket, room: Room, name: string): void {
+  // Покерын ширээнд байвал (аюулгүй үед) чөлөөлнө, тоглолтын дунд бол алдаа.
+  poker.detach(socket);
   // НЭГ СОКЕТ = НЭГ СУУДАЛ. Нэвтрэлт (authResume) DB-гээс ASYNC ирдэг тул түүнээс
   // ӨМНӨ дараалалд байсан 'join' боловсрогдож болно — тэр агшинд account хараахан
   // холбогдоогүй байдаг. Ийм үед энэ сокет аль хэдийн суудалтай атлаа ШИНЭ суудал
@@ -1322,6 +1404,9 @@ function serveLiveRooms(req: IncomingMessage, res: ServerResponse): void {
     });
   });
 
+  // Покерын өрөөнүүд — deploy-ийн сануулга тэднийг ч тоолох ёстой.
+  list.push(...poker.liveRooms());
+
   res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
   res.end(
     JSON.stringify(
@@ -1357,9 +1442,10 @@ function serveAnnounce(req: IncomingMessage, res: ServerResponse): void {
     broadcastRaw(room, line);
     reached += [...room.seats.values()].filter((s) => s.socket !== null).length;
   });
+  reached += poker.announce(line);
 
   res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-  res.end(JSON.stringify({ sent: text, rooms: rooms.size, players: reached }, null, 2));
+  res.end(JSON.stringify({ sent: text, rooms: rooms.size + poker.size, players: reached }, null, 2));
 }
 
 /** Рекламын зураг. Нээлттэй — зураг нь нийтэд харагдах зүйл. */
@@ -1675,7 +1761,8 @@ function lockedStake(userId: string): number {
       if (seat.userId === userId) locked += stake;
     }
   });
-  return locked;
+  // Явж буй Hold'em Sit & Go-гийн Buy-in ч түгжээтэй.
+  return locked + poker.lockedStake(userId);
 }
 
 /** Хэрэглэгчийн бүх нээлттэй сокетод шинэ үлдэгдлийг илгээнэ. */

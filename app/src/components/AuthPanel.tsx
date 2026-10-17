@@ -24,7 +24,13 @@ const LOW_TOKENS = 50_000;
 
 interface Props {
   account: Account | null;
-  profile: { stats: PlayerStats; matches: MatchSummary[]; topCombos: TopCombo[] } | null;
+  profile: {
+    stats: PlayerStats;
+    matches: MatchSummary[];
+    topCombos: TopCombo[];
+    /** Texas Hold'em (Sit & Go) — тусдаа цол. */
+    pokerStats?: PlayerStats;
+  } | null;
   onRegister: (username: string, password: string, email: string) => void;
   onLogin: (username: string, password: string) => void;
   onLogout: () => void;
@@ -205,6 +211,7 @@ export function AuthPanel({
 
                 {profile ? (
                   <>
+                    <Text style={styles.sectionTitle}>🂡 Big Two</Text>
                     <RankCard wins={profile.stats.rankedWins} />
 
                     <View style={styles.statRow}>
@@ -217,6 +224,22 @@ export function AuthPanel({
                       />
                       <Stat label="🐉 Луу" value={profile.stats.dragons} />
                     </View>
+
+                    {profile.pokerStats && profile.pokerStats.matches > 0 && (
+                      <>
+                        <Text style={styles.sectionTitle}>♠ Texas Hold'em (Sit & Go)</Text>
+                        <RankCard wins={profile.pokerStats.rankedWins} />
+                        <View style={styles.statRow}>
+                          <Stat label="Тэмцээн" value={profile.pokerStats.matches} />
+                          <Stat label="1-р байр" value={profile.pokerStats.wins} />
+                          <Stat
+                            label="Чип"
+                            value={profile.pokerStats.chips}
+                            tone={profile.pokerStats.chips >= 0 ? 'good' : 'bad'}
+                          />
+                        </View>
+                      </>
+                    )}
 
                     {profile.topCombos.length > 0 && (
                       <>

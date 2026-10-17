@@ -11,8 +11,13 @@ import type { BotLevel } from './bot';
 import { Card } from './cards';
 import { Combo, comboLabel } from './combos';
 import { GameState, Phase, RoundRecord, Settlement } from './game';
+import type { PokerActionKind } from './holdem/engine';
+import type { PokerView } from './holdem/view';
+import type { PokerFormat } from './holdem/structure';
 
-export const PROTOCOL_VERSION = 6;
+export type GameKind = 'bigtwo' | 'holdem';
+
+export const PROTOCOL_VERSION = 7;
 
 /** Алдааны мэдэгдлийн төрөл: хэрэглэгч бичсэн эсвэл апп өөрөө барьсан. */
 export type ReportKind = 'bug' | 'crash';
@@ -27,7 +32,8 @@ export const MAX_VOICE_MS = 30_000;
 // ── Клиент → сервер ────────────────────────────────────────────────────────
 
 export type ClientMessage =
-  | { t: 'create'; name: string }
+  /** Өрөө үүсгэх. `game` байхгүй бол Big Two (хуучин клиент). */
+  | { t: 'create'; name: string; game?: GameKind; format?: PokerFormat }
   | { t: 'join'; name: string; code: string }
   /** ҮЗЭГЧээр орох (watch линк) — тоглогч биш, зөвхөн явцыг харна. */
   | { t: 'watch'; name: string; code: string }
@@ -73,7 +79,7 @@ export type ClientMessage =
   /** Профайл: статистик ба сүүлийн тоглолтууд. */
   | { t: 'profile' }
   /** Топ тоглогчид — бүх хүн харна, нэвтрэх шаардлагагүй. */
-  | { t: 'leaderboard' }
+  | { t: 'leaderboard'; game?: GameKind }
   /** Өрөөн доторх өөр тоглогчийн ил мэдээллийг асуух. */
   | { t: 'inspect'; playerId: string }
   /**
@@ -97,6 +103,17 @@ export type ClientMessage =
   /** Реклам харагдсан эсвэл дарагдсаныг мэдэгдэх. */
   | { t: 'adEvent'; id: string; kind: 'seen' | 'click' }
   | { t: 'leave' }
+  // ── Texas Hold'em ──
+  /** Тэмцээн/ширээ эхлүүлэх (эзэн). Sit & Go: buyIn; Cash: эзний тогтоосон blind-аар. */
+  | { t: 'pkStart'; buyIn?: number; turnSeconds?: number }
+  /** Cash: blind тогтоох (эзэн, эхлэхээс өмнө). */
+  | { t: 'pkBlinds'; sb: number; bb: number }
+  /** Fold / Check / Call / Bet / Raise / All-in. amount = "raise to". */
+  | { t: 'pkAct'; kind: PokerActionKind; amount?: number }
+  /** Cash: токеноор чип авч суух эсвэл нэмэх. */
+  | { t: 'pkBuyIn'; amount: number }
+  /** Sit out-аас буцаж ирэх. */
+  | { t: 'pkSitIn' }
   | { t: 'ping' };
 
 // ── Сервер → клиент ────────────────────────────────────────────────────────
@@ -105,15 +122,24 @@ export type ServerMessage =
   | { t: 'welcome'; version: number }
   | { t: 'joined'; code: string; playerId: string; token: string }
   | { t: 'state'; view: GameView }
+  /** Texas Hold'em ширээний харагдац. */
+  | { t: 'pkState'; view: PokerView }
   | { t: 'error'; message: string }
   | { t: 'chat'; from: string; text: string; at: number }
   | { t: 'voice'; from: string; data: string; ms: number; at: number }
   | { t: 'reported'; id: string }
   /** Нэвтрэлтийн төлөв. account null бол нэвтрээгүй. */
   | { t: 'auth'; account: Account | null; token?: string }
-  | { t: 'profile'; stats: PlayerStats; matches: MatchSummary[]; topCombos: TopCombo[] }
+  | {
+      t: 'profile';
+      stats: PlayerStats;
+      matches: MatchSummary[];
+      topCombos: TopCombo[];
+      /** Texas Hold'em (Sit & Go)-ийн статистик — тусдаа цол. */
+      pokerStats?: PlayerStats;
+    }
   /** Топ тоглогчид — цолоор эрэмбэлсэн жагсаалт. */
-  | { t: 'leaderboard'; entries: LeaderboardEntry[] }
+  | { t: 'leaderboard'; entries: LeaderboardEntry[]; game?: GameKind }
   /** Өөр тоглогчийн ил мэдээлэл. Бүртгэлгүй бол stats нь null. */
   | { t: 'playerInfo'; info: PlayerInfo }
   /**

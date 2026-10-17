@@ -16,6 +16,7 @@ import { defaultServerUrl, useBigTwo } from './src/net';
 import { DrawScreen } from './src/screens/DrawScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LobbyScreen } from './src/screens/LobbyScreen';
+import { PokerScreen } from './src/screens/PokerScreen';
 import { TableScreen } from './src/screens/TableScreen';
 import {
   loadAuthToken,
@@ -142,7 +143,7 @@ function Root() {
     if (accountId) loadInvites();
   }, [accountId, loadInvites]);
   // Өрөөнд орсны дараа рекламыг нэг удаа татна.
-  const inRoom = Boolean(game.view);
+  const inRoom = Boolean(game.view || game.pokerView);
   const loadAds = game.loadAds;
   useEffect(() => {
     if (inRoom) loadAds();
@@ -150,8 +151,8 @@ function Root() {
 
   // Өрөөнд орсны дараа хаягийг цэвэрлэнэ.
   useEffect(() => {
-    if (game.view) clearRoomCodeFromUrl();
-  }, [game.view]);
+    if (game.view || game.pokerView) clearRoomCodeFromUrl();
+  }, [game.view, game.pokerView]);
 
   // Хэрэглэгчийн оруулсан утгыг тогтмол хадгална.
   useEffect(() => {
@@ -204,6 +205,28 @@ function Root() {
   };
 
   const view = game.view;
+  const pv = game.pokerView;
+  // Покер эсвэл Big Two — өрөөнд байгаа эсэх, таны id, нэр.
+  const youId = view?.youId ?? pv?.youId ?? '';
+  const youName =
+    view?.players.find((p) => p.id === view.youId)?.name ??
+    pv?.players.find((p) => p.id === pv.youId)?.name ??
+    '';
+  const youRankWins =
+    view?.players.find((p) => p.id === view.youId)?.rankedWins ??
+    pv?.players.find((p) => p.id === pv.youId)?.rankedWins ??
+    null;
+
+  // Покерын Sit & Go дуусахад нэг удаа хожлын баяр.
+  const pokerCelebratedRef = useRef('');
+  useEffect(() => {
+    if (!pv || pv.phase !== 'finished' || !pv.winnerId) return;
+    const key = `${pv.code}#${pv.handNo}`;
+    if (pokerCelebratedRef.current === key) return;
+    pokerCelebratedRef.current = key;
+    const w = pv.players.find((p) => p.id === pv.winnerId);
+    if (w) setWinCeleb({ name: w.name, mine: w.id === pv.youId, match: true });
+  }, [pv?.phase, pv?.winnerId, pv?.handNo, pv?.code]);
 
   // Тойрог/тоглолт дуусч хожигч тодрох мөчид нэг л удаа хожлын баяр асаана.
   useEffect(() => {
@@ -229,17 +252,35 @@ function Root() {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <StatusBar style="light" />
-      {!ready || (authPending && !view) ? (
+      {!ready || (authPending && !view && !pv) ? (
         <View style={styles.center}>
           <ActivityIndicator color={theme.accent} size="large" />
         </View>
+      ) : pv ? (
+        <PokerScreen
+          view={pv}
+          account={game.account}
+          onAct={game.pokerAct}
+          onStart={game.pokerStart}
+          onBlinds={game.pokerBlinds}
+          onBuyIn={game.pokerBuyIn}
+          onSitIn={game.pokerSitIn}
+          onAddBot={game.addBot}
+          onRemoveBot={game.removeBot}
+          onLeave={pv.spectating ? game.stopWatching : game.leaveRoom}
+          onInvite={game.invitePlayers}
+          onInspect={(playerId, name) => {
+            setInspecting(name);
+            game.inspectPlayer(playerId);
+          }}
+        />
       ) : !view ? (
         <HomeScreen
           name={name}
           onNameChange={setName}
           serverUrl={serverUrl}
           onServerUrlChange={setServerUrl}
-          onCreate={() => game.createRoom(name)}
+          onCreate={(g, f) => game.createRoom(name, g, f)}
           onJoin={(code) => game.joinRoom(name, code)}
           connecting={game.status === 'connecting'}
           initialCode={invitedCode}
@@ -254,6 +295,7 @@ function Root() {
           guestReady={guestChosen}
           onEnterGuest={() => setGuestChosen(true)}
           leaderboard={game.leaderboard}
+          leaderboardGame={game.leaderboardGame}
           onLoadLeaderboard={game.loadLeaderboard}
         />
       ) : view.spectating ? (
@@ -313,10 +355,10 @@ function Root() {
         />
       )}
 
-      {view && game.promotion && (
+      {(view || pv) && game.promotion && (
         <Celebration
           promotion={game.promotion}
-          mine={game.promotion.playerId === view.youId}
+          mine={game.promotion.playerId === youId}
           onDone={game.clearPromotion}
         />
       )}
@@ -330,34 +372,50 @@ function Root() {
         />
       )}
 
-      {view && (
+      {(view || pv) && (
         <>
           <ChatButton
             lines={game.chat}
-            youName={view.players.find((p) => p.id === view.youId)?.name ?? ''}
+            youName={youName}
             onSend={game.sendChat}
             onSendVoice={game.sendVoice}
           />
           <SoundToggle />
-          <HelpButton wins={view.players.find((p) => p.id === view.youId)?.rankedWins ?? null} />
+          <HelpButton wins={youRankWins} />
           <PlayerInfoPanel
             pendingName={inspecting}
             info={game.playerInfo}
             onClose={closeInspect}
             onTransfer={
-              game.account && !view.spectating && game.playerInfo?.playerId !== view.youId
+              game.account &&
+              !(view?.spectating ?? pv?.spectating) &&
+              game.playerInfo?.playerId !== youId
                 ? (playerId, amount) => game.transferTokens({ playerId }, amount)
                 : undefined
             }
           />
           <ReportButton
             lastReportId={game.lastReportId}
-            onSend={(text) => game.sendReport('bug', text, { view: summarise(view) })}
+            onSend={(text) =>
+              game.sendReport('bug', text, {
+                view: view
+                  ? summarise(view)
+                  : pv && {
+                      game: 'holdem',
+                      code: pv.code,
+                      format: pv.format,
+                      phase: pv.phase,
+                      hand: pv.handNo,
+                      toActIsYou: pv.toAct === pv.youId,
+                      log: pv.log.slice(-5),
+                    },
+              })
+            }
           />
         </>
       )}
 
-      {game.status !== 'online' && view && (
+      {game.status !== 'online' && (view || pv) && (
         <View style={styles.banner}>
           <Text style={styles.bannerText}>
             {game.status === 'connecting' ? 'Холбогдож байна…' : 'Холболт тасарлаа'}

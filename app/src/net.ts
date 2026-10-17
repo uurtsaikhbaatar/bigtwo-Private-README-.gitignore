@@ -12,9 +12,13 @@ import { AppState, Platform } from 'react-native';
 import type { BotLevel } from './shared/bot';
 import type { Card } from './shared/cards';
 import { deviceContext } from './errors';
+import type { PokerActionKind } from './shared/holdem/engine';
+import type { PokerFormat } from './shared/holdem/structure';
+import type { PokerView } from './shared/holdem/view';
 import type {
   Account,
   ClientMessage,
+  GameKind,
   GameView,
   LeaderboardEntry,
   MatchSummary,
@@ -78,6 +82,8 @@ export interface ChatLine {
 export function useBigTwo(serverUrl: string) {
   const [status, setStatus] = useState<ConnectionStatus>('offline');
   const [view, setView] = useState<GameView | null>(null);
+  // Texas Hold'em ширээний харагдац. Нэг үед view эсвэл pokerView-ийн аль нэг л байна.
+  const [pokerView, setPokerView] = useState<PokerView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatLine[]>([]);
   const [lastReportId, setLastReportId] = useState<string | null>(null);
@@ -94,8 +100,10 @@ export function useBigTwo(serverUrl: string) {
     stats: PlayerStats;
     matches: MatchSummary[];
     topCombos: TopCombo[];
+    pokerStats?: PlayerStats;
   } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[] | null>(null);
+  const [leaderboardGame, setLeaderboardGame] = useState<GameKind>('bigtwo');
   const authTokenRef = useRef<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -130,6 +138,12 @@ export function useBigTwo(serverUrl: string) {
       case 'state':
         resumingRef.current = false;
         setView(msg.view);
+        setPokerView(null);
+        break;
+      case 'pkState':
+        resumingRef.current = false;
+        setPokerView(msg.view);
+        setView(null);
         break;
       case 'chat':
         setChat((prev) => [...prev.slice(-49), { from: msg.from, text: msg.text, at: msg.at }]);
@@ -153,10 +167,16 @@ export function useBigTwo(serverUrl: string) {
         }
         break;
       case 'profile':
-        setProfile({ stats: msg.stats, matches: msg.matches, topCombos: msg.topCombos });
+        setProfile({
+          stats: msg.stats,
+          matches: msg.matches,
+          topCombos: msg.topCombos,
+          pokerStats: msg.pokerStats,
+        });
         break;
       case 'leaderboard':
         setLeaderboard(msg.entries);
+        setLeaderboardGame(msg.game ?? 'bigtwo');
         break;
       case 'playerInfo':
         setPlayerInfo(msg.info);
@@ -185,6 +205,7 @@ export function useBigTwo(serverUrl: string) {
           wantOnlineRef.current = false;
           void clearSession();
           setView(null);
+          setPokerView(null);
         }
         break;
     }
@@ -347,6 +368,7 @@ export function useBigTwo(serverUrl: string) {
   return {
     status,
     view,
+    pokerView,
     error,
     chat,
     lastReportId,
@@ -355,6 +377,7 @@ export function useBigTwo(serverUrl: string) {
     account,
     profile,
     leaderboard,
+    leaderboardGame,
     playerInfo,
     promotion,
     invites,
@@ -391,7 +414,13 @@ export function useBigTwo(serverUrl: string) {
     ),
     logOut: useCallback(() => send({ t: 'logout', token: authTokenRef.current ?? '' }), [send]),
     loadProfile: useCallback(() => send({ t: 'profile' }), [send]),
-    loadLeaderboard: useCallback(() => send({ t: 'leaderboard' }), [send]),
+    loadLeaderboard: useCallback(
+      (game: GameKind = 'bigtwo') => {
+        setLeaderboard(null);
+        send({ t: 'leaderboard', game });
+      },
+      [send],
+    ),
     /** Одоогийн өрөөний найзуудыг дараагийн тоглолтод урих. */
     invitePlayers: useCallback(() => send({ t: 'invite' }), [send]),
     loadInvites: useCallback(() => send({ t: 'invites' }), [send]),
@@ -440,7 +469,23 @@ export function useBigTwo(serverUrl: string) {
       [send],
     ),
 
-    createRoom: useCallback((name: string) => send({ t: 'create', name }), [send]),
+    createRoom: useCallback(
+      (name: string, game: GameKind = 'bigtwo', format: PokerFormat = 'sng') =>
+        send(game === 'holdem' ? { t: 'create', name, game, format } : { t: 'create', name }),
+      [send],
+    ),
+    // ── Texas Hold'em ──
+    pokerStart: useCallback(
+      (buyIn: number, turnSeconds: number) => send({ t: 'pkStart', buyIn, turnSeconds }),
+      [send],
+    ),
+    pokerBlinds: useCallback((sb: number, bb: number) => send({ t: 'pkBlinds', sb, bb }), [send]),
+    pokerAct: useCallback(
+      (kind: PokerActionKind, amount?: number) => send({ t: 'pkAct', kind, amount }),
+      [send],
+    ),
+    pokerBuyIn: useCallback((amount: number) => send({ t: 'pkBuyIn', amount }), [send]),
+    pokerSitIn: useCallback(() => send({ t: 'pkSitIn' }), [send]),
     joinRoom: useCallback(
       (name: string, code: string) => send({ t: 'join', name, code: code.trim().toUpperCase() }),
       [send],
@@ -458,6 +503,7 @@ export function useBigTwo(serverUrl: string) {
     stopWatching: useCallback(() => {
       watchRef.current = null;
       setView(null);
+      setPokerView(null);
       setChat([]);
       disconnect();
     }, [disconnect]),
@@ -505,6 +551,7 @@ export function useBigTwo(serverUrl: string) {
       sessionRef.current = null;
       void clearSession();
       setView(null);
+      setPokerView(null);
       setChat([]);
       disconnect();
     }, [disconnect]),

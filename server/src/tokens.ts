@@ -316,3 +316,103 @@ export async function awardTokens(userId: string, amount: number): Promise<numbe
   );
   return Number(result.rows[0]?.tokens ?? 0);
 }
+
+// ── Hold'em кэш ширээний барьцаа ───────────────────────────────────────────
+//
+// Кэш тоглолтын чип = токен. Суухад токен users.tokens-оос poker_escrow руу
+// шилжинэ, гар бүрийн дараа ширээний чиптэй тэнцүүлнэ, босоход буцна. Бүх
+// шилжүүлэг нэг гүйлгээнд — хагас бичигдсэн төлөв үлдэхгүй. Сервер гарын
+// дунд унтарвал барьцаа нь сүүлд дууссан гарын үлдэгдлийг хадгална (тэр гар
+// хүчингүй болно, амьд казинод misdeal болсонтой адил).
+
+/** Токеныг ширээнд барьцаална. Хүрэлцэхгүй бол TokenError. Шинэ барьцааг буцаана. */
+export async function escrowBuyIn(roomCode: string, userId: string, amount: number): Promise<number> {
+  const value = Math.round(amount);
+  if (!Number.isFinite(value) || value <= 0) throw new TokenError('Хэмжээ эерэг байх ёстой.');
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const taken = await client.query(
+      'UPDATE users SET tokens = tokens - $2 WHERE id = $1 AND tokens >= $2 RETURNING tokens',
+      [userId, value],
+    );
+    if (taken.rowCount === 0) throw new TokenError(`${value.toLocaleString('en-US')} токен хүрэлцэхгүй байна.`);
+    const row = await client.query<{ amount: string }>(
+      `INSERT INTO poker_escrow (room_code, user_id, amount) VALUES ($1, $2, $3)
+       ON CONFLICT (room_code, user_id)
+         DO UPDATE SET amount = poker_escrow.amount + EXCLUDED.amount, updated_at = now()
+       RETURNING amount`,
+      [roomCode, userId, value],
+    );
+    await client.query('COMMIT');
+    return Number(row.rows[0].amount);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Гар дуусах бүрд барьцааг ширээний чиптэй тэнцүүлнэ (userId → чип). */
+export async function syncEscrow(roomCode: string, stacks: Map<string, number>): Promise<void> {
+  if (stacks.size === 0) return;
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    for (const [userId, amount] of stacks) {
+      await client.query(
+        `UPDATE poker_escrow SET amount = $3, updated_at = now() WHERE room_code = $1 AND user_id = $2`,
+        [roomCode, userId, Math.max(0, Math.round(amount))],
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Ширээнээс босоход барьцааг үлдэгдэлд буцаана. Буцаасан хэмжээг өгнө. */
+export async function escrowCashOut(roomCode: string, userId: string): Promise<number> {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const del = await client.query<{ amount: string }>(
+      'DELETE FROM poker_escrow WHERE room_code = $1 AND user_id = $2 RETURNING amount',
+      [roomCode, userId],
+    );
+    const amount = Number(del.rows[0]?.amount ?? 0);
+    if (amount > 0) {
+      await client.query('UPDATE users SET tokens = tokens + $2 WHERE id = $1', [userId, amount]);
+    }
+    await client.query('COMMIT');
+    return amount;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Өрөөний барьцаа (userId → хэмжээ) — сервер дахин асахад чипийг сэргээнэ. */
+export async function escrowOf(roomCode: string): Promise<Map<string, number>> {
+  const r = await getPool().query<{ user_id: string; amount: string }>(
+    'SELECT user_id, amount FROM poker_escrow WHERE room_code = $1',
+    [roomCode],
+  );
+  return new Map(r.rows.map((x) => [x.user_id, Number(x.amount)]));
+}
+
+/** Амьд өрөөнд хамаарахгүй барьцааг эзэнд нь буцаана. Буцаасан мөрийн тоо. */
+export async function refundOrphanEscrow(liveCodes: string[]): Promise<number> {
+  const r = await getPool().query<{ room_code: string; user_id: string }>(
+    'SELECT room_code, user_id FROM poker_escrow WHERE NOT (room_code = ANY($1::text[]))',
+    [liveCodes],
+  );
+  for (const row of r.rows) await escrowCashOut(row.room_code, row.user_id);
+  return r.rows.length;
+}

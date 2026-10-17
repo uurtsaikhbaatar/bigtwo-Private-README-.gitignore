@@ -162,7 +162,9 @@ async function main() {
   console.log('✓ чат бүх тоглогчид хүрлээ');
 
   clients[0].send({ t: 'start', targetScore: TARGET_SCORE, turnSeconds: TURN_SECONDS, stake: STAKE });
-  await clients[0].await((m) => m.t === 'state' && m.view.phase === 'playing');
+  // Суудлын сугалаа (drawing, 2026-08-06-аас): сонголтын хугацаа дуусахад өөрөө
+  // ил болж эхэлнэ (~20 сек) — тиймээс урт хүлээнэ.
+  await clients[0].await((m) => m.t === 'state' && m.view.phase === 'playing', 60_000);
   console.log(`✓ тоглолт эхэллээ (босго ${TARGET_SCORE} оноо)`);
 
   const scores = new Map(clients.map((c) => [c.playerId, 0]));
@@ -187,11 +189,20 @@ async function main() {
     }
     const view = clients[0].view!;
 
+    if (view.phase === 'drawing') {
+      await clients[0].await((m) => m.t === 'state' && m.view.phase !== 'drawing', 60_000);
+      continue;
+    }
+
     if (view.phase === 'roundEnd') {
       verifyRound(clients, scores);
       rounds++;
-      clients[0].send({ t: 'next' });
-      await clients[0].await((m) => m.t === 'state' && m.view.phase !== 'roundEnd');
+      // Эзэн хасагдвал эрх шилждэг (ensureActiveHost) — одоогийн эзнээс илгээнэ.
+      // Тойрог 6 сек-ийн дараа өөрөө ч эхэлдэг тул хүлээлтийг уртасгав.
+      const hostId = view.players.find((p) => p.isHost)?.id;
+      const host = clients.find((c) => c.playerId === hostId) ?? clients[0];
+      host.send({ t: 'next' });
+      await clients[0].await((m) => m.t === 'state' && m.view.phase !== 'roundEnd', 15_000);
       continue;
     }
 

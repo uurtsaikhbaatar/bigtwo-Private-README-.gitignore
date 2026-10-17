@@ -159,6 +159,35 @@ export async function initSchema(): Promise<void> {
     -- Туршилтын тоглолтыг тэмдэглэнэ. Устгахгүй — алдаа засахад хэрэгтэй —
     -- гэхдээ хүний харах жагсаалтад гаргахгүй.
     ALTER TABLE matches ADD COLUMN IF NOT EXISTS test BOOLEAN NOT NULL DEFAULT false;
+    -- Тоглоомын төрөл: 'bigtwo' | 'holdem' (Sit & Go). Хуучин мөрүүд bigtwo.
+    -- Цол, статистик тоглоом тус бүрт тусдаа тоологдоно.
+    ALTER TABLE matches ADD COLUMN IF NOT EXISTS game TEXT NOT NULL DEFAULT 'bigtwo';
+
+    -- Hold'em кэш ширээнд барьцаалсан токен. Суухад users.tokens-оос хасагдаж
+    -- энд орно, гар бүрийн дараа ширээний чиптэй тэнцүүлнэ, босоход буцна.
+    -- Сервер унтарч асахад өрөөгүй болсон мөрийг эзэнд нь буцаана.
+    CREATE TABLE IF NOT EXISTS poker_escrow (
+      room_code  TEXT NOT NULL,
+      user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount     BIGINT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (room_code, user_id)
+    );
+
+    -- Hold'em гар бүрийн бүртгэл (шинжилгээнд): ширээний хөзөр, сав, оролцогчид.
+    CREATE TABLE IF NOT EXISTS poker_hands (
+      id        BIGSERIAL PRIMARY KEY,
+      room_code TEXT NOT NULL,
+      format    TEXT NOT NULL,
+      hand_no   INTEGER NOT NULL,
+      sb        BIGINT NOT NULL,
+      bb        BIGINT NOT NULL,
+      board     INTEGER[] NOT NULL,
+      pot       BIGINT NOT NULL,
+      players   JSONB NOT NULL,
+      test      BOOLEAN NOT NULL DEFAULT false,
+      ended_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
 
     CREATE TABLE IF NOT EXISTS match_players (
       match_id  BIGINT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
