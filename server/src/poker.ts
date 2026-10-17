@@ -48,7 +48,7 @@ import {
 import { pokerViewFor } from '../../app/src/shared/holdem/view';
 import { promoted, rewardBetween } from '../../app/src/shared/ranks';
 import type { Account, ClientMessage, ServerMessage } from '../../app/src/shared/protocol';
-import { dbEnabled, deleteRoomStates, saveRoomState } from './db';
+import { dbEnabled, deleteRoomStates, loadRoomState, saveRoomState } from './db';
 import { recordPokerHand, recordPokerMatch, statsForUser } from './history';
 import { dropInvite, inviteUsers } from './invites';
 import { saveReport } from './reports';
@@ -61,7 +61,8 @@ import {
   escrowBuyIn,
   escrowCashOut,
   escrowOf,
-  refundOrphanEscrow,
+  escrowRoomCodes,
+  refundRoomEscrow,
   syncEscrow,
 } from './tokens';
 
@@ -76,6 +77,11 @@ const SIT_OUT_ACT_MS = 1_000;
 /** Хэн ч онлайнгүй өрөөг устгах хугацаа. */
 const ROOM_TTL_MS = 60 * 60 * 1000;
 const EMPTY_ROOM_TTL_MS = 3 * 60 * 1000;
+/**
+ * Cash: ингэтэл удаан салсан (гарт оролцоогүй) тоглогчийг босгож чипийг токенд
+ * буцаана — токен ширээн дээр гацахгүй. Буцаж ирээд дахин Buy-in хийж болно.
+ */
+const CASH_OFFLINE_STAND_MS = 10 * 60 * 1000;
 const isTest = () => Boolean(process.env.TEST_MODE);
 
 /** Криптограф санамсаргүй тоо — хөзөр холиход (Math.random биш). */
@@ -87,6 +93,8 @@ interface PkSeat {
   socket: WebSocket | null;
   userId: string | null;
   bot: BotLevel | null;
+  /** Хэзээнээс салсан (холбогдсон бол undefined). Cash-д 10 минутын дүрэмд. */
+  offlineSince?: number;
 }
 
 export interface PkRoom {
@@ -108,6 +116,12 @@ export interface PkRoom {
   dbChain: Promise<unknown>;
   /** Sit & Go дууссан ч токены тооцоо хараахан бичигдээгүй — Buy-in түгжээтэй хэвээр. */
   settling?: boolean;
+  /**
+   * Санах ойн хуулбар санд хамгийн сүүлд тэнцүү байсан мөч (уншсан/бичсэн).
+   * Санд үүнээс шинэ snapshot байвал (deploy-ийн үед хуучин сервер бичсэн)
+   * хандах үед дахин уншина.
+   */
+  syncedAt?: number;
 }
 
 export interface PokerDeps {
@@ -134,6 +148,16 @@ export class PokerServer {
     setInterval(() => this.flush(), 8000).unref();
     setInterval(() => this.tick(), 500).unref();
     setInterval(() => this.sweep(), 5 * 60 * 1000).unref();
+    // Гацсан барьцаа (өрөө нь санах ойд алга) — сэргээх эсвэл буцаах.
+    setInterval(() => void this.rescueEscrow().catch((e) => console.error('барьцаа аврах:', e)), 5 * 60 * 1000).unref();
+    // Cash: удаан салсан тоглогчийг босгох.
+    setInterval(() => this.standUpOffline(), 30 * 1000).unref();
+  }
+
+  /** Унтрах үед: цаашид юу ч өөрчлөхгүй (хадгалсан snapshot-ыг эвдэхгүй). */
+  private frozen = false;
+  freeze(): void {
+    this.frozen = true;
   }
 
   // ── Нийтийн API (index.ts) ───────────────────────────────────────────────
@@ -213,6 +237,7 @@ export class PokerServer {
       old.close();
     }
     seat.socket = socket;
+    seat.offlineSince = undefined;
     this.sessions.set(socket, { room, playerId });
     this.markReturned(room, playerId);
     const acct = this.deps.accountOf(socket);
@@ -285,7 +310,10 @@ export class PokerServer {
     const s = this.sessions.get(socket);
     if (!s) return;
     const seat = s.room.seats.get(s.playerId);
-    if (seat && seat.socket === socket) seat.socket = null;
+    if (seat && seat.socket === socket) {
+      seat.socket = null;
+      seat.offlineSince = Date.now();
+    }
     this.sessions.delete(socket);
     s.room.lastActivity = Date.now();
     this.broadcast(s.room);
@@ -293,6 +321,7 @@ export class PokerServer {
 
   /** Өрөөний түвшний мессеж. Энэ сокет покерт хамааралгүй бол false. */
   handle(socket: WebSocket, msg: ClientMessage): boolean {
+    if (this.frozen) return true; // унтарч байна — клиент шинэ сервер рүү холбогдоно
     const watcher = this.watchers.get(socket);
     if (watcher && !this.sessions.get(socket)) {
       if (msg.t === 'chat') {
@@ -636,10 +665,18 @@ export class PokerServer {
     };
   }
 
-  restore(data: any): void {
+  restore(data: any, updatedAt = Date.now()): PkRoom {
     const seats = new Map<string, PkSeat>();
+    const now = Date.now();
     for (const s of data.seats ?? []) {
-      seats.set(s.playerId, { playerId: s.playerId, token: s.token, socket: null, userId: s.userId ?? null, bot: s.bot ?? null });
+      seats.set(s.playerId, {
+        playerId: s.playerId,
+        token: s.token,
+        socket: null,
+        userId: s.userId ?? null,
+        bot: s.bot ?? null,
+        offlineSince: s.bot ? undefined : now,
+      });
     }
     const state = data.state as PokerState;
     // Хугацаа серверийн унтарсан хугацаанд өнгөрсөн — шинэ ээлж олгоно.
@@ -659,7 +696,105 @@ export class PokerServer {
       lastPlayers: data.lastPlayers ?? [],
       cashRunning: data.cashRunning ?? false,
       dbChain: Promise.resolve(),
+      syncedAt: updatedAt,
     });
+    return this.rooms.get(data.code)!;
+  }
+
+  /**
+   * Тоглогч кодоор хандахаас ӨМНӨ: санд илүү шинэ snapshot байвал (эсвэл санах
+   * ойд огт байхгүй бол) түүнийг уншина. Deploy-ийн үед хуучин сервер дээр
+   * үүссэн/өөрчлөгдсөн өрөө "олдсонгүй" эсвэл хуучирсан болохоос сэргийлнэ.
+   * Холбогдсон хүнтэй өрөөг хэзээ ч солихгүй (энэ сервер дээр амьд байна).
+   */
+  async refresh(code: string, snap: { data: any; updatedAt: number }): Promise<void> {
+    const existing = this.get(code);
+    if (existing) {
+      const live =
+        existing.spectators.size > 0 || [...existing.seats.values()].some((s) => s.socket !== null);
+      if (live || snap.updatedAt <= (existing.syncedAt ?? 0) + 500) return;
+    }
+    const room = this.restore(snap.data, snap.updatedAt);
+    if (room.state.format === 'cash') await this.reconcileCash(room);
+  }
+
+  /** Бүх өрөөг санд бичнэ (унтрахын өмнө). */
+  async flushAll(): Promise<void> {
+    if (!dbEnabled()) return;
+    await Promise.all(
+      [...this.rooms.values()].map(async (room) => {
+        await room.dbChain.catch(() => undefined); // барьцааны бичилт дуустал
+        await saveRoomState(room.code, this.serialize(room));
+      }),
+    );
+  }
+
+  /**
+   * Cash ширээний чипийг барьцаанаас (эх үнэн) тохируулж, дууссангүй гарыг
+   * хүчингүй болгоно (misdeal) — токен үүсэх/алга болохоос сэргийлнэ.
+   */
+  private async reconcileCash(room: PkRoom): Promise<void> {
+    const escrow = await escrowOf(room.code);
+    const st = room.state;
+    for (const p of st.players) {
+      const uid = room.seats.get(p.id)?.userId;
+      p.stack = uid ? (escrow.get(uid) ?? 0) : 0;
+      Object.assign(p, { total: 0, street: 0, folded: false, allIn: false, dealt: false, hole: [], actedAt: null });
+      if (p.stack === 0) p.sittingOut = true;
+    }
+    if (st.phase === 'playing' || st.phase === 'handEnd') {
+      st.log.push('Сервер шинэчлэгдэв — дууссангүй гар хүчингүй болж, чип буцлаа.');
+      st.phase = 'lobby';
+      st.toAct = null;
+      st.turnEndsAt = null;
+      st.handEndsAt = null;
+      st.board = [];
+      st.pots = [];
+    }
+  }
+
+  /**
+   * Гацсан барьцаа: өрөө нь санах ойд алга бол snapshot-оос сэргээнэ (дараа нь
+   * 10 минутын дүрмээр буцна), snapshot ч алга бол шууд эзэнд нь буцаана.
+   */
+  async rescueEscrow(): Promise<void> {
+    if (!dbEnabled() || this.frozen) return;
+    for (const code of await escrowRoomCodes()) {
+      if (this.rooms.has(code)) continue;
+      const snap = await loadRoomState(code);
+      if (snap && (snap.data as { kind?: string }).kind === 'poker') {
+        const room = this.restore(snap.data, snap.updatedAt);
+        await this.reconcileCash(room);
+        console.log(`барьцаатай өрөө ${code}-ийг snapshot-оос сэргээв`);
+      } else {
+        const n = await refundRoomEscrow(code);
+        console.log(`өрөөгүй барьцаа ${code}: ${n} тоглогчид буцаав`);
+      }
+    }
+  }
+
+  /** Cash: 10 минутаас дээш салсан, гарт оролцоогүй тоглогчийг босгож чипийг буцаана. */
+  standUpOffline(now = Date.now()): void {
+    if (this.frozen) return;
+    for (const room of this.rooms.values()) {
+      const st = room.state;
+      if (st.format !== 'cash') continue;
+      let changed = false;
+      for (const seat of [...room.seats.values()]) {
+        if (seat.socket || seat.bot || !seat.offlineSince || now - seat.offlineSince < CASH_OFFLINE_STAND_MS) continue;
+        const p = st.players.find((x) => x.id === seat.playerId);
+        if (!p) continue;
+        if (st.phase === 'playing' && p.dealt && !p.folded) continue; // гар дуустал
+        const removed = removePokerPlayer(st, seat.playerId);
+        if (removed) {
+          room.seats.delete(seat.playerId);
+          if (seat.userId) this.cashOut(room, seat.userId, null);
+        }
+        st.log.push(`${p.name} удаан салсан тул ширээнээс бослоо (чип токенд буцав).`);
+        changed = true;
+      }
+      if (changed) this.broadcast(room);
+    }
   }
 
   /**
@@ -669,37 +804,24 @@ export class PokerServer {
   async afterRestore(): Promise<void> {
     if (!dbEnabled()) return;
     for (const room of this.rooms.values()) {
-      if (room.state.format !== 'cash') continue;
-      const escrow = await escrowOf(room.code);
-      const st = room.state;
-      for (const p of st.players) {
-        const uid = room.seats.get(p.id)?.userId;
-        p.stack = uid ? (escrow.get(uid) ?? 0) : 0;
-        Object.assign(p, { total: 0, street: 0, folded: false, allIn: false, dealt: false, hole: [], actedAt: null });
-        if (p.stack === 0) p.sittingOut = true;
-      }
-      if (st.phase === 'playing' || st.phase === 'handEnd') {
-        st.log.push('Сервер дахин асав — дууссангүй гар хүчингүй болж, чип буцлаа.');
-        st.phase = 'lobby';
-        st.toAct = null;
-        st.turnEndsAt = null;
-        st.handEndsAt = null;
-        st.board = [];
-        st.pots = [];
-      }
+      if (room.state.format === 'cash') await this.reconcileCash(room);
     }
-    const live = [...this.rooms.values()].filter((r) => r.state.format === 'cash').map((r) => r.code);
-    const n = await refundOrphanEscrow(live);
-    if (n) console.log(`✓ ${n} барьцааг эзэнд нь буцаав.`);
+    await this.rescueEscrow();
   }
 
   private flush(): void {
-    if (!dbEnabled() || this.dirty.size === 0) return;
+    if (!dbEnabled() || this.dirty.size === 0 || this.frozen) return;
     const codes = [...this.dirty];
     this.dirty.clear();
     for (const code of codes) {
       const room = this.rooms.get(code);
-      if (room) void saveRoomState(code, this.serialize(room)).catch((e) => console.error('покер хадгалах:', e));
+      if (!room) continue;
+      const at = Date.now();
+      void saveRoomState(code, this.serialize(room))
+        .then(() => {
+          room.syncedAt = at;
+        })
+        .catch((e) => console.error('покер хадгалах:', e));
     }
   }
 
@@ -735,6 +857,7 @@ export class PokerServer {
         old.close();
       }
       seat.socket = socket;
+      seat.offlineSince = undefined;
       this.sessions.set(socket, { room, playerId: seat.playerId });
       this.markReturned(room, seat.playerId);
       room.lastActivity = Date.now();
@@ -799,6 +922,7 @@ export class PokerServer {
       if (st.format === 'cash' && seat?.userId) this.cashOut(room, seat.userId, socket);
     } else if (seat) {
       seat.socket = null;
+      seat.offlineSince = Date.now();
       if (st.format === 'sng' && concludeIfNoHumans(st)) {
         // Бүх хүн гарсан — тэмцээн дуусав (broadcast бүртгэнэ).
       }
@@ -909,9 +1033,11 @@ export class PokerServer {
         void recordPokerHand(st, room.code, accounts, isTest()).catch((e) => console.error('гар бүртгэх:', e));
         if (st.format === 'cash') {
           const stacks = new Map<string, number>();
+          // Зөвхөн энэ гарт тараагдсан тоглогчид — бусдын чип өөрчлөгдөөгүй
+          // (хуучирсан хуулбар барьцааг дарж бичихээс сэргийлнэ).
           for (const p of st.players) {
             const uid = accounts.get(p.id);
-            if (uid) stacks.set(uid, p.stack);
+            if (uid && p.dealt) stacks.set(uid, p.stack);
           }
           room.dbChain = room.dbChain
             .then(() => syncEscrow(room.code, stacks))
@@ -988,6 +1114,7 @@ export class PokerServer {
   // ── Цохилт ───────────────────────────────────────────────────────────────
 
   private tick(): void {
+    if (this.frozen) return;
     const now = Date.now();
     for (const room of this.rooms.values()) {
       const st = room.state;

@@ -67,6 +67,7 @@ import {
   deleteRoomStates,
   getPool,
   initSchema,
+  loadRoomState,
   loadRoomStates,
   recordRound,
   recordVisits,
@@ -97,6 +98,8 @@ const MAX_CHAT_LENGTH = 200;
 const CHAT_HISTORY = 30;
 
 const rooms = new RoomStore();
+/** Зөөлөн унтарч байгаа эсэх (SIGTERM) — доорх `shutdown`-ийг үз. */
+let shuttingDown = false;
 
 /**
  * Texas Hold'em — Big Two-гоос тусдаа store/цохилт. Кодоор нь чиглүүлнэ:
@@ -197,15 +200,18 @@ function markRoomDirty(code: string): void {
  *  гэмтлээс сэргээхэд хэрэгтэй тул 8 сек хоцролт аюулгүй. Dirty өрөө байхгүй бол
  *  огт бичихгүй (idle үед сан унтарна). */
 setInterval(() => {
-  if (!dbEnabled() || dirtyRooms.size === 0) return;
+  if (!dbEnabled() || dirtyRooms.size === 0 || shuttingDown) return;
   const codes = [...dirtyRooms];
   dirtyRooms.clear();
   for (const code of codes) {
     const room = rooms.get(code);
     if (room) {
-      void saveRoomState(code, serializeRoom(room)).catch((err) =>
-        console.error('өрөө хадгалж чадсангүй:', err),
-      );
+      const at = Date.now();
+      void saveRoomState(code, serializeRoom(room))
+        .then(() => {
+          room.syncedAt = at;
+        })
+        .catch((err) => console.error('өрөө хадгалж чадсангүй:', err));
     }
   }
 }, 8000).unref();
@@ -248,10 +254,11 @@ async function restoreRooms(): Promise<void> {
   try {
     const snaps = await loadRoomStates(ROOM_TTL_MS);
     let n = 0;
-    for (const { data } of snaps) {
+    for (const { data, updated_at } of snaps) {
       try {
-        if ((data as { kind?: string })?.kind === 'poker') poker.restore(data);
-        else rooms.restore(deserializeRoom(data));
+        const at = updated_at ? new Date(updated_at).getTime() : Date.now();
+        if ((data as { kind?: string })?.kind === 'poker') poker.restore(data, at);
+        else rooms.restore({ ...deserializeRoom(data), syncedAt: at });
         n += 1;
       } catch (err) {
         console.error('нэг өрөө сэргээхэд алдаа:', err);
@@ -380,9 +387,14 @@ function markOffline(socket: WebSocket): void {
  */
 async function liveInvites(userId: string) {
   const all = await invitesFor(userId);
-  return all.filter(
-    (invite) => rooms.get(invite.roomCode) !== undefined || poker.has(invite.roomCode),
-  );
+  const live = [];
+  for (const invite of all) {
+    if (rooms.get(invite.roomCode) || poker.has(invite.roomCode)) live.push(invite);
+    // Deploy-ийн давхцлын үед өрөө санах ойд хараахан ачаалагдаагүй байж болно —
+    // санд snapshot байвал хүчинтэй (орох үед refreshRoom ачаална).
+    else if (await loadRoomState(invite.roomCode)) live.push(invite);
+  }
+  return live;
 }
 
 /** Тухайн хэрэглэгчийн бүх нээлттэй цонхонд урилгуудыг дахин илгээнэ. */
@@ -500,13 +512,7 @@ wss.on('connection', (socket, req) => {
     } catch {
       return send(socket, { t: 'error', message: 'Мессежийг уншиж чадсангүй.' });
     }
-    try {
-      handle(socket, msg);
-    } catch (err) {
-      const message = isUserError(err) ? err.message : 'Дотоод алдаа гарлаа.';
-      if (!isUserError(err)) console.error('handler error:', err);
-      send(socket, { t: 'error', message });
-    }
+    dispatch(socket, msg);
   });
 
   socket.on('close', () => {
@@ -534,6 +540,71 @@ wss.on('connection', (socket, req) => {
     broadcast(session.room);
   });
 });
+
+/**
+ * Мессежийг ДАРААЛЛААР нь боловсруулна. Кодоор хандах (join/resume/watch) үед
+ * эхлээд санаас тухайн өрөөний хамгийн шинэ snapshot-ыг уншина (async) — тэр
+ * хооронд ирсэн мессежүүд хүлээнэ, ингэснээр "resume → тоглох" дараалал эвдрэхгүй.
+ *
+ * Яагаад: deploy-ийн үед шинэ сервер асаад хуучин нь хэсэг хугацаа ажилласаар
+ * байдаг. Тэр хооронд хуучин сервер дээр үүссэн/өөрчлөгдсөн өрөө шинэ серверт
+ * байхгүй ("Өрөө олдсонгүй") эсвэл хуучирсан байдаг байв.
+ */
+const pendingBySocket = new WeakMap<WebSocket, ClientMessage[]>();
+
+function dispatch(socket: WebSocket, msg: ClientMessage): void {
+  const queue = pendingBySocket.get(socket);
+  if (queue) {
+    queue.push(msg);
+    return;
+  }
+  const code =
+    msg.t === 'join' || msg.t === 'resume' || msg.t === 'watch' ? String(msg.code ?? '') : '';
+  if (!code || !dbEnabled() || shuttingDown) {
+    safeHandle(socket, msg);
+    return;
+  }
+  pendingBySocket.set(socket, []);
+  void refreshRoom(code)
+    .catch((err) => console.error('өрөө шинэчлэх:', err))
+    .finally(() => {
+      safeHandle(socket, msg);
+      const rest = pendingBySocket.get(socket) ?? [];
+      pendingBySocket.delete(socket);
+      for (const m of rest) dispatch(socket, m);
+    });
+}
+
+function safeHandle(socket: WebSocket, msg: ClientMessage): void {
+  if (shuttingDown) return; // унтарч байна — клиент шинэ сервер рүү дахин холбогдоно
+  try {
+    handle(socket, msg);
+  } catch (err) {
+    const message = isUserError(err) ? err.message : 'Дотоод алдаа гарлаа.';
+    if (!isUserError(err)) console.error('handler error:', err);
+    send(socket, { t: 'error', message });
+  }
+}
+
+/**
+ * Санд илүү шинэ snapshot байвал (эсвэл санах ойд огт байхгүй бол) өрөөг
+ * сангаас уншина. Холбогдсон хүнтэй өрөөг хэзээ ч солихгүй.
+ */
+async function refreshRoom(code: string): Promise<void> {
+  const snap = await loadRoomState(code);
+  if (!snap) return;
+  if ((snap.data as { kind?: string })?.kind === 'poker') {
+    await poker.refresh(code, snap as { data: any; updatedAt: number });
+    return;
+  }
+  const existing = rooms.get(code);
+  if (existing) {
+    const live =
+      existing.spectators.size > 0 || [...existing.seats.values()].some((s) => s.socket !== null);
+    if (live || snap.updatedAt <= (existing.syncedAt ?? 0) + 500) return;
+  }
+  rooms.restore({ ...deserializeRoom(snap.data), syncedAt: snap.updatedAt });
+}
 
 function handle(socket: WebSocket, msg: ClientMessage): void {
   switch (msg.t) {
@@ -1826,6 +1897,7 @@ const GRACE_MS = GRACE_SEC * 1000;
 /** Тойрог дуусаад дараагийн тойрог автоматаар эхлэх хүртэлх зай (үр дүн харах зав). */
 const ROUND_GAP_MS = Number(process.env.ROUND_GAP_MS ?? 6000);
 setInterval(() => {
+  if (shuttingDown) return;
   const now = Date.now();
   rooms.forEach((room) => {
     const { state } = room;
@@ -1930,6 +2002,7 @@ setInterval(() => {
  * тоглох нь утгагүй бөгөөс серверийг дэмий ачаална.
  */
 setInterval(() => {
+  if (shuttingDown) return;
   const now = Date.now();
   rooms.forEach((room) => {
     const { state } = room;
@@ -2007,6 +2080,47 @@ setInterval(() => {
   if (rooms.size === 0 && online.size === 0) return;
   void purgeExpiredInvites().catch(() => undefined);
 }, 30 * 60 * 1000).unref();
+
+/**
+ * Зөөлөн унтрах (Render deploy SIGTERM илгээнэ). Шинэ сервер аль хэдийн асаж,
+ * хандалт тийш шилжсэн байдаг. Энд:
+ *   1) цаашид юу ч өөрчлөхгүй (мессеж, цохилт зогсоно);
+ *   2) БҮХ өрөөг санд бичнэ (Big Two + покер, барьцааны бичилт дуустал);
+ *   3) холболтуудыг хаана → клиентүүд шинэ сервер рүү дахин холбогдож,
+ *      тэнд хамгийн шинэ snapshot-оор (refreshRoom) үргэлжилнэ.
+ */
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  poker.freeze();
+  console.log(`${signal}: өрөөнүүдийг хадгалж унтарч байна…`);
+  try {
+    if (dbEnabled()) {
+      const saves: Promise<unknown>[] = [];
+      rooms.forEach((room) => saves.push(saveRoomState(room.code, serializeRoom(room))));
+      saves.push(poker.flushAll());
+      await Promise.race([Promise.allSettled(saves), new Promise((r) => setTimeout(r, 8000))]);
+    }
+  } catch (err) {
+    console.error('унтрахын өмнө хадгалах:', err);
+  }
+  for (const client of wss.clients) {
+    try {
+      client.close(1012, 'Сервер шинэчлэгдэж байна');
+    } catch {
+      // үл тоомсорлоно
+    }
+  }
+  setTimeout(() => process.exit(0), 1000).unref();
+}
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
+// Туршилт: Windows дээр хүүхэд процесс руу SIGTERM илгээх боломжгүй тул IPC-ээр.
+if (process.env.TEST_MODE && process.send) {
+  process.on('message', (m) => {
+    if (m === 'shutdown') void shutdown('IPC');
+  });
+}
 
 httpServer.listen(PORT, () => {
   console.log(`Big Two сервер http://localhost:${PORT} дээр ажиллаж байна`);

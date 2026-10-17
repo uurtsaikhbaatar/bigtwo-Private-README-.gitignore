@@ -416,3 +416,26 @@ export async function refundOrphanEscrow(liveCodes: string[]): Promise<number> {
   for (const row of r.rows) await escrowCashOut(row.room_code, row.user_id);
   return r.rows.length;
 }
+
+/**
+ * Барьцаатай өрөөнүүдийн код (гацсан барьцааг аврахад). Сүүлийн 2 минутад
+ * өөрчлөгдсөнийг алгасна — deploy-ийн давхцлын үед хуучин сервер дээр саяхан
+ * үүссэн (snapshot нь хараахан бичигдээгүй) ширээний барьцааг андуурч буцаахгүй.
+ */
+export async function escrowRoomCodes(): Promise<string[]> {
+  const r = await getPool().query<{ room_code: string }>(
+    `SELECT room_code FROM poker_escrow GROUP BY room_code
+      HAVING max(updated_at) < now() - interval '2 minutes'`,
+  );
+  return r.rows.map((x) => x.room_code);
+}
+
+/** Тухайн өрөөний бүх барьцааг эзэдэд нь буцаана (snapshot-гүй болсон өрөө). */
+export async function refundRoomEscrow(roomCode: string): Promise<number> {
+  const r = await getPool().query<{ user_id: string }>(
+    'SELECT user_id FROM poker_escrow WHERE room_code = $1',
+    [roomCode],
+  );
+  for (const row of r.rows) await escrowCashOut(roomCode, row.user_id);
+  return r.rows.length;
+}

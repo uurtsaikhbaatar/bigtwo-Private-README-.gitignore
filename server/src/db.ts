@@ -48,6 +48,19 @@ export function getPool(): pg.Pool {
       idleTimeoutMillis: 30_000,
     });
     pool.on('error', (err) => console.error('Postgres pool алдаа:', err.message));
+    // ТУРШИЛТ: DB_SCHEMA өгвөл бүх query тэр схем дотор явна (production-ийн
+    // хүснэгтэд хүрэхгүй). Neon pooler (transaction горим)-оор session-ий
+    // тохиргоо өөр клиент рүү алдагдаж болзошгүй тул ЗӨВХӨН шууд холболтоор.
+    const schema = process.env.DB_SCHEMA;
+    if (schema) {
+      if (!/^test_[a-z0-9_]+$/.test(schema)) throw new Error('DB_SCHEMA нь test_ угтвартай байх ёстой.');
+      if (/-pooler\./.test(process.env.DATABASE_URL)) {
+        throw new Error('DB_SCHEMA-г pooler холболтоор ашиглахгүй (шууд холболт хэрэгтэй).');
+      }
+      pool.on('connect', (client) => {
+        void client.query(`SET search_path TO ${schema}`);
+      });
+    }
   }
   return pool;
 }
@@ -320,16 +333,35 @@ export async function deleteRoomStates(codes: string[]): Promise<void> {
  * Санд хадгалсан бүх өрөөний snapshot-ыг унших (сервер асахад).
  * Хэт хуучин (maxAgeMs-ээс өмнөх) snapshot-уудыг эхлээд устгана.
  */
+/**
+ * Нэг өрөөний хамгийн сүүлийн snapshot (байхгүй бол null).
+ *
+ * Deploy-ийн үед шинэ сервер асаад хуучин нь хэсэг хугацаа ажилласаар байдаг —
+ * тэр хооронд үүссэн/өөрчлөгдсөн өрөөг шинэ сервер тоглогч хандахад эндээс
+ * уншиж авна ("Өрөө олдсонгүй" гарахгүй, хуучирсан төлөвт буцахгүй).
+ */
+export async function loadRoomState(
+  code: string,
+): Promise<{ data: unknown; updatedAt: number } | null> {
+  if (!dbEnabled()) return null;
+  const r = await getPool().query<{ data: unknown; updated_at: Date }>(
+    `SELECT data, updated_at FROM room_state WHERE code = $1`,
+    [code.trim().toUpperCase()],
+  );
+  const row = r.rows[0];
+  return row ? { data: row.data, updatedAt: row.updated_at.getTime() } : null;
+}
+
 export async function loadRoomStates(
   maxAgeMs: number,
-): Promise<Array<{ code: string; data: unknown }>> {
+): Promise<Array<{ code: string; data: unknown; updated_at?: Date }>> {
   if (!dbEnabled()) return [];
   await getPool().query(
     `DELETE FROM room_state WHERE updated_at < now() - ($1::int * interval '1 millisecond')`,
     [maxAgeMs],
   );
-  const r = await getPool().query<{ code: string; data: unknown }>(
-    `SELECT code, data FROM room_state`,
+  const r = await getPool().query<{ code: string; data: unknown; updated_at: Date }>(
+    `SELECT code, data, updated_at FROM room_state`,
   );
   return r.rows;
 }
