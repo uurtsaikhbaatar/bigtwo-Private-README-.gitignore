@@ -23,7 +23,6 @@ import {
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CardBack, PlayingCard } from '../components/PlayingCard';
-import { RankBadge } from '../components/RankBadge';
 import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import { WatchLinkButton } from '../components/WatchLinkButton';
 import { formatSignedChips, groupDigits, shortChips } from '../chips';
@@ -508,31 +507,47 @@ ${link}`
       <Text style={styles.section}>
         Тоглогчид ({view.players.length}/{POKER_MAX_SEATS})
       </Text>
+      {/* Тоглогчид ба робот нэмэх — Big Two-гийн лоббитой ижил дараалал, загвар. */}
       {view.players.map((p) => (
         <View key={p.id} style={styles.lobbyRow}>
-          <Avatar name={p.name} avatar={p.avatar} size={26} />
+          <View style={[styles.dot, { backgroundColor: p.connected ? theme.success : theme.textMuted }]} />
           <Text style={styles.lobbyName} numberOfLines={1}>
             {p.name}
-            {p.isHost ? '  👑' : ''}
-            {p.id === view.youId ? '  (та)' : ''}
+            {p.id === view.youId ? ' (та)' : ''}
           </Text>
-          <RankBadge wins={p.rankedWins} />
           {!sng && <Text style={styles.lobbyStack}>{p.stack > 0 ? n(p.stack) : 'Buy-in хийгээгүй'}</Text>}
-          {isHost && p.bot && (
-            <Pressable onPress={() => onRemoveBot(p.id)} accessibilityRole="button">
-              <Text style={styles.remove}>Хасах</Text>
+          {p.bot && <Text style={styles.botTag}>робот</Text>}
+          {p.isHost && <Text style={styles.hostBadge}>эзэн</Text>}
+          {p.bot && isHost && (
+            <Pressable
+              onPress={() => onRemoveBot(p.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name}-г хасах`}
+            >
+              <Text style={styles.removeBot}>✕</Text>
             </Pressable>
           )}
         </View>
       ))}
 
-      {sng && isHost && (
-        <View style={styles.botRow}>
-          {BOT_LEVELS.map((lv) => (
-            <Pressable key={lv} onPress={() => onAddBot(lv)} style={styles.botBtn} accessibilityRole="button">
-              <Text style={styles.botText}>+ Робот ({BOT_LEVEL_NAMES[lv].toLowerCase()})</Text>
-            </Pressable>
-          ))}
+      {sng && isHost && view.players.length < POKER_MAX_SEATS && (
+        <View style={styles.botAdd}>
+          <Text style={styles.botAddLabel}>Робот нэмэх</Text>
+          <View style={styles.botLevels}>
+            {BOT_LEVELS.map((level) => (
+              <Pressable
+                key={level}
+                onPress={() => onAddBot(level)}
+                accessibilityRole="button"
+                style={styles.botLevel}
+              >
+                <Text style={styles.botLevelText}>{BOT_LEVEL_NAMES[level]}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.hint}>
+            Найз завгүй үед роботуудтай тоглож болно. Роботтой тоглолт цолд тооцогдохгүй (чип хожиж болно).
+          </Text>
         </View>
       )}
 
@@ -826,13 +841,43 @@ const styles = StyleSheet.create({
   codeBig: { color: theme.text, fontSize: 40, fontWeight: '800', letterSpacing: 6, textAlign: 'center' },
   linkText: { color: theme.textMuted, fontSize: 12, textAlign: 'center' },
   section: { color: theme.textMuted, fontSize: 13, fontWeight: '700', marginTop: 4 },
-  lobbyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
-  lobbyName: { color: theme.text, flex: 1, fontSize: 14 },
+  lobbyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lobbyName: { color: theme.text, flex: 1, fontSize: 16 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  botTag: {
+    color: theme.textMuted,
+    fontSize: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  hostBadge: {
+    color: theme.accent,
+    fontSize: 11,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: theme.accent,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  removeBot: { color: theme.textMuted, fontSize: 14, paddingHorizontal: 4 },
+  botAdd: { gap: 8, marginTop: 10 },
+  botAddLabel: { color: theme.textMuted, fontSize: 12, fontWeight: '700' },
+  botLevels: { flexDirection: 'row', gap: 8 },
+  botLevel: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  botLevelText: { color: theme.text, fontSize: 13, fontWeight: '700' },
+  hint: { color: theme.textMuted, fontSize: 13, lineHeight: 18 },
   lobbyStack: { color: theme.accent, fontSize: 12, fontWeight: '700' },
-  remove: { color: theme.danger, fontSize: 12, fontWeight: '700' },
-  botRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  botBtn: { backgroundColor: theme.surfaceRaised, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
-  botText: { color: theme.text, fontSize: 12, fontWeight: '600' },
   choiceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   choice: { backgroundColor: theme.surfaceRaised, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
   rules: { marginTop: 6, gap: 4, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: 8 },
