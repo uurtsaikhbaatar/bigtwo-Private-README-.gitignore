@@ -114,6 +114,8 @@ export type ClientMessage =
   | { t: 'pkBuyIn'; amount: number }
   /** Sit out-аас буцаж ирэх. */
   | { t: 'pkSitIn' }
+  /** Тэмцэлгүй хожсоны дараа хөзрөө харуулах (true) эсвэл Muck (false). */
+  | { t: 'pkShow'; show: boolean }
   | { t: 'ping' };
 
 // ── Сервер → клиент ────────────────────────────────────────────────────────

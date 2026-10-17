@@ -157,11 +157,18 @@ export interface PokerState {
   handEndsAt: number | null;
   /** Товчны сугалаа (TDA): хөзөр бүр ил. */
   buttonDraw: { playerId: string; card: Card }[] | null;
+  /**
+   * Тэмцэлгүй (бусад нь Fold) хожсон хүн хөзрөө харуулах эсэхээ сонгох цонх.
+   * Showdown-д хожих гар заавал ил гардаг тул тэнд энэ сонголт байхгүй.
+   */
+  showOffer?: { playerId: string; endsAt: number } | null;
   log: string[];
 }
 
 /** Гар дуусаад дараагийнх эхлэх хүртэлх зай (ms). */
 export const HAND_GAP_MS = 4_500;
+/** Тэмцэлгүй хожсон хүн хөзрөө харуулах (Show) эсэхээ сонгох хугацаа. */
+export const SHOW_WINDOW_MS = 2_000;
 /** Кэш: дараалан ингэтэл олон гар байхгүй бол ширээнээс босгож токеныг буцаана. */
 export const SIT_OUT_STAND_HANDS = 3;
 
@@ -196,6 +203,7 @@ export function createPoker(format: PokerFormat): PokerState {
     winnerId: null,
     handEndsAt: null,
     buttonDraw: null,
+    showOffer: null,
     log: [],
   };
 }
@@ -547,6 +555,7 @@ export function startHand(state: PokerState, rng: () => number = Math.random): v
   state.allInRunout = false;
   state.aggressor = null;
   state.handEndsAt = null;
+  state.showOffer = null;
 
   // ── Бооцоо, анте ──
   const sbPlayer = state.players.find((p) => p.seat === sbSeat && p.dealt) ?? null;
@@ -861,6 +870,8 @@ function finishHand(state: PokerState): void {
     w.won = pot;
     state.pots = [{ amount: pot, winners: [w.id], name: 'Pot', hand: null }];
     state.log.push(`${w.name} Pot ${fmt(pot)} авлаа (бусад нь Fold).`);
+    // Хүн бол хөзрөө харуулах эсэхээ 2 секундэд сонгоно (робот харуулахгүй).
+    state.showOffer = w.bot ? null : { playerId: w.id, endsAt: Date.now() + SHOW_WINDOW_MS };
   } else {
     // Ширээний 5 хөзөр бүрэн байх ёстой (all-in-ий дараа ил тавигдана).
     while (state.board.length < 5) {
@@ -999,6 +1010,23 @@ function settle(state: PokerState): PokerSettlement[] | null {
       place: p.place!,
       amount: (prizes[p.place! - 1] ?? 0) - state.buyIn,
     }));
+}
+
+/**
+ * Тэмцэлгүй хожсон тоглогч хөзрөө харуулах (show=true) эсвэл харуулахгүй
+ * (Muck) гэж сонгоно. Зөвхөн SHOW_WINDOW_MS-ийн дотор, нэг л удаа.
+ */
+export function showHand(state: PokerState, id: string, show: boolean): void {
+  const offer = state.showOffer;
+  if (!offer || offer.playerId !== id) throw new PokerRuleError('Хөзөр харуулах боломж алга.');
+  state.showOffer = null;
+  if (Date.now() > offer.endsAt) throw new PokerRuleError('Хөзөр харуулах хугацаа өнгөрсөн.');
+  if (!show) return;
+  const p = state.players.find((x) => x.id === id);
+  if (!p || p.hole.length === 0) return;
+  p.showCards = true;
+  p.handLabel = state.board.length >= 3 ? bestHand([...p.hole, ...state.board]).label : null;
+  state.log.push(`${p.name} хөзрөө харууллаа: ${p.hole.map(pokerCardName).join(' ')}`);
 }
 
 /**

@@ -98,6 +98,8 @@ export interface PokerView {
   buttonDraw: { playerId: string; card: Card }[] | null;
   /** Таны одоогийн хамгийн сайн гар (flop-оос хойш). */
   yourHand: string | null;
+  /** Тэмцэлгүй хожсон бол хөзрөө харуулах (Show/Muck) сонголт — үлдсэн ms. */
+  showOfferMs: number | null;
   /** Cash: суух хэмжээний хязгаар (токен). */
   minBuyIn: number;
   maxBuyIn: number;
@@ -190,6 +192,10 @@ export function pokerViewFor(
     winnerId: state.winnerId,
     buttonDraw: state.buttonDraw,
     yourHand,
+    showOfferMs:
+      !spectator && state.showOffer && state.showOffer.playerId === youId && state.showOffer.endsAt > now
+        ? state.showOffer.endsAt - now
+        : null,
     minBuyIn: state.bb * CASH_MIN_BUYIN_BB,
     maxBuyIn: state.bb * CASH_MAX_BUYIN_BB,
     log: state.log.slice(-14),

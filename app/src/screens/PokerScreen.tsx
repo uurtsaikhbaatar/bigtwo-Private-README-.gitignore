@@ -51,6 +51,8 @@ interface Props {
   onBlinds: (sb: number, bb: number) => void;
   onBuyIn: (amount: number) => void;
   onSitIn: () => void;
+  /** Тэмцэлгүй хожсоны дараа: true = Show, false = Muck. */
+  onShow: (show: boolean) => void;
   onAddBot: (level: BotLevel) => void;
   onRemoveBot: (playerId: string) => void;
   onLeave: () => void;
@@ -152,9 +154,16 @@ function Table({ view, onInspect }: Props) {
   const winners = new Set(view.pots.flatMap((p) => p.winners));
   const showResult = view.phase === 'handEnd' || view.phase === 'finished';
 
+  // Жинхэнэ покерын ширээ шиг зууван: модон хүрээ → ногоон даавуу → betting line.
+  // Утсанд (босоо дэлгэц) босоо, компьютерт хэвтээ — дэлгэцийн хэлбэрээс шууд.
   return (
     <View style={styles.tableWrap} onLayout={onLayout}>
-      <View style={styles.felt} />
+      <View style={styles.rail}>
+        <View style={styles.felt}>
+          <View style={styles.bettingLine} />
+          <Text style={styles.feltLogo}>♠ Дай Ди</Text>
+        </View>
+      </View>
       {/* Төв: ширээний хөзөр ба Pot */}
       <View style={[styles.center, { left: size.w / 2 - 120, top: size.h / 2 - 52 }]}>
         <View style={styles.board}>
@@ -339,6 +348,10 @@ function YouPanel(props: Props) {
         </View>
       </View>
 
+      {view.showOfferMs !== null && view.phase !== 'playing' && (
+        <ShowOffer key={view.handNo} ms={view.showOfferMs} onShow={props.onShow} />
+      )}
+
       {legal ? (
         <ActionBar view={view} onAct={props.onAct} />
       ) : me.sittingOut && !me.eliminated && me.stack > 0 ? (
@@ -350,6 +363,36 @@ function YouPanel(props: Props) {
       ) : null}
 
       {view.format === 'cash' && <CashSeatPanel {...props} />}
+    </View>
+  );
+}
+
+/**
+ * Тэмцэлгүй хожсоны дараа: хөзрөө харуулах (Show) эсвэл үгүй (Muck) — 2 секунд.
+ * Хугацаа дуусвал товч алга болно (сервер ч хүлээн авахгүй).
+ */
+function ShowOffer({ ms, onShow }: { ms: number; onShow: (show: boolean) => void }) {
+  const [left, setLeft] = useState(ms);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    const end = Date.now() + ms;
+    const id = setInterval(() => setLeft(Math.max(0, end - Date.now())), 100);
+    return () => clearInterval(id);
+  }, [ms]);
+  if (done || left <= 0) return null;
+  const pick = (show: boolean) => {
+    setDone(true);
+    onShow(show);
+  };
+  return (
+    <View style={styles.showBox}>
+      <Text style={styles.showText}>
+        Та тэмцэлгүй хожлоо. Хөзрөө харуулах уу? ({Math.ceil(left / 1000)}с)
+      </Text>
+      <View style={styles.actionRow}>
+        <Button title="Show" onPress={() => pick(true)} style={styles.actionBtn} />
+        <Button title="Muck" variant="secondary" onPress={() => pick(false)} style={styles.actionBtn} />
+      </View>
     </View>
   );
 }
@@ -751,16 +794,51 @@ const styles = StyleSheet.create({
   spectatorLeave: { color: theme.accent, fontWeight: '700' },
 
   tableWrap: { width: '100%', height: 420, position: 'relative' },
-  felt: {
+  // borderRadius '50%' → жинхэнэ эллипс (тойрог биш, дугуйрсан тэгш өнцөгт ч биш).
+  rail: {
     position: 'absolute',
-    left: 34,
-    right: 34,
-    top: 34,
-    bottom: 34,
-    borderRadius: 200,
+    left: 22,
+    right: 22,
+    top: 26,
+    bottom: 26,
+    borderRadius: '50%',
+    backgroundColor: '#4a2c17',
+    borderWidth: 3,
+    borderColor: '#24140a',
+    padding: 11,
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  felt: {
+    flex: 1,
+    borderRadius: '50%',
     backgroundColor: theme.felt,
-    borderWidth: 8,
-    borderColor: '#5b3a1e',
+    borderWidth: 2,
+    borderColor: '#0a3d29',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  bettingLine: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    top: 22,
+    bottom: 22,
+    borderRadius: '50%',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  feltLogo: {
+    position: 'absolute',
+    bottom: '22%',
+    color: 'rgba(255,255,255,0.10)',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
   center: { position: 'absolute', width: 240, alignItems: 'center', gap: 4 },
   board: { flexDirection: 'row', gap: 4 },
@@ -870,6 +948,15 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 6 },
   actionBtn: { flex: 1, paddingHorizontal: 6 },
 
+  showBox: {
+    gap: 6,
+    backgroundColor: 'rgba(74,222,128,0.10)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.success,
+    padding: 8,
+  },
+  showText: { color: theme.text, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   cashBox: { gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: 8 },
   cashTitle: { color: theme.text, fontWeight: '800' },
 

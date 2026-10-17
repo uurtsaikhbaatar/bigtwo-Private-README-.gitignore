@@ -28,6 +28,7 @@ import {
   createPoker,
   nextHand,
   removePokerPlayer,
+  showHand,
   sitIn,
   startCash,
   startHand,
@@ -364,6 +365,12 @@ export class PokerServer {
         if (!kinds.includes(msg.kind)) throw new PokerError('Танихгүй үйлдэл.');
         act(st, playerId, { kind: msg.kind, amount: Number(msg.amount) });
         room.botMove = null;
+        this.broadcast(room);
+        return true;
+      }
+
+      case 'pkShow': {
+        showHand(st, playerId, msg.show === true);
         this.broadcast(room);
         return true;
       }

@@ -265,6 +265,7 @@ function Root() {
           onBlinds={game.pokerBlinds}
           onBuyIn={game.pokerBuyIn}
           onSitIn={game.pokerSitIn}
+          onShow={game.pokerShow}
           onAddBot={game.addBot}
           onRemoveBot={game.removeBot}
           onLeave={pv.spectating ? game.stopWatching : game.leaveRoom}

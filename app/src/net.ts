@@ -486,6 +486,8 @@ export function useBigTwo(serverUrl: string) {
     ),
     pokerBuyIn: useCallback((amount: number) => send({ t: 'pkBuyIn', amount }), [send]),
     pokerSitIn: useCallback(() => send({ t: 'pkSitIn' }), [send]),
+    /** Тэмцэлгүй хожсоны дараа хөзрөө харуулах (true) эсвэл Muck (false). */
+    pokerShow: useCallback((show: boolean) => send({ t: 'pkShow', show }), [send]),
     joinRoom: useCallback(
       (name: string, code: string) => send({ t: 'join', name, code: code.trim().toUpperCase() }),
       [send],

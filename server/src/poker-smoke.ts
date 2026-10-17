@@ -172,7 +172,34 @@ async function main() {
   await until('cash робот → алдаа', () => e.errors.length > 1);
   console.log(`✓ Cash хамгаалалт: "${e.errors[0]}" / "${e.errors[1]}"`);
 
-  // 9. Админ жагсаалт.
+  // 9. Show/Muck: B Fold хийвэл A тэмцэлгүй хожиж, 2 сек-д хөзрөө харуулж болно.
+  const s1 = await new Client('Сүх').open();
+  const s2 = await new Client('Тэмүүлэн').open();
+  s1.send({ t: 'create', name: 'Сүх', game: 'holdem', format: 'sng' });
+  await until('show өрөө', () => s1.view?.code !== undefined);
+  s2.send({ t: 'join', name: 'Тэмүүлэн', code: s1.view!.code });
+  await until('show нэгдэх', () => s2.view?.players.length === 2);
+  s1.send({ t: 'pkStart', buyIn: 0, turnSeconds: 20 });
+  await until('show эхэлсэн', () => s1.view?.phase === 'playing' && s2.view?.phase === 'playing');
+  const actor = [s1, s2].find((x) => x.view!.toAct === x.view!.youId)!;
+  const other = actor === s1 ? s2 : s1;
+  actor.send({ t: 'pkAct', kind: 'fold' });
+  await until('Show санал', () => (other.view?.showOfferMs ?? 0) > 0);
+  assert.ok(other.view!.showOfferMs! <= 2000);
+  assert.equal(actor.view!.showOfferMs, null, 'хаясан хүнд санал гарахгүй');
+  const winnerId = other.view!.youId;
+  assert.equal(actor.view!.players.find((p) => p.id === winnerId)!.hole, null, 'Show хийхээс өмнө нууц');
+  other.send({ t: 'pkShow', show: true });
+  await until('хөзөр ил', () => actor.view!.players.find((p) => p.id === winnerId)!.hole?.length === 2);
+  console.log('✓ Show: тэмцэлгүй хожсон хүн хөзрөө харуулахад бусдад ил гарав');
+  // Дахин Show → татгалзана (нэг л удаа).
+  const n0 = other.errors.length;
+  other.send({ t: 'pkShow', show: true });
+  await until('давхар Show алдаа', () => other.errors.length > n0);
+  s1.close();
+  s2.close();
+
+  // 10. Админ жагсаалт.
   const res = await fetch(`${HTTP}/admin/rooms`);
   const body = (await res.json()) as { list: Array<{ code: string; game?: string }> };
   assert.ok(body.list.some((r) => r.code === code && r.game === 'holdem'), 'админ жагсаалтад покер');

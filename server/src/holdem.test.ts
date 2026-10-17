@@ -19,6 +19,7 @@ import {
   legalActions,
   nextHand,
   removePokerPlayer,
+  showHand,
   startCash,
   startHand,
   startTournament,
@@ -567,4 +568,45 @@ test('сайн робот сул роботыг олон тэмцээнд дав
     if (s.winnerId === 'h') hardWins += 1;
   }
   assert.ok(hardWins >= games * 0.6, `сайн робот ${hardWins}/${games}`);
+});
+
+// ── Show / Muck ─────────────────────────────────────────────────────────────
+
+test('тэмцэлгүй хожсон хүн 2 секундэд хөзрөө харуулж (Show) эсвэл нууж (Muck) болно', () => {
+  const s = sng([1500, 1500, 1500], 0);
+  rig(s, ['Ah Kd', '7c 2d', '8c 3h'], '3c 8d 9s Js 4h');
+  act(s, 'p0', { kind: 'raise', amount: 60 });
+  act(s, 'p1', { kind: 'fold' });
+  act(s, 'p2', { kind: 'fold' });
+  assert.equal(s.showOffer?.playerId, 'p0', 'зөвхөн хожсон хүнд');
+  assert.equal(P(s, 0).showCards, false, 'анхдагчаар нууц');
+  assert.throws(() => showHand(s, 'p1', true), PokerRuleError, 'бусад хүн сонгохгүй');
+  showHand(s, 'p0', true);
+  assert.equal(P(s, 0).showCards, true);
+  assert.throws(() => showHand(s, 'p0', true), PokerRuleError, 'нэг л удаа');
+
+  const m = sng([1500, 1500], 0);
+  act(m, 'p0', { kind: 'fold' });
+  assert.equal(m.showOffer?.playerId, 'p1');
+  showHand(m, 'p1', false); // Muck
+  assert.equal(P(m, 1).showCards, false);
+  assert.equal(m.showOffer, null);
+});
+
+test('Show хугацаа өнгөрвөл татгалзана; Showdown-д сонголт гарахгүй; робот харуулахгүй', () => {
+  const s = sng([1500, 1500], 0);
+  act(s, 'p0', { kind: 'fold' });
+  s.showOffer!.endsAt = Date.now() - 1;
+  assert.throws(() => showHand(s, 'p1', true), PokerRuleError);
+  assert.equal(P(s, 1).showCards, false);
+
+  const sd = sng([1500, 1500], 0);
+  act(sd, 'p0', { kind: 'call' });
+  while (sd.phase === 'playing') act(sd, sd.toAct!, { kind: 'check' });
+  assert.equal(sd.showOffer, null, 'Showdown-д хожих гар заавал ил');
+
+  const b = sng([1500, 1500], 0);
+  P(b, 1).bot = 'hard';
+  act(b, 'p0', { kind: 'fold' });
+  assert.equal(b.showOffer, null);
 });
