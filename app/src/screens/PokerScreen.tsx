@@ -23,6 +23,7 @@ import {
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CardBack, PlayingCard } from '../components/PlayingCard';
+import { RankBadge } from '../components/RankBadge';
 import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import { WatchLinkButton } from '../components/WatchLinkButton';
 import { formatSignedChips, groupDigits, shortChips } from '../chips';
@@ -249,12 +250,19 @@ function Seat({
         ) : null}
       </View>
       <View style={styles.seatInfo}>
+        {/* Big Two-гийн өрсөлдөгчийн толгойтой ижил: цэг, зураг, нэр, цол. */}
         <View style={styles.seatNameRow}>
+          <View style={[styles.seatDot, { backgroundColor: p.connected ? theme.success : theme.danger }]} />
           <Avatar name={p.name} avatar={p.avatar} size={16} />
           <Text style={[styles.seatName, you && styles.seatNameYou]} numberOfLines={1}>
             {p.name}
           </Text>
         </View>
+        {p.rankedWins !== null && (
+          <View style={styles.seatRank}>
+            <RankBadge wins={p.rankedWins} />
+          </View>
+        )}
         <Text style={styles.seatStack}>
           {p.eliminated ? `#${p.place}` : n(p.stack)}
           {p.allIn ? ' · All-in' : ''}
@@ -302,6 +310,23 @@ function YouPanel(props: Props) {
   const legal = view.legal;
   return (
     <View style={[styles.youPanel, fabGap]}>
+      <Pressable
+        onPress={() => props.onInspect(me.id, me.name)}
+        accessibilityRole="button"
+        accessibilityLabel="Миний мэдээлэл"
+        style={styles.meRow}
+      >
+        <Avatar name={me.name} avatar={me.avatar} size={22} />
+        <Text style={styles.meName} numberOfLines={1}>
+          {me.name}
+        </Text>
+        {me.rankedWins === null ? (
+          // Зочин — тоглолт нь тооцогдохгүй гэдгийг тоглох явцад ч сануулна.
+          <Text style={styles.guestTag}>зочин</Text>
+        ) : (
+          <RankBadge wins={me.rankedWins} />
+        )}
+      </Pressable>
       <View style={styles.youRow}>
         <View style={styles.youCards}>
           {me.hole?.map((c) => <PlayingCard key={c} card={c} size="md" dimmed={me.folded} />)}
@@ -776,6 +801,18 @@ const styles = StyleSheet.create({
   seatCards: { flexDirection: 'row', gap: 2, marginTop: -26, minHeight: 22 },
   seatInfo: { alignItems: 'center', width: '100%' },
   seatNameRow: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%' },
+  seatDot: { width: 6, height: 6, borderRadius: 3 },
+  seatRank: { marginTop: 1 },
+  meRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', maxWidth: '100%' },
+  meName: { color: theme.text, fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  guestTag: {
+    color: theme.textMuted,
+    fontSize: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
   seatName: { color: theme.text, fontSize: 11, fontWeight: '700', flexShrink: 1 },
   seatNameYou: { color: theme.accent },
   seatStack: { color: theme.text, fontSize: 11, fontWeight: '800' },
@@ -796,7 +833,7 @@ const styles = StyleSheet.create({
   seatTimer: { position: 'absolute', bottom: -12 },
 
   youPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12, gap: 10 },
-  fabGap: { marginRight: 50 },
+  fabGap: { marginRight: 60 },
   youRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   youCards: { flexDirection: 'row', gap: 6 },
   youStack: { color: theme.text, fontSize: 16, fontWeight: '800' },
