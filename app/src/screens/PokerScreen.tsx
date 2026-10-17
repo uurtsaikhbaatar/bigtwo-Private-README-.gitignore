@@ -13,6 +13,7 @@ import {
   Pressable,
   useWindowDimensions,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -26,6 +27,7 @@ import { RankBadge } from '../components/RankBadge';
 import { TurnTimer, useTurnCountdown } from '../components/TurnTimer';
 import { WatchLinkButton } from '../components/WatchLinkButton';
 import { formatSignedChips, groupDigits, shortChips } from '../chips';
+import { joinUrl } from '../deeplink';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, type BotLevel } from '../shared/bot';
 import type { PokerActionKind } from '../shared/holdem/engine';
 import {
@@ -476,8 +478,33 @@ function Lobby(props: Props) {
   const canStart = sng ? view.players.length >= 2 : withChips >= 2;
   const firstTime = view.handNo === 0;
 
+  // Big Two-гийн лоббитой адил: линкийг утасны хуваалцах цонхоор илгээнэ.
+  // ("Урих" нь зөвхөн өмнө хамт тоглосон бүртгэлтэй хүмүүст апп доторх урилга.)
+  const link = joinUrl(view.code);
+  const share = () => {
+    Share.share({
+      message: link
+        ? `Дай Ди — Texas Hold'em! Линк дарахад шууд орно:
+${link}`
+        : `Дай Ди — Texas Hold'em! Өрөөний код: ${view.code}`,
+    }).catch(() => {
+      // Хэрэглэгч цуцалсан — алдаа биш.
+    });
+  };
+
   return (
     <View style={styles.lobby}>
+      <Text style={styles.codeEyebrow}>Өрөөний код</Text>
+      <Text style={styles.codeBig} accessibilityLabel={view.code.split('').join(' ')}>
+        {view.code}
+      </Text>
+      <Button title="Найзууддаа илгээх" variant="secondary" onPress={share} />
+      {link && (
+        <Text style={styles.linkText} numberOfLines={1}>
+          {link}
+        </Text>
+      )}
+
       <Text style={styles.section}>
         Тоглогчид ({view.players.length}/{POKER_MAX_SEATS})
       </Text>
@@ -795,6 +822,9 @@ const styles = StyleSheet.create({
   cashTitle: { color: theme.text, fontWeight: '800' },
 
   lobby: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12, gap: 8 },
+  codeEyebrow: { color: theme.textMuted, fontSize: 13, textAlign: 'center' },
+  codeBig: { color: theme.text, fontSize: 40, fontWeight: '800', letterSpacing: 6, textAlign: 'center' },
+  linkText: { color: theme.textMuted, fontSize: 12, textAlign: 'center' },
   section: { color: theme.textMuted, fontSize: 13, fontWeight: '700', marginTop: 4 },
   lobbyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
   lobbyName: { color: theme.text, flex: 1, fontSize: 14 },
