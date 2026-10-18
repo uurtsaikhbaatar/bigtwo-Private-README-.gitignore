@@ -12,7 +12,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { watchUrl } from '../deeplink';
 import { theme } from '../theme';
 
-export function WatchLinkButton({ code }: { code: string }) {
+export function WatchLinkButton({ code, compact = false }: { code: string; compact?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const url = watchUrl(code);
@@ -31,8 +31,15 @@ export function WatchLinkButton({ code }: { code: string }) {
   };
 
   return (
-    <Pressable onPress={share} accessibilityRole="button" style={styles.btn}>
-      <Text style={styles.txt}>{copied ? '✓ Линк хууллаа' : '👁 Үзэгчийн линк хуваалцах'}</Text>
+    <Pressable
+      onPress={share}
+      accessibilityRole="button"
+      accessibilityLabel="Үзэгчийн линк хуваалцах"
+      style={[styles.btn, compact && styles.btnCompact]}
+    >
+      <Text style={[styles.txt, compact && styles.txtCompact]}>
+        {copied ? (compact ? '✓ Хууллаа' : '✓ Линк хууллаа') : compact ? '👁 Үзэгч' : '👁 Үзэгчийн линк хуваалцах'}
+      </Text>
     </Pressable>
   );
 }
@@ -47,4 +54,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   txt: { color: theme.accent, fontSize: 14, fontWeight: '700' },
+  btnCompact: { paddingVertical: 6, paddingHorizontal: 9, borderRadius: 8 },
+  txtCompact: { fontSize: 12 },
 });

@@ -26,6 +26,9 @@ const n = groupDigits;
 interface Props {
   view: PokerView;
   onInspect: (playerId: string, name: string) => void;
+  /** Тоглолтын үед ширээнд үлдсэн бодит зай (дэлгэцэнд гүйлгээгүй багтана). */
+  width?: number;
+  height?: number;
 }
 
 // ── Хөзөр ───────────────────────────────────────────────────────────────────
@@ -60,18 +63,22 @@ export function PkCard({ card, w, back, style }: { card?: Card; w: number; back?
 const PAGE_PAD = 24;
 const PAGE_MAX = 720;
 
-export function PokerTable({ view, onInspect }: Props) {
+export function PokerTable({ view, onInspect, width, height }: Props) {
   // Өргөнийг цонхноос шууд — утас эргүүлэх/цонх өөрчлөхөд тэр дороо дахин зурна.
   const { width: winW } = useWindowDimensions();
-  const W = Math.min(winW, PAGE_MAX) - PAGE_PAD;
-  const portrait = W < 560;
-  // Өндрийг өргөнөөс: утсанд босоо, компьютерт хэвтээ ширээ.
-  const H = portrait ? Math.min(600, Math.max(470, Math.round(W * 1.42))) : Math.min(560, Math.max(380, Math.round(W * 0.62)));
+  const W = width ?? Math.min(winW, PAGE_MAX) - PAGE_PAD;
+  const portrait = height !== undefined ? height > W * 1.05 || W < 560 : W < 560;
+  // Өндөр: өгөгдсөн зай (тоглолтын үед) эсвэл өргөнөөс.
+  const H =
+    height ??
+    (portrait ? Math.min(600, Math.max(470, Math.round(W * 1.42))) : Math.min(560, Math.max(380, Math.round(W * 0.62))));
 
   // Хүрээний хэмжээ (суудлууд хүрээн дээр сууна).
+  // Суудлын хөзөр/хавтан багтах зай — жижиг өндөрт бага зэрэг нарийсна.
+  const tight = H < 440;
   const rail = portrait
-    ? { left: 46, right: 46, top: 78, bottom: 96 }
-    : { left: 90, right: 90, top: 66, bottom: 74 };
+    ? { left: 46, right: 46, top: tight ? 62 : 78, bottom: tight ? 78 : 96 }
+    : { left: 90, right: 90, top: tight ? 54 : 66, bottom: tight ? 62 : 74 };
   const railW = W - rail.left - rail.right;
   const railH = H - rail.top - rail.bottom;
   const railR = Math.min(railW, railH) / 2; // уралдааны замын хагас дугуй үзүүр
@@ -115,7 +122,10 @@ export function PokerTable({ view, onInspect }: Props) {
 
   const showResult = view.phase === 'handEnd' || view.phase === 'finished';
   const winners = new Set(showResult ? view.pots.flatMap((p) => p.winners) : []);
-  const boardW = Math.min(portrait ? 50 : 66, Math.floor((railW * (portrait ? 0.8 : 0.62)) / 5.5));
+  const boardW = Math.max(
+    30,
+    Math.min(portrait ? 50 : 66, Math.floor((railW * (portrait ? 0.8 : 0.62)) / 5.5), Math.floor(railH * 0.17)),
+  );
   const buttonPlayer = view.players.find((p) => p.isButton);
 
   return (

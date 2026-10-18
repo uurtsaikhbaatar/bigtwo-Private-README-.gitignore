@@ -65,6 +65,8 @@ export function PokerScreen(props: Props) {
   const { view } = props;
   const started = view.handNo > 0;
   const showLobby = !started || view.phase === 'finished';
+  // Тоглолтын үед: гүйлгээгүй, дэлгэцэнд бүрэн багтана (Big Two-гийн ширээ шиг).
+  if (started && view.phase !== 'finished') return <PlayLayout {...props} />;
   return (
     <ScrollView
       style={styles.scroll}
@@ -86,6 +88,61 @@ export function PokerScreen(props: Props) {
       {showLobby && !view.spectating && <Lobby {...props} />}
       {started && view.phase !== 'finished' && <HandLog view={view} />}
     </ScrollView>
+  );
+}
+
+// ── Тоглолтын байрлал (гүйлгээгүй) ───────────────────────────────────────────
+
+/**
+ * Дээр нь нэг мөр толгой, дунд нь ширээ (үлдсэн зайг бүхэлд нь эзэлнэ), доор нь
+ * бэхлэгдсэн үйлдлийн самбар. Ширээний хэмжээг бодит зайнаас тооцно — утсанд
+ * товчнууд хэзээ ч доош хэтрэхгүй.
+ */
+function PlayLayout(props: Props) {
+  const { view, onLeave, onInvite } = props;
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  return (
+    <View style={styles.play}>
+      <View style={styles.playHeader}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.playTitle} numberOfLines={1}>
+            ♠ {view.format === 'sng' ? 'Sit & Go' : 'Cash'} · <Text style={styles.code}>{view.code}</Text>
+          </Text>
+          <Text style={styles.playSub} numberOfLines={1}>
+            Hand #{view.handNo} · Blinds {n(view.sb)}/{n(view.bb)}
+            {view.bbAnte > 0 ? ` · Ante ${n(view.bbAnte)}` : ''}
+            {view.format === 'sng' && view.handsToNextLevel ? ` · level ${view.handsToNextLevel} гарын дараа` : ''}
+          </Text>
+        </View>
+        {view.spectating ? (
+          <Pressable onPress={onLeave} style={[styles.smallBtn, styles.leaveBtn]} accessibilityRole="button">
+            <Text style={styles.smallBtnText}>Үзэхээ болих</Text>
+          </Pressable>
+        ) : (
+          <>
+            <WatchLinkButton code={view.code} compact />
+            <Pressable onPress={onInvite} style={styles.smallBtn} accessibilityRole="button">
+              <Text style={styles.smallBtnText}>Урих</Text>
+            </Pressable>
+            <Pressable onPress={onLeave} style={[styles.smallBtn, styles.leaveBtn]} accessibilityRole="button">
+              <Text style={styles.smallBtnText}>Гарах</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+      <View
+        style={styles.playTable}
+        onLayout={(e) => {
+          const { width: w, height: h } = e.nativeEvent.layout;
+          if (!box || Math.abs(box.w - w) > 1 || Math.abs(box.h - h) > 1) setBox({ w, h });
+        }}
+      >
+        {box && box.h > 120 && (
+          <PokerTable view={view} onInspect={props.onInspect} width={box.w} height={box.h} />
+        )}
+      </View>
+      {!view.spectating && <YouPanel {...props} />}
+    </View>
   );
 }
 
@@ -596,6 +653,21 @@ function HandLog({ view }: { view: PokerView }) {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: '#101010' },
+  play: {
+    flex: 1,
+    backgroundColor: '#101010',
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 8,
+    gap: 6,
+  },
+  playHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  playTitle: { color: theme.text, fontSize: 14, fontWeight: '800' },
+  playSub: { color: theme.textMuted, fontSize: 11 },
+  playTable: { flex: 1, minHeight: 0 },
   page: { padding: 12, paddingBottom: 140, gap: 10, width: '100%', maxWidth: 720, alignSelf: 'center' },
   // Утсанд нарийн тул гарчиг ба товчлуурыг хоёр мөрөнд (нэг мөрөнд бол гарчиг шахагдана).
   header: { gap: 8 },
@@ -628,7 +700,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
 
-  youPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, padding: 12, gap: 10 },
+  youPanel: { backgroundColor: theme.surface, borderRadius: theme.radius, paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
   fabGap: { marginRight: 60 },
   youRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   youCards: { flexDirection: 'row', gap: 6 },
@@ -655,6 +727,8 @@ const styles = StyleSheet.create({
   stepText: { color: theme.text, fontSize: 20, fontWeight: '800' },
   amountInput: {
     flex: 1,
+    minWidth: 0, // вэб дээр <input>-ийн анхдагч өргөн мөрийг тэлэхгүй
+    width: 0,
     height: 40,
     borderRadius: 8,
     backgroundColor: theme.surfaceRaised,
